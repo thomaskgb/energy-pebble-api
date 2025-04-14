@@ -73,6 +73,31 @@ async def fetch_data(date_str: Optional[str] = None):
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
+async def fetch_data_for_date_range(start_date: datetime, num_days: int = 2):
+    """Fetch data for multiple consecutive days and combine the results."""
+    all_data = []
+    
+    for day_offset in range(num_days):
+        # Calculate the date for this offset
+        current_date = start_date + timedelta(days=day_offset)
+        date_str = current_date.strftime("%Y-%m-%d")
+        
+        try:
+            # Fetch data for this date
+            day_data = await fetch_data(date_str)
+            if day_data:
+                # Append to the combined results
+                if isinstance(day_data, list):
+                    all_data.extend(day_data)
+                else:
+                    logger.warning(f"Data for {date_str} is not a list: {type(day_data)}")
+            else:
+                logger.warning(f"No data available for {date_str}")
+        except Exception as e:
+            logger.error(f"Error fetching data for {date_str}: {e}")
+    
+    return all_data
+
 def group_entries_by_hour(entries: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """Group 15-minute entries into hourly data points."""
     hourly_data = {}
@@ -101,7 +126,7 @@ def group_entries_by_hour(entries: List[Dict[str, Any]]) -> Dict[str, Dict[str, 
     
     return hourly_data
 
-def get_current_and_future_hours(hourly_data: Dict[str, Dict[str, Any]], hours: int = 8) -> List[Dict[str, Any]]:
+def get_current_and_future_hours(hourly_data: Dict[str, Dict[str, Any]], hours: int = 12) -> List[Dict[str, Any]]:
     """Get current hour and future hours data."""
     now = datetime.now(pytz.UTC).replace(minute=0, second=0, microsecond=0)
     result = []
@@ -168,9 +193,9 @@ async def root():
         "message": "Electricity Price API",
         "endpoints": {
             "/api/json": "Get electricity price data in JSON format (Optional query param: date=YYYY-MM-DD)",
-            "/api/color-code": "Get color code based on price analysis (Optional query param: date=YYYY-MM-DD)",
+            "/api/color-code": "Get color codes for current hour and next 11 hours (Optional query param: date=YYYY-MM-DD)",
             "/api/sample": "Get sample electricity price data for testing",
-            "/api/sample-color-code": "Get sample color code data for testing",
+            "/api/sample-color-code": "Get sample color codes for current hour and next 11 hours",
             "/docs": "API documentation (Swagger UI)"
         }
     }
@@ -212,116 +237,47 @@ async def get_json_data(date: Optional[str] = None):
 @app.get("/api/color-code")
 async def get_color_code(date: Optional[str] = None):
     """
-    Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
+    Get color codes (G, Y, R) for the current hour and next 11 hours based on price analysis.
     
     Optional query parameter:
     - date: Date in YYYY-MM-DD format
     """
     # Validate date format if provided
-    if date and not re.match(r'^\d{4}-\d{2}-\d{2}
-
-@app.get("/api/sample")
-async def get_sample_data():
-    """
-    Get sample electricity price data for testing.
-    """
-    # Create sample data that includes various price scenarios
-    sample_data = []
-    
-    # Create a datetime series starting from yesterday and spanning 3 days
-    start_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-    
-    # Create sample data with realistic patterns:
-    # - Higher prices in morning and evening peaks
-    # - Lower prices during night and midday
-    # - Occasional negative prices (solar/wind surplus)
-    # - 15-minute intervals for each hour
-    
-    for day_offset in range(3):  # 3 days of data
-        current_date = start_date + timedelta(days=day_offset)
-        
-        for hour in range(24):
-            base_time = current_date.replace(hour=hour)
-            
-            # Create price patterns
-            if 0 <= hour < 6:  # Night (low demand)
-                base_price = 40.0 + (day_offset * 5)
-            elif 6 <= hour < 9:  # Morning peak
-                base_price = 120.0 + (day_offset * 10)
-            elif 9 <= hour < 14:  # Midday (solar generation)
-                # Occasionally negative prices during high solar/wind periods
-                if hour == 12 and day_offset == 1:
-                    base_price = -10.0
-                else:
-                    base_price = 30.0 + (day_offset * 5)
-            elif 14 <= hour < 17:  # Afternoon
-                base_price = 80.0 + (day_offset * 8)
-            elif 17 <= hour < 22:  # Evening peak
-                base_price = 150.0 + (day_offset * 15)
-            else:  # Late evening
-                base_price = 70.0 + (day_offset * 5)
-                
-            # Add some randomness to prices
-            price_variation = (hash(f"{current_date.isoformat()}_{hour}") % 20) - 10
-            hour_base_price = base_price + price_variation
-            
-            # Create 15-minute intervals
-            for minute in [0, 15, 30, 45]:
-                entry_time = base_time.replace(minute=minute)
-                # Add slight variation within the hour
-                minute_variation = (hash(f"{entry_time.isoformat()}") % 10) - 5
-                price = round(hour_base_price + (minute_variation / 10), 4)
-                
-                sample_data.append({
-                    "isVisible": True,
-                    "dateTime": entry_time.isoformat().replace('+00:00', 'Z'),
-                    "price": price
-                })
-    
-    return {"data": sample_data}
-
-@app.get("/api/sample-color-code")
-async def get_sample_color_code():
-    """
-    Get sample color codes for the current hour and next 7 hours for testing.
-    """
-    # Get sample data from the sample endpoint
-    sample_data_response = await get_sample_data()
-    sample_data = sample_data_response["data"]
-    
-    # Group by hour
-    hourly_data = group_entries_by_hour(sample_data)
-    
-    # Get current and future 7 hours (total 8 hours)
-    hours_data = get_current_and_future_hours(hourly_data, 8)
-    
-    # Determine color codes for all hours
-    color_codes = determine_color_codes(hours_data)
-    
-    # Return only the hour and color code information
-    return {"hour_color_codes": color_codes}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-, date):
+    if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     
-    # Get the data
-    json_response = await get_json_data(date)
-    json_data = json_response["data"]
+    # Determine the start date
+    if date:
+        start_date = datetime.strptime(date, "%Y-%m-%d")
+    else:
+        start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Fetch data for multiple days to ensure we have enough hours
+    json_data = await fetch_data_for_date_range(start_date, num_days=2)
+    
+    if not json_data:
+        raise HTTPException(status_code=404, detail="No data available for the requested date range")
     
     # Group by hour
     hourly_data = group_entries_by_hour(json_data)
     
-    # Get current and future 7 hours (total 8 hours)
-    hours_data = get_current_and_future_hours(hourly_data, 8)
+    # Get current and future 11 hours (total 12 hours)
+    hours_data = get_current_and_future_hours(hourly_data, 12)
+    
+    if not hours_data:
+        raise HTTPException(status_code=404, detail="No data available for the requested time period")
+    
+    # Get the current hour
+    current_hour = hours_data[0]["dateTime"]
     
     # Determine color codes for all hours
     color_codes = determine_color_codes(hours_data)
     
-    # Return only the hour and color code information
-    return {"hour_color_codes": color_codes}
+    # Return both the current hour and all hour color codes
+    return {
+        "current_hour": current_hour,
+        "hour_color_codes": color_codes
+    }
 
 @app.get("/api/sample")
 async def get_sample_data():
@@ -386,22 +342,68 @@ async def get_sample_data():
 @app.get("/api/sample-color-code")
 async def get_sample_color_code():
     """
-    Get sample color code data for testing.
+    Get sample color codes for the current hour and next 11 hours for testing.
     """
-    # Get sample data from the sample endpoint
+    # Get sample data from the sample endpoint that will span multiple days if needed
     sample_data_response = await get_sample_data()
     sample_data = sample_data_response["data"]
     
     # Group by hour
     hourly_data = group_entries_by_hour(sample_data)
     
-    # Get current and future 7 hours (total 8 hours)
-    hours_data = get_current_and_future_hours(hourly_data, 8)
+    # Get current and future 11 hours (total 12 hours)
+    hours_data = get_current_and_future_hours(hourly_data, 12)
     
-    # Determine color code
-    result = determine_color_code(hours_data)
+    if not hours_data:
+        raise HTTPException(status_code=404, detail="No sample data available for the requested time period")
     
-    return result
+    # Get the current hour
+    current_hour = hours_data[0]["dateTime"]
+    
+    # Determine color codes for all hours
+    color_codes = determine_color_codes(hours_data)
+    
+    # Return both the current hour and all hour color codes
+    return {
+        "current_hour": current_hour,
+        "hour_color_codes": color_codes
+    }
+
+@app.get("/api/diagnostic")
+async def get_diagnostic(date: Optional[str] = None):
+    """
+    Diagnostic endpoint to check available data.
+    
+    Optional query parameter:
+    - date: Date in YYYY-MM-DD format
+    """
+    # Validate date format if provided
+    if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    
+    # Determine the start date
+    if date:
+        start_date = datetime.strptime(date, "%Y-%m-%d")
+    else:
+        start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Fetch data for multiple days to ensure we have enough hours
+    json_data = await fetch_data_for_date_range(start_date, num_days=2)
+    
+    # Group by hour
+    hourly_data = group_entries_by_hour(json_data)
+    
+    # Current time for reference
+    now = datetime.now(pytz.UTC).replace(minute=0, second=0, microsecond=0)
+    
+    # Return diagnostic information
+    return {
+        "total_entries": len(json_data),
+        "unique_hours": len(hourly_data),
+        "current_time": now.isoformat().replace('+00:00', 'Z'),
+        "available_hours": list(hourly_data.keys()),
+        "hours_data": get_current_and_future_hours(hourly_data, 12)
+    }
 
 if __name__ == "__main__":
     import uvicorn
