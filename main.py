@@ -1,15 +1,19 @@
 from fastapi import FastAPI, HTTPException
 import httpx
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 import pytz
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 import re
+import json
 
-app = FastAPI(title="Electricity Price API", 
+app = FastAPI(title="Electricity color code API", 
               description="API that provides electricity price data and color-coded indicators")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Add CORS middleware
 app.add_middleware(
@@ -20,67 +24,54 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# XML namespaces used in the data
-NAMESPACES = {
-    'ns': 'http://schemas.datacontract.org/2004/07/Elia.EliaBeControls.WebApi.Interface.Dto.FileRepository',
-    'ns2': 'http://schemas.datacontract.org/2004/07/Elia.EliaBeControls.WebApi.Interface.Dto'
-}
-
-async def fetch_xml_data(date_str: Optional[str] = None):
-    """Fetch XML data from Elia's API for a given date."""
+async def fetch_data(date_str: Optional[str] = None):
+    """Fetch data from Elia's API for a given date."""
     if not date_str:
         # Use today's date if not specified
         date_str = datetime.now().strftime("%Y-%m-%d")
     
     url = f"https://griddata.elia.be/eliabecontrols.prod/interface/Interconnections/daily/auctionresultsqh/{date_str}"
     
+    logger.info(f"Fetching data from URL: {url}")
+    
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=10.0)
             response.raise_for_status()  # Raise an exception for HTTP errors
-            return response.text
+            
+            # Log response status and size
+            content = response.text
+            logger.info(f"Response status: {response.status_code}, content size: {len(content)} bytes")
+            
+            # For debugging purposes, log a small sample of the response
+            if content:
+                sample = content[:100] + "..." if len(content) > 100 else content
+                logger.info(f"Sample response: {sample}")
+            else:
+                logger.warning("Received empty response from Elia API")
+            
+            # Check if the response is JSON (which appears to be the case)
+            try:
+                # Try to parse as JSON first
+                json_data = response.json()
+                logger.info("Successfully parsed response as JSON")
+                return json_data
+            except:
+                # If not JSON, check if it's XML and try to handle it
+                if content.strip().startswith("<"):
+                    logger.info("Response appears to be XML, not JSON")
+                    raise HTTPException(status_code=415, 
+                                        detail="Received XML response from Elia API, but JSON was expected. Try using wget or another tool to fetch the data.")
+                # If not XML either, return the raw text
+                logger.info("Response is not JSON or XML, returning raw text")
+                return content
+                
     except httpx.HTTPError as e:
         logger.error(f"HTTP error occurred: {e}")
         raise HTTPException(status_code=503, detail=f"Error fetching data from Elia API: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-
-def parse_xml_to_json(xml_data: str) -> List[Dict[str, Any]]:
-    """Parse XML data to JSON format."""
-    try:
-        root = ET.fromstring(xml_data)
-        result = []
-        
-        for price_dto in root.findall('.//ns:DailyDayAheadPriceDto', NAMESPACES):
-            # Extract values from XML
-            is_visible = price_dto.find('.//ns2:IsVisible', NAMESPACES)
-            date_time = price_dto.find('./ns:DateTime', NAMESPACES)
-            price = price_dto.find('./ns:Price', NAMESPACES)
-            
-            # Skip incomplete entries
-            if None in (is_visible, date_time, price):
-                continue
-            
-            # Convert to appropriate types
-            entry = {
-                "isVisible": is_visible.text.lower() == 'true',
-                "dateTime": date_time.text,
-                "price": float(price.text)
-            }
-            result.append(entry)
-        
-        return result
-    except ET.ParseError as e:
-        logger.error(f"XML parsing error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to parse XML data: {str(e)}")
-    except Exception as e:
-        logger.error(f"Error processing XML: {e}")
-        raise HTTPException(status_code=500, detail=f"Error processing data: {str(e)}")
 
 def group_entries_by_hour(entries: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """Group 15-minute entries into hourly data points."""
@@ -172,8 +163,11 @@ async def root():
     return {
         "message": "Electricity Price API",
         "endpoints": {
-            "/api/json": "Convert Elia XML data to JSON",
-            "/api/color-code": "Get color code based on price analysis"
+            "/api/json": "Get electricity price data in JSON format (Optional query param: date=YYYY-MM-DD)",
+            "/api/color-code": "Get color code based on price analysis (Optional query param: date=YYYY-MM-DD)",
+            "/api/sample": "Get sample electricity price data for testing",
+            "/api/sample-color-code": "Get sample color code data for testing",
+            "/docs": "API documentation (Swagger UI)"
         }
     }
 
@@ -189,9 +183,27 @@ async def get_json_data(date: Optional[str] = None):
     if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     
-    xml_data = await fetch_xml_data(date)
-    json_data = parse_xml_to_json(xml_data)
-    return {"data": json_data}
+    # For testing, can use the sample data from the uploaded document
+    use_sample_data = False  # Set to True to use sample data
+    
+    if use_sample_data:
+        # Use sample data from the provided document
+        try:
+            with open("sample_data.json", "r") as f:
+                json_data = json.load(f)
+            logger.info("Using sample data from file")
+        except Exception as e:
+            logger.error(f"Error loading sample data: {e}")
+            raise HTTPException(status_code=500, detail=f"Error loading sample data: {str(e)}")
+    else:
+        # Fetch from API - now handling JSON directly
+        json_data = await fetch_data(date)
+    
+    try:
+        return {"data": json_data}
+    except Exception as e:
+        logger.error(f"Unexpected error in get_json_data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 @app.get("/api/color-code")
 async def get_color_code(date: Optional[str] = None):
@@ -205,11 +217,92 @@ async def get_color_code(date: Optional[str] = None):
     if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     
-    xml_data = await fetch_xml_data(date)
-    json_data = parse_xml_to_json(xml_data)
+    # Get the data
+    json_response = await get_json_data(date)
+    json_data = json_response["data"]
     
     # Group by hour
     hourly_data = group_entries_by_hour(json_data)
+    
+    # Get current and future 7 hours (total 8 hours)
+    hours_data = get_current_and_future_hours(hourly_data, 8)
+    
+    # Determine color code
+    result = determine_color_code(hours_data)
+    
+    return result
+
+@app.get("/api/sample")
+async def get_sample_data():
+    """
+    Get sample electricity price data for testing.
+    """
+    # Create sample data that includes various price scenarios
+    sample_data = []
+    
+    # Create a datetime series starting from yesterday and spanning 3 days
+    start_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    
+    # Create sample data with realistic patterns:
+    # - Higher prices in morning and evening peaks
+    # - Lower prices during night and midday
+    # - Occasional negative prices (solar/wind surplus)
+    # - 15-minute intervals for each hour
+    
+    for day_offset in range(3):  # 3 days of data
+        current_date = start_date + timedelta(days=day_offset)
+        
+        for hour in range(24):
+            base_time = current_date.replace(hour=hour)
+            
+            # Create price patterns
+            if 0 <= hour < 6:  # Night (low demand)
+                base_price = 40.0 + (day_offset * 5)
+            elif 6 <= hour < 9:  # Morning peak
+                base_price = 120.0 + (day_offset * 10)
+            elif 9 <= hour < 14:  # Midday (solar generation)
+                # Occasionally negative prices during high solar/wind periods
+                if hour == 12 and day_offset == 1:
+                    base_price = -10.0
+                else:
+                    base_price = 30.0 + (day_offset * 5)
+            elif 14 <= hour < 17:  # Afternoon
+                base_price = 80.0 + (day_offset * 8)
+            elif 17 <= hour < 22:  # Evening peak
+                base_price = 150.0 + (day_offset * 15)
+            else:  # Late evening
+                base_price = 70.0 + (day_offset * 5)
+                
+            # Add some randomness to prices
+            price_variation = (hash(f"{current_date.isoformat()}_{hour}") % 20) - 10
+            hour_base_price = base_price + price_variation
+            
+            # Create 15-minute intervals
+            for minute in [0, 15, 30, 45]:
+                entry_time = base_time.replace(minute=minute)
+                # Add slight variation within the hour
+                minute_variation = (hash(f"{entry_time.isoformat()}") % 10) - 5
+                price = round(hour_base_price + (minute_variation / 10), 4)
+                
+                sample_data.append({
+                    "isVisible": True,
+                    "dateTime": entry_time.isoformat().replace('+00:00', 'Z'),
+                    "price": price
+                })
+    
+    return {"data": sample_data}
+
+@app.get("/api/sample-color-code")
+async def get_sample_color_code():
+    """
+    Get sample color code data for testing.
+    """
+    # Get sample data from the sample endpoint
+    sample_data_response = await get_sample_data()
+    sample_data = sample_data_response["data"]
+    
+    # Group by hour
+    hourly_data = group_entries_by_hour(sample_data)
     
     # Get current and future 7 hours (total 8 hours)
     hours_data = get_current_and_future_hours(hourly_data, 8)
