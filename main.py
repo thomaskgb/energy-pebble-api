@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 import re
 import json
 
-app = FastAPI(title="Electricity color code API", 
+app = FastAPI(title="Electricity Price API", 
               description="API that provides electricity price data and color-coded indicators")
 
 # Configure logging
@@ -117,45 +117,49 @@ def get_current_and_future_hours(hourly_data: Dict[str, Dict[str, Any]], hours: 
     
     return result
 
-def determine_color_code(hourly_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Determine color code based on price ranges."""
+def determine_color_codes(hourly_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Determine color codes for all hours in the window."""
     if not hourly_data:
         raise HTTPException(status_code=404, detail="No data available for the requested time period")
     
     # Extract prices
     prices = [entry["avgPrice"] for entry in hourly_data]
     
-    # Find min and max prices
+    # Find min and max prices across all hours
     min_price = min(prices)
     max_price = max(prices)
-    current_price = hourly_data[0]["avgPrice"]
     
-    # Calculate range and thresholds
+    # Calculate range and thresholds based on the entire 8-hour window
     price_range = max_price - min_price
     
-    # Avoid division by zero if all prices are the same
-    if price_range == 0:
-        color_code = "G"  # Default to green if all prices are equal
-    else:
-        lower_threshold = min_price + (price_range / 3)
-        upper_threshold = max_price - (price_range / 3)
-        
-        if current_price <= lower_threshold:
-            color_code = "G"  # Green for cheapest third
-        elif current_price <= upper_threshold:
-            color_code = "Y"  # Yellow for middle third
-        else:
-            color_code = "R"  # Red for most expensive third
+    # Initialize result list
+    hourly_color_codes = []
     
-    # Prepare result
-    return {
-        "current_hour": hourly_data[0]["dateTime"],
-        "current_price": current_price,
-        "min_price": min_price,
-        "max_price": max_price,
-        "color_code": color_code,
-        "hourly_data": hourly_data
-    }
+    # Determine color code for each hour
+    for hour_data in hourly_data:
+        hour_price = hour_data["avgPrice"]
+        
+        # Avoid division by zero if all prices are the same
+        if price_range == 0:
+            color_code = "G"  # Default to green if all prices are equal
+        else:
+            lower_threshold = min_price + (price_range / 3)
+            upper_threshold = max_price - (price_range / 3)
+            
+            if hour_price <= lower_threshold:
+                color_code = "G"  # Green for cheapest third
+            elif hour_price <= upper_threshold:
+                color_code = "Y"  # Yellow for middle third
+            else:
+                color_code = "R"  # Red for most expensive third
+        
+        # Add to result
+        hourly_color_codes.append({
+            "hour": hour_data["dateTime"],
+            "color_code": color_code
+        })
+    
+    return hourly_color_codes
 
 @app.get("/")
 async def root():
@@ -208,13 +212,99 @@ async def get_json_data(date: Optional[str] = None):
 @app.get("/api/color-code")
 async def get_color_code(date: Optional[str] = None):
     """
-    Get color code (G, Y, R) based on price analysis.
+    Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
     
     Optional query parameter:
     - date: Date in YYYY-MM-DD format
     """
     # Validate date format if provided
-    if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+    if date and not re.match(r'^\d{4}-\d{2}-\d{2}
+
+@app.get("/api/sample")
+async def get_sample_data():
+    """
+    Get sample electricity price data for testing.
+    """
+    # Create sample data that includes various price scenarios
+    sample_data = []
+    
+    # Create a datetime series starting from yesterday and spanning 3 days
+    start_date = datetime.now(pytz.UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    
+    # Create sample data with realistic patterns:
+    # - Higher prices in morning and evening peaks
+    # - Lower prices during night and midday
+    # - Occasional negative prices (solar/wind surplus)
+    # - 15-minute intervals for each hour
+    
+    for day_offset in range(3):  # 3 days of data
+        current_date = start_date + timedelta(days=day_offset)
+        
+        for hour in range(24):
+            base_time = current_date.replace(hour=hour)
+            
+            # Create price patterns
+            if 0 <= hour < 6:  # Night (low demand)
+                base_price = 40.0 + (day_offset * 5)
+            elif 6 <= hour < 9:  # Morning peak
+                base_price = 120.0 + (day_offset * 10)
+            elif 9 <= hour < 14:  # Midday (solar generation)
+                # Occasionally negative prices during high solar/wind periods
+                if hour == 12 and day_offset == 1:
+                    base_price = -10.0
+                else:
+                    base_price = 30.0 + (day_offset * 5)
+            elif 14 <= hour < 17:  # Afternoon
+                base_price = 80.0 + (day_offset * 8)
+            elif 17 <= hour < 22:  # Evening peak
+                base_price = 150.0 + (day_offset * 15)
+            else:  # Late evening
+                base_price = 70.0 + (day_offset * 5)
+                
+            # Add some randomness to prices
+            price_variation = (hash(f"{current_date.isoformat()}_{hour}") % 20) - 10
+            hour_base_price = base_price + price_variation
+            
+            # Create 15-minute intervals
+            for minute in [0, 15, 30, 45]:
+                entry_time = base_time.replace(minute=minute)
+                # Add slight variation within the hour
+                minute_variation = (hash(f"{entry_time.isoformat()}") % 10) - 5
+                price = round(hour_base_price + (minute_variation / 10), 4)
+                
+                sample_data.append({
+                    "isVisible": True,
+                    "dateTime": entry_time.isoformat().replace('+00:00', 'Z'),
+                    "price": price
+                })
+    
+    return {"data": sample_data}
+
+@app.get("/api/sample-color-code")
+async def get_sample_color_code():
+    """
+    Get sample color codes for the current hour and next 7 hours for testing.
+    """
+    # Get sample data from the sample endpoint
+    sample_data_response = await get_sample_data()
+    sample_data = sample_data_response["data"]
+    
+    # Group by hour
+    hourly_data = group_entries_by_hour(sample_data)
+    
+    # Get current and future 7 hours (total 8 hours)
+    hours_data = get_current_and_future_hours(hourly_data, 8)
+    
+    # Determine color codes for all hours
+    color_codes = determine_color_codes(hours_data)
+    
+    # Return only the hour and color code information
+    return {"hour_color_codes": color_codes}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+, date):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     
     # Get the data
@@ -227,10 +317,11 @@ async def get_color_code(date: Optional[str] = None):
     # Get current and future 7 hours (total 8 hours)
     hours_data = get_current_and_future_hours(hourly_data, 8)
     
-    # Determine color code
-    result = determine_color_code(hours_data)
+    # Determine color codes for all hours
+    color_codes = determine_color_codes(hours_data)
     
-    return result
+    # Return only the hour and color code information
+    return {"hour_color_codes": color_codes}
 
 @app.get("/api/sample")
 async def get_sample_data():
