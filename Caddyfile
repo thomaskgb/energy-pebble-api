@@ -1,0 +1,32 @@
+:80 {
+    # Serve static files from the /static directory
+    root * /usr/share/caddy
+    
+    # Enable file serving
+    file_server
+    
+    # Set cache headers for static assets
+    @static {
+        file
+        path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg
+    }
+    header @static Cache-Control "public, max-age=31536000"
+    
+    # Security headers
+    header {
+        # Remove server header
+        -Server
+        
+        # Security headers
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+    
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+}

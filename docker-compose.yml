@@ -6,10 +6,26 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.energypebble.rule=Host(`energypebble.tdlx.nl`)"  
-      - "traefik.http.routers.energypebble.entrypoints=websecure" # use websecure for HTTPS traffic
-      - "traefik.http.routers.energypebble.tls.certresolver=myresolver"
-      - "traefik.http.services.energypebble.loadbalancer.server.port=8000" # specify the port of the service
+      - "traefik.http.routers.energypebble-api.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.energypebble-api.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-api.tls.certresolver=myresolver"
+      - "traefik.http.services.energypebble-api.loadbalancer.server.port=8000"
+    networks:
+      - proxy
+
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./static:/usr/share/caddy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.energypebble-web.rule=Host(`energypebble.tdlx.nl`)"
+      - "traefik.http.routers.energypebble-web.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-web.tls.certresolver=myresolver"
+      - "traefik.http.services.energypebble-web.loadbalancer.server.port=80"
+      - "traefik.http.routers.energypebble-web.priority=1"
     networks:
       - proxy
 
