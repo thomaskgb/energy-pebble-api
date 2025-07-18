@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 import re
 import json
+import hashlib
+from pathlib import Path
 
 app = FastAPI(title="Electricity Price API", 
               description="API that provides electricity price data and color-coded indicators")
@@ -73,7 +75,7 @@ async def fetch_data(date_str: Optional[str] = None):
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-async def fetch_data_for_date_range(start_date: datetime, num_days: int = 2):
+async def fetch_data_for_date_range(start_date: datetime, num_days: int = 3):
     """Fetch data for multiple consecutive days and combine the results."""
     all_data = []
     
@@ -97,6 +99,103 @@ async def fetch_data_for_date_range(start_date: datetime, num_days: int = 2):
             logger.error(f"Error fetching data for {date_str}: {e}")
     
     return all_data
+
+# Global cache for committed colors
+committed_colors_cache = {}
+cache_file_path = Path("/tmp/committed_colors.json")
+
+def load_committed_colors():
+    """Load committed colors from file cache."""
+    global committed_colors_cache
+    try:
+        if cache_file_path.exists():
+            with open(cache_file_path, 'r') as f:
+                committed_colors_cache = json.load(f)
+            logger.info(f"Loaded {len(committed_colors_cache)} committed colors from cache")
+        else:
+            committed_colors_cache = {}
+    except Exception as e:
+        logger.error(f"Error loading committed colors: {e}")
+        committed_colors_cache = {}
+
+def save_committed_colors():
+    """Save committed colors to file cache."""
+    try:
+        with open(cache_file_path, 'w') as f:
+            json.dump(committed_colors_cache, f)
+        logger.info(f"Saved {len(committed_colors_cache)} committed colors to cache")
+    except Exception as e:
+        logger.error(f"Error saving committed colors: {e}")
+
+def get_committed_colors_for_window(commitment_hours: int = 8) -> Dict[str, str]:
+    """Get committed colors for the next N hours."""
+    now = datetime.now(pytz.UTC).replace(minute=0, second=0, microsecond=0)
+    committed_colors = {}
+    
+    for i in range(commitment_hours):
+        target_hour = now + timedelta(hours=i)
+        target_key = target_hour.isoformat().replace('+00:00', 'Z')
+        
+        if target_key in committed_colors_cache:
+            committed_colors[target_key] = committed_colors_cache[target_key]
+    
+    return committed_colors
+
+def commit_colors_for_window(color_codes: List[Dict[str, Any]], commitment_hours: int = 8):
+    """Commit colors for the next N hours to ensure stability."""
+    global committed_colors_cache
+    
+    # Load existing committed colors
+    load_committed_colors()
+    
+    # Only commit colors for the first N hours
+    for i, color_data in enumerate(color_codes[:commitment_hours]):
+        hour_key = color_data["hour"]
+        
+        # Only commit if not already committed
+        if hour_key not in committed_colors_cache:
+            committed_colors_cache[hour_key] = color_data["color_code"]
+            logger.info(f"Committed color {color_data['color_code']} for hour {hour_key}")
+    
+    # Clean up old committed colors (older than current time)
+    now = datetime.now(pytz.UTC).replace(minute=0, second=0, microsecond=0)
+    old_keys = []
+    for hour_key in committed_colors_cache:
+        try:
+            hour_time = datetime.fromisoformat(hour_key.replace('Z', '+00:00'))
+            if hour_time < now:
+                old_keys.append(hour_key)
+        except Exception as e:
+            logger.error(f"Error parsing hour key {hour_key}: {e}")
+            old_keys.append(hour_key)
+    
+    for key in old_keys:
+        del committed_colors_cache[key]
+        logger.info(f"Removed old committed color for hour {key}")
+    
+    # Save to file
+    save_committed_colors()
+
+def apply_committed_colors(color_codes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Apply committed colors to the color codes, preserving stability."""
+    committed_colors = get_committed_colors_for_window()
+    
+    for color_data in color_codes:
+        hour_key = color_data["hour"]
+        if hour_key in committed_colors:
+            original_color = color_data["color_code"]
+            committed_color = committed_colors[hour_key]
+            
+            if original_color != committed_color:
+                logger.info(f"Using committed color {committed_color} instead of calculated {original_color} for hour {hour_key}")
+                color_data["color_code"] = committed_color
+                color_data["committed"] = True
+            else:
+                color_data["committed"] = True
+        else:
+            color_data["committed"] = False
+    
+    return color_codes
 
 def group_entries_by_hour(entries: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """Group 15-minute entries into hourly data points."""
@@ -142,19 +241,23 @@ def get_current_and_future_hours(hourly_data: Dict[str, Dict[str, Any]], hours: 
     
     return result
 
-def determine_color_codes(hourly_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Determine color codes for all hours in the window."""
+def determine_color_codes(hourly_data: List[Dict[str, Any]], reference_window_hours: int = 48) -> List[Dict[str, Any]]:
+    """Determine color codes for all hours in the window using extended reference window."""
     if not hourly_data:
         raise HTTPException(status_code=404, detail="No data available for the requested time period")
     
-    # Extract prices
-    prices = [entry["avgPrice"] for entry in hourly_data]
+    # Use extended reference window for more stable color calculations
+    # This ensures colors are based on a broader price context
+    reference_data = hourly_data[:reference_window_hours] if len(hourly_data) >= reference_window_hours else hourly_data
     
-    # Find min and max prices across all hours
-    min_price = min(prices)
-    max_price = max(prices)
+    # Extract prices from reference window
+    reference_prices = [entry["avgPrice"] for entry in reference_data]
     
-    # Calculate range and thresholds based on the entire 8-hour window
+    # Find min and max prices across the reference window
+    min_price = min(reference_prices)
+    max_price = max(reference_prices)
+    
+    # Calculate range and thresholds based on the extended reference window
     price_range = max_price - min_price
     
     # Initialize result list
@@ -237,7 +340,8 @@ async def get_json_data(date: Optional[str] = None):
 @app.get("/api/color-code")
 async def get_color_code(date: Optional[str] = None):
     """
-    Get color codes (G, Y, R) for the current hour and next 11 hours based on price analysis.
+    Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
+    Uses commitment-based stability - colors won't change once committed.
     
     Optional query parameter:
     - date: Date in YYYY-MM-DD format
@@ -252,8 +356,8 @@ async def get_color_code(date: Optional[str] = None):
     else:
         start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # Fetch data for multiple days to ensure we have enough hours
-    json_data = await fetch_data_for_date_range(start_date, num_days=2)
+    # Fetch data for multiple days to ensure we have enough hours (3 days for extended reference window)
+    json_data = await fetch_data_for_date_range(start_date, num_days=3)
     
     if not json_data:
         raise HTTPException(status_code=404, detail="No data available for the requested date range")
@@ -261,22 +365,41 @@ async def get_color_code(date: Optional[str] = None):
     # Group by hour
     hourly_data = group_entries_by_hour(json_data)
     
-    # Get current and future 11 hours (total 12 hours)
-    hours_data = get_current_and_future_hours(hourly_data, 12)
+    # Get current and future hours (48 hours for extended reference window)
+    extended_hours_data = get_current_and_future_hours(hourly_data, 48)
     
-    if not hours_data:
+    if not extended_hours_data:
         raise HTTPException(status_code=404, detail="No data available for the requested time period")
     
     # Get the current hour
-    current_hour = hours_data[0]["dateTime"]
+    current_hour = extended_hours_data[0]["dateTime"]
     
-    # Determine color codes for all hours
-    color_codes = determine_color_codes(hours_data)
+    # Determine color codes using extended reference window
+    color_codes = determine_color_codes(extended_hours_data, reference_window_hours=48)
     
-    # Return both the current hour and all hour color codes
+    # Apply commitment logic - preserve committed colors for stability
+    color_codes = apply_committed_colors(color_codes)
+    
+    # Commit new colors for the next 8 hours if not already committed
+    commit_colors_for_window(color_codes, commitment_hours=8)
+    
+    # Return only the first 8 hours for display (current + next 7)
+    display_colors = color_codes[:8]
+    
+    # Add metadata about commitment status
+    committed_count = sum(1 for color in display_colors if color.get("committed", False))
+    
+    # Return both the current hour and display color codes
     return {
         "current_hour": current_hour,
-        "hour_color_codes": color_codes
+        "hour_color_codes": display_colors,
+        "meta": {
+            "total_hours": len(display_colors),
+            "committed_hours": committed_count,
+            "flexible_hours": len(display_colors) - committed_count,
+            "reference_window_hours": 48,
+            "commitment_window_hours": 8
+        }
     }
 
 @app.get("/api/sample")
