@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:energypebble.tdlx.nl)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:www.authelia.com)",
+      "Bash(mkdir:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker exec:*)"
+    ],
+    "deny": []
+  }
+}

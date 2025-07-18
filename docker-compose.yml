@@ -21,6 +21,7 @@ services:
       - ./static:/usr/share/caddy
     labels:
       - "traefik.enable=true"
+      # All routes including dashboard
       - "traefik.http.routers.energypebble-web.rule=Host(`energypebble.tdlx.nl`)"
       - "traefik.http.routers.energypebble-web.entrypoints=websecure"
       - "traefik.http.routers.energypebble-web.tls.certresolver=myresolver"

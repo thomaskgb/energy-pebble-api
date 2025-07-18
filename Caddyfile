@@ -2,7 +2,19 @@
     # Serve static files from the /static directory
     root * /usr/share/caddy
     
-    # Enable file serving
+    # Handle dashboard route
+    handle /dashboard {
+        rewrite * /dashboard.html
+        file_server
+    }
+    
+    # Handle login route
+    handle /login {
+        rewrite * /login.html
+        file_server
+    }
+    
+    # Enable file serving for all other routes
     file_server
     
     # Set cache headers for static assets
