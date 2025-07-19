@@ -1,4 +1,31 @@
 services:
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    restart: unless-stopped
+    volumes:
+      - ./authelia/config:/config
+      - ./authelia/secrets:/secrets:ro
+    environment:
+      - TZ=UTC
+      - AUTHELIA_JWT_SECRET_FILE=/secrets/jwt_secret
+      - AUTHELIA_SESSION_SECRET_FILE=/secrets/session_secret
+      - AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/secrets/storage_encryption_key
+    labels:
+      - "traefik.enable=true"
+      # Authelia portal
+      - "traefik.http.routers.authelia.rule=Host(`auth.tdlx.nl`)"
+      - "traefik.http.routers.authelia.entrypoints=websecure"
+      - "traefik.http.routers.authelia.tls.certresolver=myresolver"
+      - "traefik.http.routers.authelia.priority=20"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+      # Forward auth middleware
+      - "traefik.http.middlewares.authelia.forwardAuth.address=http://authelia:9091/api/authz/forward-auth"
+      - "traefik.http.middlewares.authelia.forwardAuth.trustForwardHeader=true"
+      - "traefik.http.middlewares.authelia.forwardAuth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Email,Remote-Name"
+    networks:
+      - proxy
+
   api:
     build: .
     # ports:
@@ -21,7 +48,13 @@ services:
       - ./static:/usr/share/caddy
     labels:
       - "traefik.enable=true"
-      # All routes including dashboard
+      # Protected routes (dashboard)
+      - "traefik.http.routers.energypebble-web-auth.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.energypebble-web-auth.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-web-auth.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-web-auth.middlewares=authelia@docker"
+      - "traefik.http.routers.energypebble-web-auth.priority=10"
+      # Public routes (everything else)
       - "traefik.http.routers.energypebble-web.rule=Host(`energypebble.tdlx.nl`)"
       - "traefik.http.routers.energypebble-web.entrypoints=websecure"
       - "traefik.http.routers.energypebble-web.tls.certresolver=myresolver"
@@ -29,6 +62,8 @@ services:
       - "traefik.http.routers.energypebble-web.priority=1"
     networks:
       - proxy
+    depends_on:
+      - authelia
 
 networks:
   proxy:

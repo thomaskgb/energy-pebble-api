@@ -77,8 +77,8 @@ access_control:
 session:
   cookies:
     - name: authelia_session
-      domain: energypebble.tdlx.nl
-      authelia_url: https://energypebble.tdlx.nl/authelia/
+      domain: tdlx.nl
+      authelia_url: https://auth.tdlx.nl/
       default_redirection_url: https://energypebble.tdlx.nl
       same_site: lax
       inactivity: 5m
