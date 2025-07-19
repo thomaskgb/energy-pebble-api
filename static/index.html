@@ -10,194 +10,369 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
+            min-height: 100vh;
         }
-        
+
+        .top-nav {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e9ecef;
+            padding: 15px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #2c3e50;
+            text-decoration: none;
+        }
+
+        .nav-logo:hover {
+            color: #27ae60;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .nav-btn.login {
+            background: #27ae60;
+            color: white;
+        }
+
+        .nav-btn.login:hover {
+            background: #229954;
+            transform: translateY(-1px);
+        }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 30px 20px;
         }
-        
+
         .header {
             text-align: center;
             margin-bottom: 40px;
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
         }
-        
+
+        .header img {
+            max-width: 200px;
+            height: auto;
+            margin-bottom: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
         .header h1 {
             color: #2c3e50;
-            margin-bottom: 10px;
+            font-size: 2.2em;
+            margin-bottom: 15px;
+            font-weight: 600;
         }
-        
+
         .header p {
-            color: #7f8c8d;
+            color: #6c757d;
             font-size: 1.1em;
         }
-        
+
         .content {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
             margin-bottom: 40px;
         }
-        
+
         .card {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
             padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e9ecef;
         }
-        
+
         .card h2 {
             color: #2c3e50;
             margin-bottom: 20px;
+            font-size: 1.4em;
+            font-weight: 600;
             border-bottom: 2px solid #27ae60;
             padding-bottom: 10px;
         }
-        
+
+        .card p {
+            color: #495057;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
         .color-legend {
-            display: flex;
-            justify-content: space-around;
-            margin: 20px 0;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 25px 0;
         }
-        
+
         .color-item {
-            text-align: center;
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.9em;
             color: white;
-            font-weight: bold;
-            min-width: 80px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
-        
-        .color-green { background-color: #27ae60; }
-        .color-yellow { background-color: #f39c12; }
-        .color-red { background-color: #e74c3c; }
-        
-        .current-colors {
-            width: 100%;
-            grid-column: 1 / -1;
+
+        .color-green { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+        .color-yellow { background: linear-gradient(135deg, #f39c12, #f1c40f); }
+        .color-red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+
+        .info-box {
+            margin-top: 25px;
+            padding: 20px;
+            background: linear-gradient(135deg, #eafaf1 0%, #d5f4e6 100%);
+            border-radius: 12px;
+            border-left: 4px solid #27ae60;
         }
-        
+
+        .info-box h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            margin-bottom: 10px;
+            font-size: 0.95em;
+            color: #495057;
+        }
+
         .hours-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
             margin-top: 20px;
         }
-        
+
         .hour-card {
+            background: white;
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 10px;
             text-align: center;
-            color: white;
-            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             border: 2px solid transparent;
+            transition: all 0.2s ease;
         }
-        
+
+        .hour-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
         .hour-card.current {
-            border-color: #2c3e50;
-            box-shadow: 0 0 10px rgba(44, 62, 80, 0.5);
+            border-color: #27ae60;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.2);
         }
-        
-        .hour-card.committed {
-            border-width: 3px;
-            border-style: solid;
-        }
-        
-        .hour-card.committed::after {
-            content: "🔒";
-            position: absolute;
-            top: 5px;
-            right: 8px;
-            font-size: 0.8em;
-        }
-        
-        .hour-card {
-            position: relative;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #7f8c8d;
-        }
-        
-        .error {
-            background-color: #e74c3c;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        
-        .api-endpoints {
-            margin-top: 20px;
-        }
-        
-        .api-endpoints ul {
-            list-style: none;
-            padding: 0;
-        }
-        
-        .api-endpoints li {
-            background: #ecf0f1;
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-        }
-        
-        .api-endpoints li strong {
+
+        .hour-time {
+            font-weight: 600;
             color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 0.9em;
         }
-        
+
+        .hour-color {
+            font-size: 1.1em;
+            font-weight: 700;
+            padding: 8px;
+            border-radius: 6px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .color-codes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
         .refresh-button {
             background: #27ae60;
             color: white;
             border: none;
             padding: 10px 20px;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 16px;
-            margin-top: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
-        
+
         .refresh-button:hover {
             background: #229954;
+            transform: translateY(-1px);
         }
-        
+
         .refresh-button:disabled {
-            background: #bdc3c7;
+            background: #adb5bd;
             cursor: not-allowed;
+            transform: none;
         }
-        
+
+        .login-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            margin-top: 30px;
+            border: 1px solid #e9ecef;
+        }
+
+        .login-btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1em;
+            transition: all 0.2s ease;
+            margin-top: 15px;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(231, 76, 60, 0.3);
+        }
+
+        .api-endpoints {
+            list-style: none;
+            padding: 0;
+        }
+
+        .api-endpoints li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .api-endpoints li:last-child {
+            border-bottom: none;
+        }
+
+        .api-endpoints li strong {
+            color: #2c3e50;
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .api-endpoints a {
+            color: #2c3e50;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .api-endpoints a:hover {
+            color: #27ae60;
+            background: #e8f5e8;
+        }
+
         @media (max-width: 768px) {
+            .nav-container {
+                padding: 0 15px;
+            }
+            
+            .nav-logo {
+                font-size: 1.2em;
+            }
+            
+            .nav-btn {
+                padding: 6px 12px;
+                font-size: 0.9em;
+            }
+            
+            .container {
+                padding: 20px 15px;
+            }
+            
             .content {
                 grid-template-columns: 1fr;
+                gap: 20px;
             }
             
             .hours-grid {
                 grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             }
+            
+            .color-codes-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                ⚡ Energy Pebble
+            </a>
+            <div class="nav-buttons">
+                <a href="/dashboard" class="nav-btn login">🔐 Login</a>
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
         <div class="header">
-            <img src="energy-pebble-image.jpg" alt="Energy Pebble" style="max-width: 200px; height: auto; margin-bottom: 20px; border-radius: 10px;">
+            <img src="energy-pebble-image.jpg" alt="Energy Pebble">
             <h1>Energy Pebble API</h1>
-            <p>API that provides electricity price data and color-coded indicators</p>
+            <p>Real-time electricity price data and color-coded indicators for smart energy consumption</p>
         </div>
         
         <div class="content">
@@ -211,54 +386,70 @@
                     <div class="color-item color-red">RED</div>
                 </div>
                 
-                <ul style="margin-top: 20px; padding-left: 20px;">
-                    <li><strong>Green:</strong> Cheapest hours - best time to use electricity</li>
-                    <li><strong>Yellow:</strong> Medium-priced hours - moderate usage</li>
-                    <li><strong>Red:</strong> Most expensive hours - avoid high energy usage</li>
+                <ul style="list-style: none; padding: 0; margin-top: 20px;">
+                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #27ae60;">Green:</strong> Cheapest hours - perfect for high energy usage</li>
+                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #f39c12;">Yellow:</strong> Average prices - moderate energy usage recommended</li>
+                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #e74c3c;">Red:</strong> Most expensive hours - avoid high energy usage</li>
                 </ul>
                 
-                <div style="margin-top: 20px; padding: 15px; background-color: #eafaf1; border-radius: 8px; border-left: 4px solid #27ae60;">
-                    <h3 style="margin-top: 0; color: #2c3e50; font-size: 1.1em;">🔒 Stable Color Promise</h3>
-                    <p style="margin-bottom: 10px; font-size: 0.9em;">
+                <div class="info-box">
+                    <h3>🔒 Stable Color Promise</h3>
+                    <p>
                         Once you see a color, <strong>it won't change</strong> for the next 8 hours. This means you can confidently plan your energy usage without worrying about colors shifting.
                     </p>
-                    <ul style="font-size: 0.9em; margin-bottom: 0; padding-left: 20px;">
-                        <li><strong>Committed Colors:</strong> Next 8 hours - locked and stable</li>
-                        <li><strong>Smart Analysis:</strong> Based on up to 48 hours of price data</li>
-                        <li><strong>Daily Updates:</strong> New day-ahead prices at 12:45 PM</li>
-                    </ul>
+                    <p style="margin-bottom: 0;">
+                        <strong>Smart scheduling:</strong> Use green hours for dishwashers, washing machines, electric car charging, and other energy-intensive tasks.
+                    </p>
                 </div>
-            </div>
-            
-            <div class="card">
-                <h2>API Endpoints</h2>
-                <div class="api-endpoints">
-                    <ul>
-                        <li><strong>GET /api/json</strong><br>Get electricity price data in JSON format (Optional query param: date=YYYY-MM-DD)</li>
-                        <li><strong>GET /api/color-code</strong><br>Get stable color codes for current hour and next 7 hours (Optional query param: date=YYYY-MM-DD)</li>
-                        <li><strong>GET /api/sample</strong><br>Get sample electricity price data for testing</li>
-                        <li><strong>GET /api/sample-color-code</strong><br>Get sample color codes for current hour and next 11 hours</li>
-                        <li><strong>GET /docs</strong><br>API documentation (Swagger UI)</li>
-                    </ul>
-                </div>
-                
-                <button class="refresh-button" onclick="fetchColorData()">Refresh Data</button>
-                <a href="/dashboard" class="refresh-button" style="display: inline-block; text-decoration: none; text-align: center; margin-top: 10px; background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);">🔐 Access Impact Circle</a>
             </div>
             
             <div class="card current-colors">
-                <h2>Current Color Codes</h2>
-                <div id="loading" class="loading">Loading current color codes...</div>
-                <div id="error" class="error" style="display: none;"></div>
+                <div class="color-codes-header">
+                    <h2>Current Color Codes</h2>
+                    <button class="refresh-button" onclick="fetchColorData()">🔄 Refresh</button>
+                </div>
+                
+                <div id="loading" style="text-align: center; padding: 40px; color: #6c757d;">
+                    Loading current electricity prices...
+                </div>
+                
                 <div id="color-data" style="display: none;">
-                    <p>Current time: <span id="current-time"></span></p>
-                    <div id="meta-info" style="margin: 15px 0; font-size: 0.9em; color: #7f8c8d;"></div>
-                    <div id="hours-container" class="hours-grid"></div>
+                    <div class="hours-grid" id="hours-container">
+                        <!-- Color data will be loaded here -->
+                    </div>
                 </div>
             </div>
         </div>
+
+        <div class="content">
+            <div class="card">
+                <h2>API Endpoints</h2>
+                <ul class="api-endpoints">
+                    <li><strong><a href="/api/color-code" target="_blank">GET /api/color-code</a></strong> - Current and upcoming color codes</li>
+                    <li><strong><a href="/api/json" target="_blank">GET /api/json</a></strong> - Raw electricity price data</li>
+                    <li><strong><a href="/api/sample" target="_blank">GET /api/sample</a></strong> - Sample data for testing</li>
+                    <li><strong><a href="/api/sample-color-code" target="_blank">GET /api/sample-color-code</a></strong> - Sample color codes</li>
+                    <li><strong><a href="/docs" target="_blank">GET /docs</a></strong> - Interactive API documentation</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h2>Technical Details</h2>
+                <p><strong>Data Source:</strong> Elia Grid International (Belgian TSO)</p>
+                <p><strong>Update Frequency:</strong> Real-time with 8-hour commitment windows</p>
+                <p><strong>Coverage:</strong> Belgium electricity market prices</p>
+                <p><strong>API Format:</strong> JSON responses with CORS support</p>
+                <p><strong>Caching:</strong> Optimized for performance and stability</p>
+            </div>
+        </div>
+
+        <div class="login-section">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">🔋 Ready for More?</h3>
+            <p style="color: #6c757d; margin-bottom: 0;">Access the Impact Circle to discover energy secrets and learn how to maximize your savings.</p>
+            <a href="/dashboard" class="login-btn">🔐 Access Impact Circle</a>
+        </div>
     </div>
-    
+
     <script>
         function getColorClass(colorCode) {
             switch(colorCode) {
@@ -278,105 +469,59 @@
             }
         }
         
-        function formatTime(dateString) {
-            const date = new Date(dateString);
-            return date.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: false 
-            });
-        }
-        
-        function formatDateTime(dateString) {
-            const date = new Date(dateString);
-            return date.toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-            });
-        }
-        
         async function fetchColorData() {
-            const loadingEl = document.getElementById('loading');
-            const errorEl = document.getElementById('error');
-            const colorDataEl = document.getElementById('color-data');
+            const loadingDiv = document.getElementById('loading');
+            const colorDataDiv = document.getElementById('color-data');
+            const hoursContainer = document.getElementById('hours-container');
             const refreshBtn = document.querySelector('.refresh-button');
             
             // Show loading state
-            loadingEl.style.display = 'block';
-            errorEl.style.display = 'none';
-            colorDataEl.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            colorDataDiv.style.display = 'none';
             refreshBtn.disabled = true;
-            refreshBtn.textContent = 'Loading...';
+            refreshBtn.textContent = '🔄 Loading...';
             
             try {
                 const response = await fetch('/api/color-code');
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const data = await response.json();
                 
-                // Update current time
-                document.getElementById('current-time').textContent = formatDateTime(data.current_hour);
-                
-                // Update meta information
-                const metaInfo = document.getElementById('meta-info');
-                if (data.meta) {
-                    metaInfo.innerHTML = `
-                        🔒 <strong>${data.meta.committed_hours}</strong> hours committed (stable), 
-                        <strong>${data.meta.flexible_hours}</strong> hours flexible (may update)
-                    `;
-                } else {
-                    metaInfo.innerHTML = '';
-                }
-                
-                // Update hours grid
-                const hoursContainer = document.getElementById('hours-container');
+                // Clear previous data
                 hoursContainer.innerHTML = '';
                 
-                data.hour_color_codes.forEach((hourData, index) => {
+                // Add current time info
+                const currentTime = new Date();
+                
+                data.hour_color_codes.forEach((item, index) => {
+                    const hourTime = new Date(item.hour);
+                    const isCurrentHour = index === 0;
+                    
                     const hourCard = document.createElement('div');
-                    hourCard.className = `hour-card ${getColorClass(hourData.color_code)}`;
+                    hourCard.className = `hour-card ${isCurrentHour ? 'current' : ''}`;
                     
-                    // Mark the current hour
-                    if (index === 0) {
-                        hourCard.classList.add('current');
-                    }
-                    
-                    // Mark committed hours
-                    if (hourData.committed) {
-                        hourCard.classList.add('committed');
-                    }
+                    const timeString = hourTime.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false 
+                    });
                     
                     hourCard.innerHTML = `
-                        <div style="font-size: 0.9em; margin-bottom: 5px;">
-                            ${formatTime(hourData.hour)}
-                        </div>
-                        <div style="font-size: 1.2em;">
-                            ${getColorName(hourData.color_code)}
-                        </div>
-                        ${index === 0 ? '<div style="font-size: 0.8em; margin-top: 5px;">NOW</div>' : ''}
+                        <div class="hour-time">${isCurrentHour ? 'NOW' : timeString}</div>
+                        <div class="hour-color ${getColorClass(item.color_code)}">${getColorName(item.color_code)}</div>
                     `;
                     
                     hoursContainer.appendChild(hourCard);
                 });
                 
-                // Show the data
-                loadingEl.style.display = 'none';
-                colorDataEl.style.display = 'block';
+                // Show data
+                loadingDiv.style.display = 'none';
+                colorDataDiv.style.display = 'block';
                 
             } catch (error) {
                 console.error('Error fetching color data:', error);
-                errorEl.textContent = `Error loading data: ${error.message}`;
-                errorEl.style.display = 'block';
-                loadingEl.style.display = 'none';
+                loadingDiv.innerHTML = '<p style="color: #e74c3c;">❌ Failed to load data. Please try again.</p>';
             } finally {
                 refreshBtn.disabled = false;
-                refreshBtn.textContent = 'Refresh Data';
+                refreshBtn.textContent = '🔄 Refresh';
             }
         }
         
