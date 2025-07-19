@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #27ae60 0%, #f39c12 50%, #e74c3c 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .weather-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #27ae60;
+        }
+        .weather-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        .temp {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+        .description {
+            color: #666;
+            font-size: 1.1em;
+        }
+        .logout-btn {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 20px;
+        }
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(231, 76, 60, 0.3);
+        }
+        .logout-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hello, Thomas! 👋</h1>
+        
+        <div class="weather-card">
+            <div class="weather-icon">☀️</div>
+            <div class="temp">22°C</div>
+            <div class="description">Sunny and pleasant</div>
+            <p><strong>Location:</strong> Current Location</p>
+            <p><strong>Humidity:</strong> 45%</p>
+            <p><strong>Wind:</strong> 10 km/h</p>
+        </div>
+        
+        <p style="color: #666; margin-top: 30px;">
+            Welcome to your secure dashboard! You have successfully authenticated.
+        </p>
+        
+        <button class="logout-btn" onclick="window.location.href='/logout'">
+            🚪 Logout
+        </button>
+    </div>
+</body>
+</html>

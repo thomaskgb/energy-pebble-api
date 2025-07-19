@@ -1,0 +1,8 @@
+users:
+  thomas:
+    displayname: "Thomas"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$Mm2BNxKy0ALCiE2n2p8CXA$4mEyf0FD/aSkNOftsUwi6ZARKStVm1FopEWisErbL5s"
+    email: thomas@example.com
+    groups:
+      - admins
+      - dev

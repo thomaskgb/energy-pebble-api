@@ -1,0 +1,58 @@
+services:
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    volumes:
+      - ./authelia.yml:/config/configuration.yml:ro
+      - ./users_database.yml:/config/users_database.yml:ro
+      - ./authelia-assets:/assets:ro
+      - authelia_data:/config
+    ports:
+      - "9091:9091"
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9091/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./www:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      authelia:
+        condition: service_healthy
+      webapp:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  webapp:
+    image: nginx:alpine
+    container_name: webapp
+    volumes:
+      - ./www:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  authelia_data:
+  caddy_data:
+  caddy_config:

@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 25%, #27ae60 50%, #2ecc71 75%, #f39c12 100%);
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 25%, #f1c40f 50%, #f39c12 75%, #e74c3c 100%);
             background-size: 400% 400%;
             animation: energyGradient 8s ease infinite;
             min-height: 100vh;
@@ -54,7 +54,7 @@
             color: #4a5568;
             font-size: 2.5em;
             margin-bottom: 10px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: linear-gradient(45deg, #27ae60, #f39c12, #e74c3c);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -88,14 +88,14 @@
 
         input[type="text"]:focus, input[type="password"]:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.1);
         }
 
         .login-btn {
             width: 100%;
             padding: 12px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: linear-gradient(45deg, #27ae60, #f39c12);
             color: white;
             border: none;
             border-radius: 10px;
@@ -108,11 +108,17 @@
 
         .login-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 8px 25px rgba(39, 174, 96, 0.3);
         }
 
         .login-btn:active {
             transform: translateY(0);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .back-link {
@@ -121,14 +127,14 @@
         }
 
         .back-link a {
-            color: #667eea;
+            color: #27ae60;
             text-decoration: none;
             font-weight: 500;
             transition: color 0.3s ease;
         }
 
         .back-link a:hover {
-            color: #764ba2;
+            color: #f39c12;
         }
 
         .message {
@@ -178,11 +184,15 @@
         </form>
 
         <div class="back-link">
-            <a href="/">← Back to Energy Pebble</a>
+            <a href="/">← Back to Dashboard</a>
         </div>
     </div>
 
     <script>
+        // Get redirect URL from query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUrl = urlParams.get('rd') || '/';
+
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -202,7 +212,7 @@
             submitBtn.textContent = 'Logging in...';
             
             try {
-                // First, authenticate with Authelia
+                // Authenticate with Authelia API
                 const response = await fetch('/authelia/api/firstfactor', {
                     method: 'POST',
                     headers: {
@@ -215,18 +225,20 @@
                     })
                 });
                 
-                if (response.ok) {
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'OK') {
                     showMessage('Login successful! Redirecting...', 'success');
-                    // Redirect to dashboard after successful login
+                    // Redirect to original destination or dashboard
                     setTimeout(() => {
-                        window.location.href = '/dashboard';
+                        window.location.href = redirectUrl;
                     }, 1000);
                 } else {
-                    const error = await response.json();
-                    showMessage(error.message || 'Invalid username or password', 'error');
+                    showMessage(data.message || 'Invalid username or password', 'error');
                 }
             } catch (error) {
                 showMessage('Login failed. Please try again.', 'error');
+                console.error('Login error:', error);
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
@@ -239,10 +251,12 @@
             messageDiv.className = `message ${type}`;
             messageDiv.style.display = 'block';
             
-            // Hide message after 5 seconds
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
+            // Hide message after 5 seconds for errors, keep success visible
+            if (type === 'error') {
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 5000);
+            }
         }
     </script>
 </body>

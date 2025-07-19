@@ -1,0 +1,35 @@
+app.localhost.local:8443 {
+    tls internal
+    
+    route /login {
+        rewrite * /login.html
+        file_server {
+            root /srv
+        }
+    }
+    
+    route /logout {
+        rewrite * /logout.html
+        file_server {
+            root /srv
+        }
+    }
+    
+    route /authelia/* {
+        uri strip_prefix /authelia
+        reverse_proxy authelia:9091
+    }
+    
+    route /* {
+        forward_auth authelia:9091 {
+            uri /api/verify?rd=https://app.localhost.local:8443/login
+            copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+        }
+        reverse_proxy webapp:80
+    }
+}
+
+auth.localhost.local:8443 {
+    tls internal
+    reverse_proxy authelia:9091
+}

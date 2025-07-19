@@ -1,0 +1,45 @@
+theme: dark
+
+server:
+  address: 'tcp://:9091'
+  asset_path: /assets
+
+log:
+  level: debug
+
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+    password:
+      algorithm: argon2
+
+access_control:
+  default_policy: deny
+  rules:
+    - domain: app.localhost.local
+      policy: one_factor
+
+session:
+  secret: unsecure_session_secret_change_in_production
+  cookies:
+    - domain: localhost.local
+      authelia_url: https://auth.localhost.local:8443
+      default_redirection_url: https://app.localhost.local:8443
+
+regulation:
+  max_retries: 3
+  find_time: 2m
+  ban_time: 5m
+
+storage:
+  encryption_key: a_very_important_secret_for_encryption_that_should_be_changed
+  local:
+    path: /config/db.sqlite3
+
+notifier:
+  filesystem:
+    filename: /config/notification.txt
+
+identity_validation:
+  reset_password:
+    jwt_secret: a_very_important_secret_that_should_be_changed_in_production
