@@ -16,14 +16,22 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - **Real-time data**: Fetches from Elia's day-ahead pricing API
 - **Clean web interface**: Shows current color codes with stability indicators
 - **User authentication**: Authelia-based authentication with protected user area
+- **Device management**: Automatic detection and pairing of Energy Dot hardware devices
 - **Energy secrets**: Fun, educational content for authenticated users
 
 ## API Endpoints
+
+### Public Endpoints
 - `GET /api/color-code`: Get stable color codes for current hour and next 7 hours
 - `GET /api/json`: Get raw electricity price data in JSON format
 - `GET /api/sample`: Get sample data for testing
 - `GET /api/sample-color-code`: Get sample color codes for testing
 - `GET /docs`: Swagger UI documentation
+
+### Device Management (Protected)
+- `GET /api/devices`: Get detected devices from client's IP address
+- `POST /api/devices/{id}/claim`: Claim a device and assign nickname (requires auth)
+- `GET /api/user/devices`: Get all devices claimed by authenticated user
 
 ## Web Routes
 - `GET /`: Public landing page with color codes and API information
@@ -52,8 +60,16 @@ energy_pebble/
 │   ├── dashboard.html    # Protected dashboard
 │   └── energy-pebble-image.jpg  # Project image
 ├── sample_data.json      # Sample data for testing
+├── test_device_detection.py  # Test script for device detection
 └── CLAUDE.md            # This file
 ```
+
+## Device Management System
+- **Passive Detection**: Automatically detects Energy Dots making API requests
+- **Device Fingerprinting**: Creates unique identifiers based on IP, User-Agent, and timing
+- **Backward Compatibility**: Existing devices continue working without changes
+- **User Claiming**: Users can claim and name devices detected on their network
+- **SQLite Database**: Device data stored in `/tmp/energy_pebble.db`
 
 ## Color Logic
 The system uses a commitment-based approach to ensure color stability:
@@ -85,11 +101,13 @@ docker compose up -d
 - Use `/api/sample-color-code` for testing without real API calls
 - Sample data includes realistic price patterns and edge cases
 - Web interface auto-refreshes every 15 minutes
+- Run `python3 test_device_detection.py` to test device detection functionality
 
 ## Dependencies
 - FastAPI with CORS support
 - httpx for async HTTP requests
 - pytz for timezone handling
+- requests for testing scripts
 - Caddy 2 Alpine for web serving
 - Traefik for reverse proxy (external)
 
@@ -102,11 +120,9 @@ docker compose up -d
 - **Security**: All passwords use Argon2ID hashing with strong parameters
 
 ## Recent Updates
-- Implemented commitment-based color stability
-- Added extended 48-hour reference window
-- Created clean web interface with stability indicators
-- Added Caddy web server for static file serving
-- Updated Traefik routing for multi-service architecture
-- **NEW**: Added Authelia authentication system with subdomain routing
-- **NEW**: Created protected dashboard with energy secrets story
-- **NEW**: Migrated authentication to `auth.tdlx.nl` subdomain for better security
+- **Device Management**: Added automatic detection and pairing system for Energy Dots
+- **Dashboard Enhancement**: Updated dashboard with device management interface
+- **Backward Compatibility**: Ensured existing devices continue working unchanged
+- **Database Integration**: Added SQLite database for device tracking
+- **Authentication**: Migrated to `auth.tdlx.nl` subdomain for better security
+- **UI Improvements**: Professional top navigation and improved styling
