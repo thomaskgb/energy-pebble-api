@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 import httpx
 from datetime import datetime, timedelta
 import pytz
@@ -9,6 +9,8 @@ import re
 import json
 import hashlib
 from pathlib import Path
+import sqlite3
+import threading
 
 app = FastAPI(title="Electricity Price API", 
               description="API that provides electricity price data and color-coded indicators")
@@ -16,6 +18,90 @@ app = FastAPI(title="Electricity Price API",
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Database setup
+DB_PATH = Path("/tmp/energy_pebble.db")
+db_lock = threading.Lock()
+
+def init_database():
+    """Initialize the SQLite database with required tables."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        
+        # Create devices table for tracking energy dots
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_ip TEXT NOT NULL,
+                device_fingerprint TEXT UNIQUE NOT NULL,
+                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                user_agent TEXT,
+                request_count INTEGER DEFAULT 1,
+                device_id TEXT,
+                UNIQUE(client_ip, device_fingerprint)
+            )
+        ''')
+        
+        # Create user_devices table for device ownership
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                device_id INTEGER NOT NULL,
+                nickname TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (device_id) REFERENCES devices (id)
+            )
+        ''')
+        
+        # Create index for performance
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices (client_ip)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_devices_fingerprint ON devices (device_fingerprint)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices (user_id)')
+        
+        conn.commit()
+        logger.info("Database initialized successfully")
+
+def create_device_fingerprint(client_ip: str, user_agent: str, timestamp: datetime) -> str:
+    """Create a unique fingerprint for device identification."""
+    # Use client IP, user agent, and hour of first request to create fingerprint
+    hour_key = timestamp.replace(minute=0, second=0, microsecond=0).isoformat()
+    fingerprint_data = f"{client_ip}:{user_agent}:{hour_key}"
+    return hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]
+
+def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str] = None):
+    """Log a device request for tracking purposes."""
+    try:
+        with db_lock:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                
+                now = datetime.now(pytz.UTC)
+                fingerprint = create_device_fingerprint(client_ip, user_agent or "unknown", now)
+                
+                # Try to update existing device
+                cursor.execute('''
+                    UPDATE devices 
+                    SET last_seen = ?, request_count = request_count + 1, device_id = COALESCE(?, device_id)
+                    WHERE device_fingerprint = ?
+                ''', (now, device_id, fingerprint))
+                
+                # If no rows updated, insert new device
+                if cursor.rowcount == 0:
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO devices 
+                        (client_ip, device_fingerprint, first_seen, last_seen, user_agent, device_id)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (client_ip, fingerprint, now, now, user_agent, device_id))
+                
+                conn.commit()
+                
+    except Exception as e:
+        logger.error(f"Error logging device request: {e}")
+
+# Initialize database on startup
+init_database()
 
 # Add CORS middleware
 app.add_middleware(
@@ -338,7 +424,7 @@ async def get_json_data(date: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 @app.get("/api/color-code")
-async def get_color_code(date: Optional[str] = None):
+async def get_color_code(request: Request, date: Optional[str] = None):
     """
     Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
     Uses commitment-based stability - colors won't change once committed.
@@ -346,6 +432,17 @@ async def get_color_code(date: Optional[str] = None):
     Optional query parameter:
     - date: Date in YYYY-MM-DD format
     """
+    # Log device request for tracking (non-breaking)
+    try:
+        client_ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+        device_id = request.headers.get("x-device-id")  # Optional header for new devices
+        
+        # Log request asynchronously to avoid blocking
+        log_device_request(client_ip, user_agent, device_id)
+    except Exception as e:
+        logger.warning(f"Device logging failed (non-critical): {e}")
+    
     # Validate date format if provided
     if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
@@ -491,6 +588,182 @@ async def get_sample_color_code():
         "current_hour": current_hour,
         "hour_color_codes": color_codes
     }
+
+@app.get("/api/devices")
+async def get_detected_devices(request: Request):
+    """
+    Get detected devices from the same IP address as the requesting client.
+    Used for device discovery and management.
+    """
+    try:
+        client_ip = request.client.host if request.client else "unknown"
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            
+            # Get devices from the same IP
+            cursor.execute('''
+                SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
+                       d.user_agent, d.request_count, d.device_id,
+                       ud.nickname, ud.user_id
+                FROM devices d
+                LEFT JOIN user_devices ud ON d.id = ud.device_id
+                WHERE d.client_ip = ?
+                ORDER BY d.last_seen DESC
+            ''', (client_ip,))
+            
+            devices = []
+            for row in cursor.fetchall():
+                device = {
+                    "id": row[0],
+                    "fingerprint": row[1],
+                    "first_seen": row[2],
+                    "last_seen": row[3],
+                    "user_agent": row[4],
+                    "request_count": row[5],
+                    "device_id": row[6],
+                    "nickname": row[7],
+                    "claimed_by": row[8],
+                    "is_claimed": row[8] is not None,
+                    "status": "online" if datetime.fromisoformat(row[3].replace('Z', '+00:00')) > datetime.now(pytz.UTC) - timedelta(hours=1) else "offline"
+                }
+                devices.append(device)
+            
+            return {
+                "client_ip": client_ip,
+                "devices": devices,
+                "total_devices": len(devices),
+                "claimed_devices": len([d for d in devices if d["is_claimed"]]),
+                "unclaimed_devices": len([d for d in devices if not d["is_claimed"]])
+            }
+            
+    except Exception as e:
+        logger.error(f"Error fetching devices: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching devices: {str(e)}")
+
+@app.post("/api/devices/{device_id}/claim")
+async def claim_device(device_id: int, request: Request):
+    """
+    Claim a detected device and optionally assign a nickname.
+    Requires authentication via Authelia headers.
+    """
+    try:
+        # Get user from Authelia headers
+        user_id = request.headers.get("Remote-User")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        # Get request body for nickname
+        body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        nickname = body.get("nickname", "Energy Dot")
+        
+        client_ip = request.client.host if request.client else "unknown"
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            
+            # Verify device exists and is from same IP
+            cursor.execute('''
+                SELECT id, client_ip FROM devices WHERE id = ?
+            ''', (device_id,))
+            
+            device = cursor.fetchone()
+            if not device:
+                raise HTTPException(status_code=404, detail="Device not found")
+            
+            if device[1] != client_ip:
+                raise HTTPException(status_code=403, detail="Device not accessible from this IP")
+            
+            # Check if already claimed
+            cursor.execute('''
+                SELECT user_id FROM user_devices WHERE device_id = ?
+            ''', (device_id,))
+            
+            existing = cursor.fetchone()
+            if existing:
+                if existing[0] == user_id:
+                    # Update nickname if same user
+                    cursor.execute('''
+                        UPDATE user_devices SET nickname = ? WHERE device_id = ? AND user_id = ?
+                    ''', (nickname, device_id, user_id))
+                    conn.commit()
+                    return {"message": "Device nickname updated", "nickname": nickname}
+                else:
+                    raise HTTPException(status_code=409, detail="Device already claimed by another user")
+            
+            # Claim the device
+            cursor.execute('''
+                INSERT INTO user_devices (user_id, device_id, nickname)
+                VALUES (?, ?, ?)
+            ''', (user_id, device_id, nickname))
+            
+            conn.commit()
+            
+            return {
+                "message": "Device claimed successfully",
+                "device_id": device_id,
+                "nickname": nickname,
+                "user_id": user_id
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error claiming device: {e}")
+        raise HTTPException(status_code=500, detail=f"Error claiming device: {str(e)}")
+
+@app.get("/api/user/devices")
+async def get_user_devices(request: Request):
+    """
+    Get all devices claimed by the authenticated user.
+    """
+    try:
+        # Get user from Authelia headers
+        user_id = request.headers.get("Remote-User")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
+                       d.user_agent, d.request_count, d.device_id, d.client_ip,
+                       ud.nickname, ud.created_at
+                FROM devices d
+                JOIN user_devices ud ON d.id = ud.device_id
+                WHERE ud.user_id = ?
+                ORDER BY d.last_seen DESC
+            ''', (user_id,))
+            
+            devices = []
+            for row in cursor.fetchall():
+                device = {
+                    "id": row[0],
+                    "fingerprint": row[1],
+                    "first_seen": row[2],
+                    "last_seen": row[3],
+                    "user_agent": row[4],
+                    "request_count": row[5],
+                    "device_id": row[6],
+                    "client_ip": row[7],
+                    "nickname": row[8],
+                    "claimed_at": row[9],
+                    "status": "online" if datetime.fromisoformat(row[3].replace('Z', '+00:00')) > datetime.now(pytz.UTC) - timedelta(hours=1) else "offline"
+                }
+                devices.append(device)
+            
+            return {
+                "user_id": user_id,
+                "devices": devices,
+                "total_devices": len(devices)
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user devices: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user devices: {str(e)}")
 
 @app.get("/api/diagnostic")
 async def get_diagnostic(date: Optional[str] = None):
