@@ -94,11 +94,12 @@ docker compose up -d
 - Traefik for reverse proxy (external)
 
 ## User Authentication
-- **Users**: thomas (admin), djom (user), herman (user)
-- **Passwords**: All users have default passwords (thomas123, djom123, herman123)
+- **Authentication**: Authelia-based authentication with subdomain at `auth.tdlx.nl`
+- **Users**: Configured in `authelia/config/users.yml` with secure password hashing
 - **Groups**: admins, users
 - **Protection**: Only `/dashboard` route requires authentication
 - **Session**: 1 hour duration with 5 minute inactivity timeout
+- **Security**: All passwords use Argon2ID hashing with strong parameters
 
 ## Recent Updates
 - Implemented commitment-based color stability
@@ -106,6 +107,6 @@ docker compose up -d
 - Created clean web interface with stability indicators
 - Added Caddy web server for static file serving
 - Updated Traefik routing for multi-service architecture
-- **NEW**: Added Authelia authentication system
+- **NEW**: Added Authelia authentication system with subdomain routing
 - **NEW**: Created protected dashboard with energy secrets story
-- **NEW**: Added user management with three users (thomas, djom, herman)
+- **NEW**: Migrated authentication to `auth.tdlx.nl` subdomain for better security
