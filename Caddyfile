@@ -8,6 +8,12 @@
         file_server
     }
     
+    # Handle impact circle route
+    handle /impact-circle {
+        rewrite * /impact-circle.html
+        file_server
+    }
+    
     # Handle login route
     handle /login {
         rewrite * /login.html
