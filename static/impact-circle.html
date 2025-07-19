@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Pebble - Impact Circle</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #27ae60 0%, #f39c12 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .secret-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .secret-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: rotate(45deg);
+            animation: shine 3s infinite;
+        }
+        
+        @keyframes shine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            50% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+            100% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+        }
+        
+        .secret-header {
+            margin-bottom: 30px;
+        }
+        
+        .secret-title {
+            font-size: 2.5em;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .secret-subtitle {
+            font-size: 1.2em;
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+        
+        .energy-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            display: block;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .secret-story {
+            font-size: 1.1em;
+            line-height: 1.8;
+            color: #34495e;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        
+        .secret-story p {
+            margin-bottom: 20px;
+        }
+        
+        .highlight {
+            background: linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .mission-box {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border-left: 5px solid #e17055;
+        }
+        
+        .mission-box h3 {
+            color: #2d3436;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(116, 185, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #fd79a8 0%, #e84393 100%);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(253, 121, 168, 0.3);
+        }
+
+        .btn-logout {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+        }
+
+        .btn-logout:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(231, 76, 60, 0.3);
+        }
+        
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: rgba(116, 185, 255, 0.1);
+            border-radius: 10px;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #0984e3;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #636e72;
+        }
+        
+        @media (max-width: 768px) {
+            .secret-card {
+                padding: 30px 20px;
+            }
+            
+            .secret-title {
+                font-size: 2em;
+            }
+            
+            .buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="secret-card">
+            <div class="secret-header">
+                <span class="energy-icon">🔋</span>
+                <h1 class="secret-title">Welcome to the Impact Circle</h1>
+                <p class="secret-subtitle">You've unlocked the Energy Pebble secrets!</p>
+            </div>
+            
+            <div class="secret-story">
+                <p>
+                    <strong>🔐 Congratulations!</strong> You've discovered the secret that energy companies don't want you to know...
+                </p>
+                
+                <p>
+                    Every night between <span class="highlight">2 AM and 6 AM</span>, something magical happens to the electricity grid. 
+                    Wind turbines keep spinning, solar panels have stored excess energy, and the demand is at its lowest. 
+                    The grid practically <span class="highlight">pays you to use electricity</span> during these hidden green hours!
+                </p>
+                
+                <p>
+                    While everyone else sleeps, the smart money (literally) shifts their energy consumption to these secret windows. 
+                    Electric car owners charge their vehicles, smart home systems run their dishwashers and washing machines, 
+                    and crypto miners fire up their operations.
+                </p>
+                
+                <div class="mission-box">
+                    <h3>🌍 Your Mission</h3>
+                    <p>
+                        Use this knowledge to slash your energy bills and help save the planet, one smart decision at a time. 
+                        Set timers, use smart plugs, and become part of the energy revolution that's happening right under everyone's noses!
+                    </p>
+                </div>
+                
+                <p>
+                    <strong>The best part?</strong> Every kWh you shift to green hours not only saves you money but also reduces the need for dirty 
+                    peak-hour power plants. You're literally getting paid to help save the planet! 🌱⚡
+                </p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number">70%</div>
+                    <div class="stat-label">Potential Savings</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">2-6AM</div>
+                    <div class="stat-label">Sweet Spot</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">🌍</div>
+                    <div class="stat-label">Planet Helper</div>
+                </div>
+            </div>
+            
+            <div class="buttons">
+                <a href="/api/color-code" class="btn btn-primary">Check Current Prices</a>
+                <a href="/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+                <a href="https://auth.tdlx.nl/logout" class="btn btn-logout">🚪 Logout</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
