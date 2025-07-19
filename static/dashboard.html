@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Energy Pebble - Inner Circle</title>
+    <title>Energy Pebble - Impact Circle</title>
     <style>
         * {
             margin: 0;
@@ -15,7 +15,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #27ae60 0%, #f39c12 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -158,6 +158,16 @@
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(253, 121, 168, 0.3);
         }
+
+        .btn-logout {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+        }
+
+        .btn-logout:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(231, 76, 60, 0.3);
+        }
         
         
         .stats {
@@ -211,7 +221,7 @@
         <div class="secret-card">
             <div class="secret-header">
                 <span class="energy-icon">🔋</span>
-                <h1 class="secret-title">Welcome to the Inner Circle</h1>
+                <h1 class="secret-title">Welcome to the Impact Circle</h1>
                 <p class="secret-subtitle">You've unlocked the Energy Pebble secrets!</p>
             </div>
             
@@ -264,6 +274,7 @@
             <div class="buttons">
                 <a href="/api/color-code" class="btn btn-primary">Check Current Prices</a>
                 <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+                <a href="https://auth.tdlx.nl/logout" class="btn btn-logout">🚪 Logout</a>
             </div>
         </div>
     </div>
