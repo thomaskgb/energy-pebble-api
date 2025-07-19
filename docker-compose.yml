@@ -33,9 +33,17 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
+      # API routes
       - "traefik.http.routers.energypebble-api.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api`)"
       - "traefik.http.routers.energypebble-api.entrypoints=websecure"
       - "traefik.http.routers.energypebble-api.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-api.priority=10"
+      # Docs routes
+      - "traefik.http.routers.energypebble-docs.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/docs`)"
+      - "traefik.http.routers.energypebble-docs.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-docs.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-docs.priority=15"
+      - "traefik.http.routers.energypebble-docs.service=energypebble-api"
       - "traefik.http.services.energypebble-api.loadbalancer.server.port=8000"
     networks:
       - proxy
@@ -54,6 +62,12 @@ services:
       - "traefik.http.routers.energypebble-web-auth.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-web-auth.middlewares=authelia@docker"
       - "traefik.http.routers.energypebble-web-auth.priority=10"
+      # Protected routes (impact-circle)
+      - "traefik.http.routers.energypebble-web-impact.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/impact-circle`)"
+      - "traefik.http.routers.energypebble-web-impact.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-web-impact.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-web-impact.middlewares=authelia@docker"
+      - "traefik.http.routers.energypebble-web-impact.priority=10"
       # Public routes (everything else)
       - "traefik.http.routers.energypebble-web.rule=Host(`energypebble.tdlx.nl`)"
       - "traefik.http.routers.energypebble-web.entrypoints=websecure"
