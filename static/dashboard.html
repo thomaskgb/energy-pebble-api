@@ -394,6 +394,140 @@
             transform: none;
         }
 
+        /* Device Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f1f3f4;
+            padding-bottom: 15px;
+        }
+
+        .modal-title {
+            color: #2c3e50;
+            font-size: 1.4em;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+
+        .close-btn:hover {
+            color: #e74c3c;
+        }
+
+        .modal-body {
+            line-height: 1.6;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 120px;
+        }
+
+        .detail-value {
+            color: #2c3e50;
+            text-align: right;
+            flex: 1;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.online {
+            background: #27ae60;
+            box-shadow: 0 0 10px rgba(39, 174, 96, 0.3);
+        }
+
+        .status-dot.offline {
+            background: #e74c3c;
+        }
+
+        .device-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .device-item:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
         @media (max-width: 768px) {
             .nav-container {
                 padding: 0 15px;
@@ -426,6 +560,12 @@
             }
             
             .dashboard-card {
+                padding: 20px;
+            }
+
+            .modal-content {
+                margin: 10% auto;
+                width: 95%;
                 padding: 20px;
             }
         }
@@ -478,15 +618,14 @@
                 <span class="card-icon">🔴</span>
                 <h3 class="card-title">My Energy Dots</h3>
                 <p class="card-description">
-                    Manage your Energy Dot devices. View status, claim new devices detected on your network,
-                    and configure device settings.
+                    View and manage your assigned Energy Dot devices. Monitor their status and configure device settings.
                 </p>
                 <span class="card-status status-ready">Available Now</span>
                 <br>
                 <div id="device-summary" style="margin: 15px 0; font-size: 0.9em; color: #6c757d;">
                     Loading device information...
                 </div>
-                <button class="card-action" onclick="toggleDeviceManagement()">Manage My Devices</button>
+                <button class="card-action" onclick="toggleDeviceManagement()">View My Devices</button>
             </div>
 
             <div class="dashboard-card">
@@ -529,31 +668,33 @@
         <!-- Device Management Section (Hidden by default) -->
         <div id="device-management" class="device-management" style="display: none;">
             <div class="card" style="margin-top: 30px;">
-                <h2>🔴 Device Management</h2>
+                <h2>🔴 My Energy Dots</h2>
                 
-                <!-- Claimed Devices -->
+                <!-- User's Devices -->
                 <div class="device-section">
-                    <h3>My Claimed Devices</h3>
-                    <div id="claimed-devices" class="device-list">
+                    <h3>Your Assigned Devices</h3>
+                    <div id="user-devices" class="device-list">
                         <p class="loading-message">Loading your devices...</p>
                     </div>
                 </div>
                 
-                <!-- Unclaimed Devices -->
-                <div class="device-section">
-                    <h3>Detected Devices (Available to Claim)</h3>
-                    <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 15px;">
-                        These devices have been detected making requests from your network. Click "Claim" to add them to your account.
-                    </p>
-                    <div id="unclaimed-devices" class="device-list">
-                        <p class="loading-message">Scanning for devices...</p>
-                    </div>
-                </div>
-                
                 <div style="margin-top: 20px; text-align: center;">
-                    <button class="refresh-button" onclick="refreshDeviceData()">🔄 Refresh Devices</button>
+                    <button class="refresh-button" onclick="refreshDeviceData()">🔄 Refresh Status</button>
                     <button class="card-action" onclick="toggleDeviceManagement()" style="margin-left: 10px; background: #6c757d;">Close</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Details Modal -->
+    <div id="deviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Device Details</h2>
+                <button class="close-btn" onclick="closeDeviceModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Device details will be populated here -->
             </div>
         </div>
     </div>
@@ -588,29 +729,36 @@
         // Load device statistics
         async function loadDeviceStats() {
             try {
-                const response = await fetch('/api/devices');
-                const data = await response.json();
-                
-                const connectedElement = document.getElementById('connected-devices');
-                const unclaimedElement = document.getElementById('unclaimed-devices');
-                
-                if (connectedElement) {
-                    connectedElement.textContent = data.claimed_devices || 0;
-                    connectedElement.style.color = data.claimed_devices > 0 ? '#27ae60' : '#6c757d';
+                // Try production endpoint first, fallback to test endpoint
+                let userResponse = await fetch('/api/user/devices');
+                if (!userResponse.ok && userResponse.status === 401) {
+                    userResponse = await fetch('/api/test/user/devices');
                 }
                 
-                if (unclaimedElement) {
-                    unclaimedElement.textContent = data.unclaimed_devices || 0;
-                    unclaimedElement.style.color = data.unclaimed_devices > 0 ? '#f39c12' : '#6c757d';
-                }
-                
-                // Update device summary
-                const summaryElement = document.getElementById('device-summary');
-                if (summaryElement) {
-                    if (data.total_devices === 0) {
-                        summaryElement.textContent = 'No devices detected yet. Make sure your Energy Dots are connected and requesting color data.';
-                    } else {
-                        summaryElement.textContent = `${data.claimed_devices} claimed, ${data.unclaimed_devices} available to claim`;
+                if (userResponse.ok) {
+                    const data = await userResponse.json();
+                    
+                    const connectedElement = document.getElementById('connected-devices');
+                    const unclaimedElement = document.getElementById('unclaimed-devices');
+                    
+                    if (connectedElement) {
+                        connectedElement.textContent = data.total_devices || 0;
+                        connectedElement.style.color = data.total_devices > 0 ? '#27ae60' : '#6c757d';
+                    }
+                    
+                    if (unclaimedElement) {
+                        unclaimedElement.textContent = 0; // No unclaimed devices in simplified version
+                        unclaimedElement.style.color = '#6c757d';
+                    }
+                    
+                    // Update device summary
+                    const summaryElement = document.getElementById('device-summary');
+                    if (summaryElement) {
+                        if (data.total_devices === 0) {
+                            summaryElement.textContent = 'No devices assigned to your account yet.';
+                        } else {
+                            summaryElement.textContent = `You have ${data.total_devices} Energy Dot${data.total_devices !== 1 ? 's' : ''} assigned to your account.`;
+                        }
                     }
                 }
             } catch (error) {
@@ -644,46 +792,38 @@
 
         // Show loading state for device management
         function showDeviceLoading() {
-            const claimedContainer = document.getElementById('claimed-devices');
-            const unclaimedContainer = document.getElementById('unclaimed-devices');
-            
-            claimedContainer.innerHTML = '<p class="loading-message">Loading your devices...</p>';
-            unclaimedContainer.innerHTML = '<p class="loading-message">Scanning for devices...</p>';
+            const userContainer = document.getElementById('user-devices');
+            userContainer.innerHTML = '<p class="loading-message">Loading your devices...</p>';
         }
 
         // Refresh device data
         async function refreshDeviceData() {
             try {
-                // Load detected devices (public endpoint)
-                const detectedResponse = await fetch('/api/devices');
+                // Load user devices (only devices assigned to the user)
+                let userData = { devices: [] };
                 
-                if (!detectedResponse.ok) {
-                    throw new Error(`API error: ${detectedResponse.status}`);
+                // First try the production endpoint (with Authelia headers)
+                let userResponse = await fetch('/api/user/devices');
+                
+                // If that fails (401), try the test endpoint for local development
+                if (!userResponse.ok && userResponse.status === 401) {
+                    console.log('Production auth failed, trying test endpoint for local development');
+                    userResponse = await fetch('/api/test/user/devices');
                 }
                 
-                const detectedData = await detectedResponse.json();
-                console.log('Detected devices loaded:', detectedData);
-                
-                // Try to load user devices (protected endpoint)
-                let userData = { devices: [] };
-                try {
-                    const userResponse = await fetch('/api/user/devices');
-                    if (userResponse.ok) {
-                        userData = await userResponse.json();
-                    } else if (userResponse.status === 401) {
-                        console.log('User not authenticated - showing only detected devices');
-                    } else {
-                        console.warn('Failed to load user devices:', userResponse.status);
-                    }
-                } catch (userError) {
-                    console.warn('Error loading user devices:', userError);
+                if (userResponse.ok) {
+                    userData = await userResponse.json();
+                    console.log('User devices loaded:', userData);
+                } else {
+                    console.warn('Failed to load user devices:', userResponse.status);
+                    showDeviceError('Failed to load your devices. Please ensure you are logged in.');
+                    return;
                 }
                 
                 deviceData.claimed = userData.devices || [];
-                deviceData.unclaimed = detectedData.devices.filter(d => !d.is_claimed) || [];
                 
                 console.log('Device data prepared:', deviceData);
-                renderDevices();
+                renderUserDevices();
                 loadDeviceStats(); // Refresh stats too
                 
             } catch (error) {
@@ -692,73 +832,28 @@
             }
         }
 
-        // Render device lists
-        function renderDevices() {
-            console.log('renderDevices called');
-            try {
-                renderClaimedDevices();
-                console.log('renderClaimedDevices completed');
-                renderUnclaimedDevices();
-                console.log('renderUnclaimedDevices completed');
-            } catch (error) {
-                console.error('Error in renderDevices:', error);
-                showDeviceError('Error displaying devices: ' + error.message);
-            }
-        }
-
-        function renderClaimedDevices() {
-            const container = document.getElementById('claimed-devices');
+        // Render user devices
+        function renderUserDevices() {
+            console.log('renderUserDevices called');
+            const container = document.getElementById('user-devices');
             
             if (deviceData.claimed.length === 0) {
-                // Check if user is authenticated by trying to see if we have auth headers
-                container.innerHTML = '<p class="loading-message">No devices claimed yet. Claim devices below to start managing them.</p>';
+                container.innerHTML = '<p class="loading-message">No devices assigned to your account yet. Contact your administrator to have devices assigned to you.</p>';
                 return;
             }
             
             container.innerHTML = deviceData.claimed.map(device => `
-                <div class="device-item">
+                <div class="device-item" onclick="showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})">
                     <div class="device-info">
                         <div class="device-nickname">${device.nickname || 'Energy Dot'}</div>
                         <div class="device-details">
                             <span class="device-status ${device.status}">${device.status}</span>
                             Last seen: ${formatDeviceTime(device.last_seen)}<br>
-                            Requests: ${device.request_count} • ID: ${device.fingerprint.substring(0, 8)}...
+                            Requests: ${device.request_count} • Device ID: ${device.device_id || 'Unknown'}
                         </div>
                     </div>
                     <div class="device-actions">
-                        <button class="device-btn rename" onclick="renameDevice(${device.id}, '${device.nickname || 'Energy Dot'}')">Rename</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function renderUnclaimedDevices() {
-            console.log('renderUnclaimedDevices started');
-            const container = document.getElementById('unclaimed-devices');
-            console.log('Container found:', container);
-            console.log('Unclaimed devices:', deviceData.unclaimed);
-            
-            if (deviceData.unclaimed.length === 0) {
-                console.log('No unclaimed devices, showing message');
-                container.innerHTML = '<p class="loading-message">No unclaimed devices detected. Make sure your Energy Dots are connected and requesting color data.</p>';
-                return;
-            }
-            
-            console.log('Rendering', deviceData.unclaimed.length, 'unclaimed devices');
-            
-            container.innerHTML = deviceData.unclaimed.map(device => `
-                <div class="device-item">
-                    <div class="device-info">
-                        <div class="device-nickname">Unclaimed Energy Dot</div>
-                        <div class="device-details">
-                            <span class="device-status ${device.status}">${device.status}</span>
-                            First seen: ${formatDeviceTime(device.first_seen)}<br>
-                            Last seen: ${formatDeviceTime(device.last_seen)}<br>
-                            Requests: ${device.request_count} • ID: ${device.fingerprint.substring(0, 8)}...
-                        </div>
-                    </div>
-                    <div class="device-actions">
-                        <button class="device-btn claim" onclick="claimDevice(${device.id})">Claim Device</button>
+                        <button class="device-btn" onclick="event.stopPropagation(); showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})" style="background: #3498db;">View Details</button>
                     </div>
                 </div>
             `).join('');
@@ -777,64 +872,107 @@
         }
 
         function showDeviceError(message) {
-            const claimedContainer = document.getElementById('claimed-devices');
-            const unclaimedContainer = document.getElementById('unclaimed-devices');
-            
-            claimedContainer.innerHTML = `<p style="color: #e74c3c; text-align: center;">${message}</p>`;
-            unclaimedContainer.innerHTML = `<p style="color: #e74c3c; text-align: center;">${message}</p>`;
+            const userContainer = document.getElementById('user-devices');
+            userContainer.innerHTML = `<p style="color: #e74c3c; text-align: center;">${message}</p>`;
         }
 
-        // Claim a device
-        async function claimDevice(deviceId) {
-            const nickname = prompt('Enter a name for this device (e.g., "Kitchen Dot", "Living Room"):');
-            if (!nickname) return;
+        // Device Modal Functions
+        function showDeviceDetails(device) {
+            const modal = document.getElementById('deviceModal');
+            const title = document.getElementById('modalTitle');
+            const body = document.getElementById('modalBody');
             
-            try {
-                const response = await fetch(`/api/devices/${deviceId}/claim`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ nickname })
-                });
-                
-                if (response.ok) {
-                    alert(`Device claimed successfully as "${nickname}"!`);
-                    refreshDeviceData();
-                } else {
-                    const error = await response.json();
-                    alert(`Failed to claim device: ${error.detail}`);
-                }
-            } catch (error) {
-                console.error('Error claiming device:', error);
-                alert('Failed to claim device. Please try again.');
+            title.textContent = device.nickname || 'Energy Dot';
+            
+            // Calculate time since last seen
+            const lastSeenDate = new Date(device.last_seen);
+            const now = new Date();
+            const timeDiff = now - lastSeenDate;
+            const minutesAgo = Math.floor(timeDiff / (1000 * 60));
+            
+            let connectionStatus = 'Offline';
+            let statusClass = 'offline';
+            if (minutesAgo < 5) {
+                connectionStatus = 'Online';
+                statusClass = 'online';
+            } else if (minutesAgo < 30) {
+                connectionStatus = 'Recently Active';
+                statusClass = 'offline';
             }
-        }
-
-        // Rename a device
-        async function renameDevice(deviceId, currentName) {
-            const newName = prompt('Enter new name for this device:', currentName);
-            if (!newName || newName === currentName) return;
             
-            try {
-                const response = await fetch(`/api/devices/${deviceId}/claim`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ nickname: newName })
-                });
-                
-                if (response.ok) {
-                    alert(`Device renamed to "${newName}"!`);
-                    refreshDeviceData();
-                } else {
-                    const error = await response.json();
-                    alert(`Failed to rename device: ${error.detail}`);
-                }
-            } catch (error) {
-                console.error('Error renaming device:', error);
-                alert('Failed to rename device. Please try again.');
+            body.innerHTML = `
+                <div class="detail-row">
+                    <span class="detail-label">Status:</span>
+                    <span class="detail-value">
+                        <span class="status-indicator">
+                            <span class="status-dot ${statusClass}"></span>
+                            ${connectionStatus}
+                        </span>
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Device ID:</span>
+                    <span class="detail-value">${device.device_id || 'Not provided'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Hardware ID:</span>
+                    <span class="detail-value">${device.hardware_id || 'Unknown'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">MAC Address:</span>
+                    <span class="detail-value">${device.mac_address || 'Unknown'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Software Version:</span>
+                    <span class="detail-value">${device.software_version || 'Unknown'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">First Seen:</span>
+                    <span class="detail-value">${formatDetailTime(device.first_seen)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Last Connection:</span>
+                    <span class="detail-value">${formatDetailTime(device.last_seen)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Request Count:</span>
+                    <span class="detail-value">${device.request_count || 0}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Client IP:</span>
+                    <span class="detail-value">${device.client_ip || 'Unknown'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Fingerprint:</span>
+                    <span class="detail-value">${device.fingerprint ? device.fingerprint.substring(0, 12) + '...' : 'Unknown'}</span>
+                </div>
+            `;
+            
+            modal.style.display = 'block';
+        }
+        
+        function closeDeviceModal() {
+            const modal = document.getElementById('deviceModal');
+            modal.style.display = 'none';
+        }
+        
+        function formatDetailTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('deviceModal');
+            if (event.target === modal) {
+                closeDeviceModal();
             }
         }
 
