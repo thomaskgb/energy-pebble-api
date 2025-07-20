@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import httpx
 from datetime import datetime, timedelta
 import pytz
@@ -13,12 +14,104 @@ import sqlite3
 import threading
 import time
 
-app = FastAPI(title="Electricity Price API", 
-              description="API that provides electricity price data and color-coded indicators")
+app = FastAPI(
+    title="Electricity Price API", 
+    description="API that provides electricity price data and color-coded indicators",
+    openapi_tags=[
+        {
+            "name": "public",
+            "description": "Public endpoints that don't require authentication",
+        },
+        {
+            "name": "devices",
+            "description": "Device management endpoints (authentication required for some)",
+        },
+        {
+            "name": "user",
+            "description": "User-specific endpoints (authentication required)",
+        },
+    ]
+)
+
+# Configure security scheme for OpenAPI docs  
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title=app.title,
+        version="1.0.0",
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Ensure components exists
+    if "components" not in openapi_schema:
+        openapi_schema["components"] = {}
+    
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "Token",
+            "description": "Enter your username (e.g., 'thomas') or encoded token"
+        }
+    }
+    
+    # Note: We handle authentication manually in the endpoint functions
+    # No need to add security requirements in OpenAPI since we use custom auth logic
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Security scheme for OpenAPI docs
+security = HTTPBearer()
+
+def get_current_user(request: Request):
+    """
+    Get current user from Authelia headers or Bearer token.
+    This function supports both Authelia proxy headers and Bearer token authentication for the docs.
+    """
+    # First try to get user from Authelia headers (for normal web requests)
+    user_id = request.headers.get("Remote-User")
+    if user_id:
+        return user_id
+    
+    # Try to get from Authorization header for API docs
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:]  # Remove "Bearer " prefix
+        if token:
+            # Simple token format: "user:password" base64 encoded or just username
+            try:
+                import base64
+                decoded = base64.b64decode(token).decode('utf-8')
+                if ':' in decoded:
+                    username = decoded.split(':')[0]
+                else:
+                    username = decoded
+                return username
+            except:
+                # If not base64, treat as plain username for demo
+                return token
+    
+    raise HTTPException(
+        status_code=401,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+def get_optional_user(request: Request) -> Optional[str]:
+    """Get user from headers without raising exception if not authenticated."""
+    return request.headers.get("Remote-User")
 
 # Database setup
 DB_PATH = Path("/tmp/energy_pebble.db")
@@ -39,7 +132,7 @@ def init_database():
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 user_agent TEXT,
                 request_count INTEGER DEFAULT 1,
-                device_id TEXT,
+                device_id TEXT UNIQUE,
                 hardware_id INTEGER,
                 mac_address TEXT,
                 software_version TEXT,
@@ -141,22 +234,40 @@ def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str]
                 cursor = conn.cursor()
                 
                 now = datetime.now(pytz.UTC)
-                fingerprint = create_device_fingerprint(client_ip, user_agent or "unknown", now)
                 
-                # Try to update existing device
-                cursor.execute('''
-                    UPDATE devices 
-                    SET last_seen = ?, request_count = request_count + 1, device_id = COALESCE(?, device_id)
-                    WHERE device_fingerprint = ?
-                ''', (now, device_id, fingerprint))
-                
-                # If no rows updated, insert new device
-                if cursor.rowcount == 0:
+                if device_id:
+                    # If device_id is provided, update or create device by device_id (UUID-based approach)
                     cursor.execute('''
-                        INSERT OR IGNORE INTO devices 
-                        (client_ip, device_fingerprint, first_seen, last_seen, user_agent, device_id)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (client_ip, fingerprint, now, now, user_agent, device_id))
+                        UPDATE devices 
+                        SET last_seen = ?, request_count = request_count + 1, client_ip = ?
+                        WHERE device_id = ?
+                    ''', (now, client_ip, device_id))
+                    
+                    # If no rows updated, insert new device with device_id
+                    if cursor.rowcount == 0:
+                        fingerprint = create_device_fingerprint(client_ip, user_agent or "unknown", now)
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO devices 
+                            (client_ip, device_fingerprint, first_seen, last_seen, user_agent, device_id)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ''', (client_ip, fingerprint, now, now, user_agent, device_id))
+                else:
+                    # Fallback to fingerprint-based detection for devices without device_id
+                    fingerprint = create_device_fingerprint(client_ip, user_agent or "unknown", now)
+                    
+                    cursor.execute('''
+                        UPDATE devices 
+                        SET last_seen = ?, request_count = request_count + 1
+                        WHERE device_fingerprint = ? AND device_id IS NULL
+                    ''', (now, fingerprint))
+                    
+                    # If no rows updated, insert new device
+                    if cursor.rowcount == 0:
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO devices 
+                            (client_ip, device_fingerprint, first_seen, last_seen, user_agent)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (client_ip, fingerprint, now, now, user_agent))
                 
                 conn.commit()
                 
@@ -483,7 +594,7 @@ def determine_color_codes(hourly_data: List[Dict[str, Any]], reference_window_ho
     
     return hourly_color_codes
 
-@app.get("/")
+@app.get("/", tags=["public"])
 async def root():
     """Root endpoint with API information."""
     return {
@@ -497,7 +608,7 @@ async def root():
         }
     }
 
-@app.get("/api/json")
+@app.get("/api/json", tags=["public"])
 async def get_json_data(date: Optional[str] = None):
     """
     Get electricity price data in JSON format.
@@ -531,7 +642,7 @@ async def get_json_data(date: Optional[str] = None):
         logger.error(f"Unexpected error in get_json_data: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-@app.get("/api/color-code")
+@app.get("/api/color-code", tags=["public"])
 async def get_color_code(request: Request, date: Optional[str] = None, device_id: Optional[str] = None):
     """
     Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
@@ -608,7 +719,7 @@ async def get_color_code(request: Request, date: Optional[str] = None, device_id
         }
     }
 
-@app.get("/api/sample")
+@app.get("/api/sample", tags=["public"])
 async def get_sample_data():
     """
     Get sample electricity price data for testing.
@@ -668,7 +779,7 @@ async def get_sample_data():
     
     return {"data": sample_data}
 
-@app.get("/api/sample-color-code")
+@app.get("/api/sample-color-code", tags=["public"])
 async def get_sample_color_code():
     """
     Get sample color codes for the current hour and next 11 hours for testing.
@@ -698,29 +809,28 @@ async def get_sample_color_code():
         "hour_color_codes": color_codes
     }
 
-@app.get("/api/devices")
-async def get_detected_devices(request: Request):
-    """
-    Get detected devices from the same IP address as the requesting client.
-    Used for device discovery and management.
-    """
+# Device claiming endpoints removed for simplicity
+# Devices are now pre-assigned to users via database setup
+
+@app.get("/api/test/user/devices", tags=["user"])
+async def test_user_devices(request: Request):
+    """Test endpoint for local development - hardcodes thomas user."""
     try:
-        client_ip = get_real_client_ip(request)
+        user_id = "thomas"  # Hardcoded for testing
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             
-            # Get devices from the same IP
             cursor.execute('''
                 SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
-                       d.user_agent, d.request_count, d.device_id,
+                       d.user_agent, d.request_count, d.device_id, d.client_ip,
                        d.hardware_id, d.mac_address, d.software_version,
-                       ud.nickname, ud.user_id
+                       ud.nickname, ud.created_at
                 FROM devices d
-                LEFT JOIN user_devices ud ON d.id = ud.device_id
-                WHERE d.client_ip = ?
+                JOIN user_devices ud ON d.id = ud.device_id
+                WHERE ud.user_id = ?
                 ORDER BY d.last_seen DESC
-            ''', (client_ip,))
+            ''', (user_id,))
             
             devices = []
             for row in cursor.fetchall():
@@ -732,109 +842,34 @@ async def get_detected_devices(request: Request):
                     "user_agent": row[4],
                     "request_count": row[5],
                     "device_id": row[6],
-                    "hardware_id": row[7],
-                    "mac_address": row[8],
-                    "software_version": row[9],
-                    "nickname": row[10],
-                    "claimed_by": row[11],
-                    "is_claimed": row[11] is not None,
+                    "client_ip": row[7],
+                    "hardware_id": row[8],
+                    "mac_address": row[9],
+                    "software_version": row[10],
+                    "nickname": row[11],
+                    "claimed_at": row[12],
                     "status": "offline"
                 }
                 devices.append(device)
             
             return {
-                "client_ip": client_ip,
+                "user_id": user_id,
                 "devices": devices,
-                "total_devices": len(devices),
-                "claimed_devices": len([d for d in devices if d["is_claimed"]]),
-                "unclaimed_devices": len([d for d in devices if not d["is_claimed"]])
+                "total_devices": len(devices)
             }
             
     except Exception as e:
-        logger.error(f"Error fetching devices: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching devices: {str(e)}")
+        logger.error(f"Error fetching test user devices: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user devices: {str(e)}")
 
-@app.post("/api/devices/{device_id}/claim")
-async def claim_device(device_id: int, request: Request):
-    """
-    Claim a detected device and optionally assign a nickname.
-    Requires authentication via Authelia headers.
-    """
-    try:
-        # Get user from Authelia headers
-        user_id = request.headers.get("Remote-User")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        
-        # Get request body for nickname
-        body = await request.json() if request.headers.get("content-type") == "application/json" else {}
-        nickname = body.get("nickname", "Energy Dot")
-        
-        client_ip = get_real_client_ip(request)
-        
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            
-            # Verify device exists and is from same IP
-            cursor.execute('''
-                SELECT id, client_ip FROM devices WHERE id = ?
-            ''', (device_id,))
-            
-            device = cursor.fetchone()
-            if not device:
-                raise HTTPException(status_code=404, detail="Device not found")
-            
-            if device[1] != client_ip:
-                raise HTTPException(status_code=403, detail="Device not accessible from this IP")
-            
-            # Check if already claimed
-            cursor.execute('''
-                SELECT user_id FROM user_devices WHERE device_id = ?
-            ''', (device_id,))
-            
-            existing = cursor.fetchone()
-            if existing:
-                if existing[0] == user_id:
-                    # Update nickname if same user
-                    cursor.execute('''
-                        UPDATE user_devices SET nickname = ? WHERE device_id = ? AND user_id = ?
-                    ''', (nickname, device_id, user_id))
-                    conn.commit()
-                    return {"message": "Device nickname updated", "nickname": nickname}
-                else:
-                    raise HTTPException(status_code=409, detail="Device already claimed by another user")
-            
-            # Claim the device
-            cursor.execute('''
-                INSERT INTO user_devices (user_id, device_id, nickname)
-                VALUES (?, ?, ?)
-            ''', (user_id, device_id, nickname))
-            
-            conn.commit()
-            
-            return {
-                "message": "Device claimed successfully",
-                "device_id": device_id,
-                "nickname": nickname,
-                "user_id": user_id
-            }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error claiming device: {e}")
-        raise HTTPException(status_code=500, detail=f"Error claiming device: {str(e)}")
-
-@app.get("/api/user/devices")
+@app.get("/api/user/devices", tags=["user"])  
 async def get_user_devices(request: Request):
     """
     Get all devices claimed by the authenticated user.
     """
     try:
-        # Get user from Authelia headers
-        user_id = request.headers.get("Remote-User")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required")
+        # Get user directly from authentication function
+        user_id = get_current_user(request)
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -882,7 +917,7 @@ async def get_user_devices(request: Request):
         logger.error(f"Error fetching user devices: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching user devices: {str(e)}")
 
-@app.get("/api/diagnostic")
+@app.get("/api/diagnostic", tags=["public"])
 async def get_diagnostic(date: Optional[str] = None):
     """
     Diagnostic endpoint to check available data.
