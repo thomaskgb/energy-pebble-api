@@ -325,6 +325,11 @@
             color: #155724;
         }
 
+        .device-status.recently_active {
+            background: #fff3cd;
+            color: #856404;
+        }
+
         .device-status.offline {
             background: #f8d7da;
             color: #721c24;
@@ -504,6 +509,11 @@
         .status-dot.online {
             background: #27ae60;
             box-shadow: 0 0 10px rgba(39, 174, 96, 0.3);
+        }
+
+        .status-dot.recently_active {
+            background: #f39c12;
+            box-shadow: 0 0 10px rgba(243, 156, 18, 0.3);
         }
 
         .status-dot.offline {
@@ -732,7 +742,9 @@
                 // Try production endpoint first, fallback to test endpoint
                 let userResponse = await fetch('/api/user/devices');
                 if (!userResponse.ok && userResponse.status === 401) {
-                    userResponse = await fetch('/api/test/user/devices');
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const testUser = urlParams.get('testuser') || 'thomas';
+                    userResponse = await fetch(`/api/test/user/devices?user=${testUser}`);
                 }
                 
                 if (userResponse.ok) {
@@ -808,7 +820,10 @@
                 // If that fails (401), try the test endpoint for local development
                 if (!userResponse.ok && userResponse.status === 401) {
                     console.log('Production auth failed, trying test endpoint for local development');
-                    userResponse = await fetch('/api/test/user/devices');
+                    // Check URL for test user parameter (e.g., ?testuser=willie)
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const testUser = urlParams.get('testuser') || 'thomas';
+                    userResponse = await fetch(`/api/test/user/devices?user=${testUser}`);
                 }
                 
                 if (userResponse.ok) {
@@ -884,21 +899,23 @@
             
             title.textContent = device.nickname || 'Energy Dot';
             
-            // Calculate time since last seen
-            const lastSeenDate = new Date(device.last_seen);
-            const now = new Date();
-            const timeDiff = now - lastSeenDate;
-            const minutesAgo = Math.floor(timeDiff / (1000 * 60));
-            
+            // Use the status and minutes from the API response
             let connectionStatus = 'Offline';
-            let statusClass = 'offline';
-            if (minutesAgo < 5) {
-                connectionStatus = 'Online';
-                statusClass = 'online';
-            } else if (minutesAgo < 30) {
-                connectionStatus = 'Recently Active';
-                statusClass = 'offline';
+            let statusClass = device.status || 'offline';
+            
+            switch(device.status) {
+                case 'online':
+                    connectionStatus = 'Online';
+                    break;
+                case 'recently_active':
+                    connectionStatus = 'Recently Active';
+                    break;
+                default:
+                    connectionStatus = 'Offline';
+                    statusClass = 'offline';
             }
+            
+            const minutesAgo = device.minutes_since_last_seen || 0;
             
             body.innerHTML = `
                 <div class="detail-row">
@@ -932,7 +949,7 @@
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Last Connection:</span>
-                    <span class="detail-value">${formatDetailTime(device.last_seen)}</span>
+                    <span class="detail-value">${formatDetailTime(device.last_seen)} (${minutesAgo} minutes ago)</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Request Count:</span>
