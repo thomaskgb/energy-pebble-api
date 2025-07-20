@@ -38,6 +38,7 @@ services:
       - "traefik.http.routers.energypebble-api.entrypoints=websecure"
       - "traefik.http.routers.energypebble-api.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-api.priority=10"
+      - "traefik.http.routers.energypebble-api.middlewares=real-ip"
       # Docs routes
       - "traefik.http.routers.energypebble-docs.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/docs`)"
       - "traefik.http.routers.energypebble-docs.entrypoints=websecure"
@@ -51,6 +52,8 @@ services:
       - "traefik.http.routers.energypebble-openapi.priority=15"
       - "traefik.http.routers.energypebble-openapi.service=energypebble-api"
       - "traefik.http.services.energypebble-api.loadbalancer.server.port=8000"
+      # Real IP middleware to forward client IP  
+      - "traefik.http.middlewares.real-ip.headers.customrequestheaders.X-Forwarded-Proto=https"
     networks:
       - proxy
 

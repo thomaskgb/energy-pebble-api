@@ -11,6 +11,7 @@ import hashlib
 from pathlib import Path
 import sqlite3
 import threading
+import time
 
 app = FastAPI(title="Electricity Price API", 
               description="API that provides electricity price data and color-coded indicators")
@@ -116,6 +117,15 @@ def init_database():
         conn.commit()
         logger.info("Database initialized successfully")
 
+def get_real_client_ip(request: Request) -> str:
+    """Extract real client IP from proxy headers."""
+    return (
+        request.headers.get("cf-connecting-ip") or  # Cloudflare real IP
+        request.headers.get("x-real-ip") or        # Standard proxy header
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip() or  # Standard forwarded header
+        (request.client.host if request.client else "unknown")
+    )
+
 def create_device_fingerprint(client_ip: str, user_agent: str, timestamp: datetime) -> str:
     """Create a unique fingerprint for device identification."""
     # Use client IP, user agent, and hour of first request to create fingerprint
@@ -156,6 +166,25 @@ def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str]
 # Initialize database on startup
 init_database()
 
+# Add custom logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    # Get real client IP and device ID for logging
+    client_ip = get_real_client_ip(request)
+    device_id = request.headers.get("x-device-id") or request.query_params.get("device_id")
+    
+    
+    response = await call_next(request)
+    
+    # Log with custom format
+    process_time = time.time() - start_time
+    device_info = f" - device: {device_id}" if device_id else ""
+    logger.info(f"{client_ip} - \"{request.method} {request.url.path}{request.url.query and '?' + str(request.url.query) or ''}\" {response.status_code} ({process_time:.3f}s){device_info}")
+    
+    return response
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -184,11 +213,8 @@ async def fetch_data(date_str: Optional[str] = None):
             content = response.text
             logger.info(f"Response status: {response.status_code}, content size: {len(content)} bytes")
             
-            # For debugging purposes, log a small sample of the response
-            if content:
-                sample = content[:100] + "..." if len(content) > 100 else content
-                logger.info(f"Sample response: {sample}")
-            else:
+            # Check for empty response
+            if not content:
                 logger.warning("Received empty response from Elia API")
             
             # Check if the response is JSON (which appears to be the case)
@@ -214,6 +240,31 @@ async def fetch_data(date_str: Optional[str] = None):
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
+def should_data_be_available(target_date: datetime) -> bool:
+    """
+    Check if day-ahead price data should be available for a given date.
+    Day-ahead prices are published around 12:45 CET for the next day.
+    """
+    # Convert target date to CET timezone for comparison
+    cet = pytz.timezone('CET')
+    now_cet = datetime.now(cet)
+    target_date_cet = target_date.replace(tzinfo=cet)
+    
+    # Data for today should always be available (published yesterday)
+    today_cet = now_cet.date()
+    target_date_only = target_date_cet.date()
+    
+    if target_date_only <= today_cet:
+        return True
+    
+    # For tomorrow's data, check if it's after 12:45 CET today
+    if target_date_only == today_cet + timedelta(days=1):
+        publication_time = now_cet.replace(hour=12, minute=45, second=0, microsecond=0)
+        return now_cet >= publication_time
+    
+    # For dates further in the future, data is not expected to be available yet
+    return False
+
 async def fetch_data_for_date_range(start_date: datetime, num_days: int = 3):
     """Fetch data for multiple consecutive days and combine the results."""
     all_data = []
@@ -222,6 +273,11 @@ async def fetch_data_for_date_range(start_date: datetime, num_days: int = 3):
         # Calculate the date for this offset
         current_date = start_date + timedelta(days=day_offset)
         date_str = current_date.strftime("%Y-%m-%d")
+        
+        # Skip dates where data definitely won't be available
+        if not should_data_be_available(current_date):
+            logger.debug(f"Skipping {date_str} - data not yet published (before 12:45 CET)")
+            continue
         
         try:
             # Fetch data for this date
@@ -233,7 +289,7 @@ async def fetch_data_for_date_range(start_date: datetime, num_days: int = 3):
                 else:
                     logger.warning(f"Data for {date_str} is not a list: {type(day_data)}")
             else:
-                logger.warning(f"No data available for {date_str}")
+                logger.warning(f"No data available for {date_str} (data should be available)")
         except Exception as e:
             logger.error(f"Error fetching data for {date_str}: {e}")
     
@@ -375,8 +431,7 @@ def get_current_and_future_hours(hourly_data: Dict[str, Dict[str, Any]], hours: 
         
         if target_key in hourly_data:
             result.append(hourly_data[target_key])
-        else:
-            logger.warning(f"Data for hour {target_key} not found in dataset")
+        # Skip individual hour warnings - day-level warnings are sufficient
     
     return result
 
@@ -477,7 +532,7 @@ async def get_json_data(date: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 @app.get("/api/color-code")
-async def get_color_code(request: Request, date: Optional[str] = None, test: Optional[str] = None):
+async def get_color_code(request: Request, date: Optional[str] = None, device_id: Optional[str] = None):
     """
     Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
     Uses commitment-based stability - colors won't change once committed.
@@ -488,16 +543,9 @@ async def get_color_code(request: Request, date: Optional[str] = None, test: Opt
     """
     # Log device request for tracking (non-breaking)
     try:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_real_client_ip(request)
         user_agent = request.headers.get("user-agent", "unknown")
-        header_device_id = request.headers.get("x-device-id")  # Optional header for new devices
-        
-        # Use query parameter deviceid if provided, otherwise fall back to header
-        final_device_id = deviceid or header_device_id
-        
-        # Log deviceid if provided via query parameter for future analytics
-        if deviceid:
-            logger.info(f"Color request with deviceid: {deviceid}")
+        final_device_id = device_id or request.headers.get("x-device-id")
         
         # Log request asynchronously to avoid blocking
         log_device_request(client_ip, user_agent, final_device_id)
@@ -657,7 +705,7 @@ async def get_detected_devices(request: Request):
     Used for device discovery and management.
     """
     try:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_real_client_ip(request)
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -722,7 +770,7 @@ async def claim_device(device_id: int, request: Request):
         body = await request.json() if request.headers.get("content-type") == "application/json" else {}
         nickname = body.get("nickname", "Energy Dot")
         
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_real_client_ip(request)
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
