@@ -76,6 +76,16 @@
             transform: translateY(-1px);
         }
 
+        .nav-btn.dashboard {
+            background: #27ae60;
+            color: white;
+        }
+
+        .nav-btn.dashboard:hover {
+            background: #229954;
+            transform: translateY(-1px);
+        }
+
         /* User Menu Styles */
         .user-menu {
             position: relative;
@@ -617,12 +627,13 @@
             if (username) {
                 // User is logged in - show user menu
                 navButtons.innerHTML = `
+                    <a href="/dashboard" class="nav-btn dashboard">📊 Dashboard</a>
                     <div class="user-menu" id="user-menu">
                         <button class="user-menu-trigger" id="user-menu-trigger">
                             👤 ${username} ▼
                         </button>
                         <div class="user-menu-dropdown">
-                            <a href="/dashboard" class="user-menu-item">📊 Dashboard</a>
+                            <a href="#" class="user-menu-item" onclick="openUserSettings()">⚙️ Settings</a>
                             <a href="#" class="user-menu-item logout" onclick="logout()">🚪 Logout</a>
                         </div>
                     </div>
@@ -671,8 +682,135 @@
             updateNavigation(username);
         });
         
+        // User settings functionality
+        let currentUserData = null;
+
+        function openUserSettings() {
+            // Close user menu first
+            const userMenu = document.getElementById('user-menu');
+            if (userMenu) {
+                userMenu.classList.remove('active');
+            }
+            
+            // Load current user data
+            loadCurrentUserData();
+            
+            // Show modal
+            document.getElementById('userSettingsModal').style.display = 'block';
+        }
+
+        function closeUserSettings() {
+            document.getElementById('userSettingsModal').style.display = 'none';
+            // Clear form
+            document.getElementById('userSettingsForm').reset();
+        }
+
+        async function loadCurrentUserData() {
+            try {
+                const response = await fetch('/api/user/profile');
+                if (response.ok) {
+                    currentUserData = await response.json();
+                    const username = currentUserData.username;
+                    
+                    // Update settings form when opened
+                    const usernameInput = document.getElementById('newUsername');
+                    if (usernameInput) {
+                        usernameInput.value = username;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load user data:', error);
+            }
+        }
+
+        // Handle user settings form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const settingsForm = document.getElementById('userSettingsForm');
+            if (settingsForm) {
+                settingsForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(e.target);
+                    const newUsername = formData.get('username').trim();
+                    const currentPassword = formData.get('currentPassword');
+                    const newPassword = formData.get('newPassword');
+                    
+                    if (!newUsername) {
+                        alert('Username is required');
+                        return;
+                    }
+                    
+                    const updateData = { username: newUsername };
+                    
+                    if (currentPassword && newPassword) {
+                        updateData.currentPassword = currentPassword;
+                        updateData.newPassword = newPassword;
+                    }
+                    
+                    try {
+                        const response = await fetch('/api/user/profile', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(updateData)
+                        });
+                        
+                        if (response.ok) {
+                            alert('Settings updated successfully!');
+                            closeUserSettings();
+                            
+                            // Refresh the page to update username in navigation
+                            window.location.reload();
+                        } else {
+                            const error = await response.json();
+                            alert(`Failed to update settings: ${error.detail}`);
+                        }
+                    } catch (error) {
+                        console.error('Error updating settings:', error);
+                        alert('Failed to update settings. Please try again.');
+                    }
+                });
+            }
+        });
+
         // Auto-refresh every 15 minutes
         setInterval(fetchColorData, 15 * 60 * 1000);
     </script>
+
+    <!-- User Settings Modal -->
+    <div id="userSettingsModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+        <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: none; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+                <h2 class="modal-title" style="margin: 0; color: #2c3e50; font-size: 24px;">User Settings</h2>
+                <button class="close-btn" onclick="closeUserSettings()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #aaa; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="userSettingsForm">
+                    <div style="margin-bottom: 20px;">
+                        <label for="newUsername" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Username:</label>
+                        <input type="text" id="newUsername" name="username" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new username">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label for="currentPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Current Password:</label>
+                        <input type="password" id="currentPassword" name="currentPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter current password (optional)">
+                        <small style="color: #666; font-size: 12px;">Only required if changing password</small>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label for="newPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">New Password:</label>
+                        <input type="password" id="newPassword" name="newPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new password (optional)">
+                        <small style="color: #666; font-size: 12px;">Leave blank to keep current password</small>
+                    </div>
+                    
+                    <div style="text-align: right; margin-top: 25px;">
+                        <button type="button" onclick="closeUserSettings()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; margin-right: 10px; cursor: pointer;">Cancel</button>
+                        <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

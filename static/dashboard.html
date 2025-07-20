@@ -690,11 +690,7 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="connected-devices">-</div>
-                    <div class="stat-label">Connected Energy Dots</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="unclaimed-devices">-</div>
-                    <div class="stat-label">Unclaimed Devices</div>
+                    <div class="stat-label">My Energy Dots</div>
                 </div>
             </div>
         </div>
@@ -850,7 +846,7 @@
         }
 
         // Device management variables
-        let deviceData = { claimed: [], unclaimed: [] };
+        let deviceData = { claimed: [] };
 
         // Load device statistics
         async function loadDeviceStats() {
@@ -866,16 +862,10 @@
                     const data = await userResponse.json();
                     
                     const connectedElement = document.getElementById('connected-devices');
-                    const unclaimedElement = document.getElementById('unclaimed-devices');
                     
                     if (connectedElement) {
                         connectedElement.textContent = data.total_devices || 0;
                         connectedElement.style.color = data.total_devices > 0 ? '#27ae60' : '#6c757d';
-                    }
-                    
-                    if (unclaimedElement) {
-                        unclaimedElement.textContent = 0; // No unclaimed devices in simplified version
-                        unclaimedElement.style.color = '#6c757d';
                     }
                     
                     // Update device summary
@@ -1041,10 +1031,6 @@
                 <div class="detail-row">
                     <span class="detail-label">Device ID:</span>
                     <span class="detail-value">${device.device_id || 'Not provided'}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Hardware ID:</span>
-                    <span class="detail-value">${device.hardware_id || 'Unknown'}</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">MAC Address:</span>

@@ -122,23 +122,61 @@ def init_database():
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         
-        # Create devices table for tracking energy dots
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS devices (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                client_ip TEXT NOT NULL,
-                device_fingerprint TEXT UNIQUE NOT NULL,
-                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                user_agent TEXT,
-                request_count INTEGER DEFAULT 1,
-                device_id TEXT UNIQUE,
-                hardware_id INTEGER,
-                mac_address TEXT,
-                software_version TEXT,
-                UNIQUE(client_ip, device_fingerprint)
-            )
-        ''')
+        # Check if we need to migrate the devices table to remove hardware_id
+        cursor.execute("PRAGMA table_info(devices)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'hardware_id' in columns:
+            logger.info("Migrating devices table to remove hardware_id column")
+            
+            # Create new table without hardware_id
+            cursor.execute('''
+                CREATE TABLE devices_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_ip TEXT NOT NULL,
+                    device_fingerprint TEXT UNIQUE NOT NULL,
+                    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    user_agent TEXT,
+                    request_count INTEGER DEFAULT 1,
+                    device_id TEXT UNIQUE,
+                    mac_address TEXT,
+                    software_version TEXT,
+                    UNIQUE(client_ip, device_fingerprint)
+                )
+            ''')
+            
+            # Copy data from old table to new table (excluding hardware_id)
+            cursor.execute('''
+                INSERT INTO devices_new (id, client_ip, device_fingerprint, first_seen, last_seen, 
+                                       user_agent, request_count, device_id, mac_address, software_version)
+                SELECT id, client_ip, device_fingerprint, first_seen, last_seen,
+                       user_agent, request_count, device_id, mac_address, software_version
+                FROM devices
+            ''')
+            
+            # Drop old table and rename new table
+            cursor.execute('DROP TABLE devices')
+            cursor.execute('ALTER TABLE devices_new RENAME TO devices')
+            
+            logger.info("Successfully migrated devices table")
+        else:
+            # Create devices table for tracking energy dots (new installations)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS devices (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_ip TEXT NOT NULL,
+                    device_fingerprint TEXT UNIQUE NOT NULL,
+                    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    user_agent TEXT,
+                    request_count INTEGER DEFAULT 1,
+                    device_id TEXT UNIQUE,
+                    mac_address TEXT,
+                    software_version TEXT,
+                    UNIQUE(client_ip, device_fingerprint)
+                )
+            ''')
         
         # Create user_devices table for device ownership
         cursor.execute('''
@@ -152,13 +190,18 @@ def init_database():
             )
         ''')
         
+        # Create predefined_devices table for bulk device uploads
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS predefined_devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT UNIQUE NOT NULL,
+                mac_address TEXT,
+                software_version TEXT DEFAULT 'v1',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         # Add new columns to existing devices table if they don't exist
-        try:
-            cursor.execute('ALTER TABLE devices ADD COLUMN hardware_id INTEGER')
-            logger.info("Added hardware_id column to devices table")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-            
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN mac_address TEXT')
             logger.info("Added mac_address column to devices table")
@@ -176,36 +219,33 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_devices_fingerprint ON devices (device_fingerprint)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices (user_id)')
         
-        # Insert predefined devices if they don't exist
-        predefined_devices = [
-            (10, "v1", "B4:3A:45:B0:50:A8"),
-            (9, "v1", "B4:3A:45:B0:4F:90"),
-            (8, "v1", "B4:3A:45:B0:5A:6C"),
-            (6, "v1", "B8:F8:62:D8:68:68"),
-            (5, "v1", "B4:3A:45:B0:58:E8"),
-            (4, "v1", "B4:3A:45:B0:5E:BC"),
-            (3, "v1", "24:EC:4A:2F:2E:9C"),
-            (2, "v1", "24:EC:4A:2F:2D:04"),
-            (1, "v1", "24:EC:4A:2F:C5:D4"),
-        ]
+        # Insert initial predefined devices if the table is empty
+        cursor.execute('SELECT COUNT(*) FROM predefined_devices')
+        count = cursor.fetchone()[0]
         
-        for hardware_id, software_version, mac_address in predefined_devices:
-            # Check if device with this hardware_id already exists
-            cursor.execute('SELECT id FROM devices WHERE hardware_id = ?', (hardware_id,))
-            if not cursor.fetchone():
-                # Insert as a placeholder device with minimal data
+        if count == 0:
+            logger.info("Initializing predefined devices table")
+            initial_devices = [
+                ("904fb0453ab4", "B4:3A:45:B0:50:A8", "v1"),
+                ("test-device-1", "B4:3A:45:B0:4F:90", "v1"), 
+                ("test-device-2", "B4:3A:45:B0:5A:6C", "v1"),
+                ("test-device-3", "B8:F8:62:D8:68:68", "v1"),
+                ("test-device-4", "B4:3A:45:B0:58:E8", "v1"),
+                ("test-device-5", "B4:3A:45:B0:5E:BC", "v1"),
+                ("test-device-6", "24:EC:4A:2F:2E:9C", "v1"),
+                ("test-device-7", "24:EC:4A:2F:2D:04", "v1"),
+                ("test-device-8", "24:EC:4A:2F:C5:D4", "v1"),
+            ]
+            
+            for device_id, mac_address, software_version in initial_devices:
                 cursor.execute('''
-                    INSERT INTO devices 
-                    (client_ip, device_fingerprint, hardware_id, mac_address, software_version, first_seen, last_seen)
-                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                ''', (
-                    f"unknown_{hardware_id}",  # Placeholder IP
-                    f"hardware_{hardware_id}_{mac_address}",  # Unique fingerprint
-                    hardware_id,
-                    mac_address,
-                    software_version
-                ))
-                logger.info(f"Added predefined device {hardware_id} with MAC {mac_address}")
+                    INSERT INTO predefined_devices (device_id, mac_address, software_version)
+                    VALUES (?, ?, ?)
+                ''', (device_id, mac_address, software_version))
+            
+            logger.info(f"Added {len(initial_devices)} predefined devices")
+        else:
+            logger.info(f"Predefined devices table already contains {count} devices")
         
         conn.commit()
         logger.info("Database initialized successfully")
@@ -251,6 +291,48 @@ def create_device_fingerprint(client_ip: str, user_agent: str, timestamp: dateti
     hour_key = timestamp.replace(minute=0, second=0, microsecond=0).isoformat()
     fingerprint_data = f"{client_ip}:{user_agent}:{hour_key}"
     return hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]
+
+def generate_mac_from_device_id(device_id: str) -> str:
+    """Convert ESP32 device ID to actual hardware MAC address.
+    
+    ESP32 device IDs are eFuse MAC addresses with bytes reversed.
+    Algorithm:
+    1. Split device_id into byte pairs: 904fb0453ab4 -> [90, 4f, b0, 45, 3a, b4]
+    2. Reverse byte order: [b4, 3a, 45, b0, 4f, 90]
+    3. Format with colons: B4:3A:45:B0:4F:90
+    """
+    if not device_id or len(device_id) != 12:
+        return "00:00:00:00:00:00"
+    
+    try:
+        # Split into byte pairs and reverse order
+        byte_pairs = [device_id[i:i+2] for i in range(0, 12, 2)]
+        reversed_pairs = byte_pairs[::-1]
+        
+        # Format as MAC address with uppercase
+        mac_address = ':'.join(reversed_pairs).upper()
+        return mac_address
+    except:
+        # Fallback to default if conversion fails
+        return "00:00:00:00:00:00"
+
+def get_device_mac_address(cursor, conn, device_db_id: int, device_id: str, stored_mac: str) -> str:
+    """Get MAC address for a device: stored, predefined, or generated."""
+    if stored_mac:
+        return stored_mac
+    
+    # Check predefined_devices table for MAC address
+    cursor.execute('SELECT mac_address FROM predefined_devices WHERE device_id = ?', (device_id,))
+    predefined_result = cursor.fetchone()
+    if predefined_result and predefined_result[0]:
+        mac_address = predefined_result[0]
+        # Update devices table with predefined MAC for future use
+        cursor.execute('UPDATE devices SET mac_address = ? WHERE id = ?', (mac_address, device_db_id))
+        conn.commit()
+        return mac_address
+    
+    # Generate MAC from device_id as fallback
+    return generate_mac_from_device_id(device_id)
 
 def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str] = None):
     """Log a device request for tracking purposes."""
@@ -850,7 +932,7 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
             cursor.execute('''
                 SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
                        d.user_agent, d.request_count, d.device_id, d.client_ip,
-                       d.hardware_id, d.mac_address, d.software_version,
+                       d.mac_address, d.software_version,
                        ud.nickname, ud.created_at
                 FROM devices d
                 JOIN user_devices ud ON d.id = ud.device_id
@@ -862,6 +944,12 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
             for row in cursor.fetchall():
                 status, minutes_ago = calculate_device_status(row[3])
                 
+                # Get MAC address using helper function
+                stored_mac = row[8]  # mac_address from database
+                device_id = row[6]
+                device_db_id = row[0]
+                mac_address = get_device_mac_address(cursor, conn, device_db_id, device_id, stored_mac)
+                
                 device = {
                     "id": row[0],
                     "fingerprint": row[1],
@@ -869,13 +957,12 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
                     "last_seen": row[3],
                     "user_agent": row[4],
                     "request_count": row[5],
-                    "device_id": row[6],
+                    "device_id": device_id,
                     "client_ip": row[7],
-                    "hardware_id": row[8],
-                    "mac_address": row[9],
-                    "software_version": row[10],
-                    "nickname": row[11],
-                    "claimed_at": row[12],
+                    "mac_address": mac_address,
+                    "software_version": row[9],
+                    "nickname": row[10],
+                    "claimed_at": row[11],
                     "status": status,
                     "minutes_since_last_seen": minutes_ago
                 }
@@ -908,7 +995,7 @@ async def get_user_devices(request: Request):
             cursor.execute('''
                 SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
                        d.user_agent, d.request_count, d.device_id, d.client_ip,
-                       d.hardware_id, d.mac_address, d.software_version,
+                       d.mac_address, d.software_version,
                        ud.nickname, ud.created_at
                 FROM devices d
                 JOIN user_devices ud ON d.id = ud.device_id
@@ -920,6 +1007,12 @@ async def get_user_devices(request: Request):
             for row in cursor.fetchall():
                 status, minutes_ago = calculate_device_status(row[3])
                 
+                # Get MAC address using helper function
+                stored_mac = row[8]  # mac_address from database
+                device_id = row[6]
+                device_db_id = row[0]
+                mac_address = get_device_mac_address(cursor, conn, device_db_id, device_id, stored_mac)
+                
                 device = {
                     "id": row[0],
                     "fingerprint": row[1],
@@ -927,13 +1020,12 @@ async def get_user_devices(request: Request):
                     "last_seen": row[3],
                     "user_agent": row[4],
                     "request_count": row[5],
-                    "device_id": row[6],
+                    "device_id": device_id,
                     "client_ip": row[7],
-                    "hardware_id": row[8],
-                    "mac_address": row[9],
-                    "software_version": row[10],
-                    "nickname": row[11],
-                    "claimed_at": row[12],
+                    "mac_address": mac_address,
+                    "software_version": row[9],
+                    "nickname": row[10],
+                    "claimed_at": row[11],
                     "status": status,
                     "minutes_since_last_seen": minutes_ago
                 }
