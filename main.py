@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 import httpx
 from datetime import datetime, timedelta
 import pytz
@@ -39,6 +39,9 @@ def init_database():
                 user_agent TEXT,
                 request_count INTEGER DEFAULT 1,
                 device_id TEXT,
+                hardware_id INTEGER,
+                mac_address TEXT,
+                software_version TEXT,
                 UNIQUE(client_ip, device_fingerprint)
             )
         ''')
@@ -55,10 +58,60 @@ def init_database():
             )
         ''')
         
+        # Add new columns to existing devices table if they don't exist
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN hardware_id INTEGER')
+            logger.info("Added hardware_id column to devices table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN mac_address TEXT')
+            logger.info("Added mac_address column to devices table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN software_version TEXT')
+            logger.info("Added software_version column to devices table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
         # Create index for performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices (client_ip)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_devices_fingerprint ON devices (device_fingerprint)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices (user_id)')
+        
+        # Insert predefined devices if they don't exist
+        predefined_devices = [
+            (10, "v1", "B4:3A:45:B0:50:A8"),
+            (9, "v1", "B4:3A:45:B0:4F:90"),
+            (8, "v1", "B4:3A:45:B0:5A:6C"),
+            (6, "v1", "B8:F8:62:D8:68:68"),
+            (5, "v1", "B4:3A:45:B0:58:E8"),
+            (4, "v1", "B4:3A:45:B0:5E:BC"),
+            (3, "v1", "24:EC:4A:2F:2E:9C"),
+            (2, "v1", "24:EC:4A:2F:2D:04"),
+            (1, "v1", "24:EC:4A:2F:C5:D4"),
+        ]
+        
+        for hardware_id, software_version, mac_address in predefined_devices:
+            # Check if device with this hardware_id already exists
+            cursor.execute('SELECT id FROM devices WHERE hardware_id = ?', (hardware_id,))
+            if not cursor.fetchone():
+                # Insert as a placeholder device with minimal data
+                cursor.execute('''
+                    INSERT INTO devices 
+                    (client_ip, device_fingerprint, hardware_id, mac_address, software_version, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (
+                    f"unknown_{hardware_id}",  # Placeholder IP
+                    f"hardware_{hardware_id}_{mac_address}",  # Unique fingerprint
+                    hardware_id,
+                    mac_address,
+                    software_version
+                ))
+                logger.info(f"Added predefined device {hardware_id} with MAC {mac_address}")
         
         conn.commit()
         logger.info("Database initialized successfully")
@@ -382,7 +435,7 @@ async def root():
         "message": "Electricity Price API",
         "endpoints": {
             "/api/json": "Get electricity price data in JSON format (Optional query param: date=YYYY-MM-DD)",
-            "/api/color-code": "Get color codes for current hour and next 11 hours (Optional query param: date=YYYY-MM-DD)",
+            "/api/color-code": "Get color codes for current hour and next 11 hours (Optional query params: date=YYYY-MM-DD, device_id=string)",
             "/api/sample": "Get sample electricity price data for testing",
             "/api/sample-color-code": "Get sample color codes for current hour and next 11 hours",
             "/docs": "API documentation (Swagger UI)"
@@ -424,22 +477,30 @@ async def get_json_data(date: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 @app.get("/api/color-code")
-async def get_color_code(request: Request, date: Optional[str] = None):
+async def get_color_code(request: Request, date: Optional[str] = None, test: Optional[str] = None):
     """
     Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
     Uses commitment-based stability - colors won't change once committed.
     
-    Optional query parameter:
+    Optional query parameters:
     - date: Date in YYYY-MM-DD format
+    - device_id: Device identifier for potential device-specific color logic (future use)
     """
     # Log device request for tracking (non-breaking)
     try:
         client_ip = request.client.host if request.client else "unknown"
         user_agent = request.headers.get("user-agent", "unknown")
-        device_id = request.headers.get("x-device-id")  # Optional header for new devices
+        header_device_id = request.headers.get("x-device-id")  # Optional header for new devices
+        
+        # Use query parameter deviceid if provided, otherwise fall back to header
+        final_device_id = deviceid or header_device_id
+        
+        # Log deviceid if provided via query parameter for future analytics
+        if deviceid:
+            logger.info(f"Color request with deviceid: {deviceid}")
         
         # Log request asynchronously to avoid blocking
-        log_device_request(client_ip, user_agent, device_id)
+        log_device_request(client_ip, user_agent, final_device_id)
     except Exception as e:
         logger.warning(f"Device logging failed (non-critical): {e}")
     
@@ -605,6 +666,7 @@ async def get_detected_devices(request: Request):
             cursor.execute('''
                 SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
                        d.user_agent, d.request_count, d.device_id,
+                       d.hardware_id, d.mac_address, d.software_version,
                        ud.nickname, ud.user_id
                 FROM devices d
                 LEFT JOIN user_devices ud ON d.id = ud.device_id
@@ -622,10 +684,13 @@ async def get_detected_devices(request: Request):
                     "user_agent": row[4],
                     "request_count": row[5],
                     "device_id": row[6],
-                    "nickname": row[7],
-                    "claimed_by": row[8],
-                    "is_claimed": row[8] is not None,
-                    "status": "online" if datetime.fromisoformat(row[3].replace('Z', '+00:00')) > datetime.now(pytz.UTC) - timedelta(hours=1) else "offline"
+                    "hardware_id": row[7],
+                    "mac_address": row[8],
+                    "software_version": row[9],
+                    "nickname": row[10],
+                    "claimed_by": row[11],
+                    "is_claimed": row[11] is not None,
+                    "status": "offline"
                 }
                 devices.append(device)
             
@@ -729,6 +794,7 @@ async def get_user_devices(request: Request):
             cursor.execute('''
                 SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
                        d.user_agent, d.request_count, d.device_id, d.client_ip,
+                       d.hardware_id, d.mac_address, d.software_version,
                        ud.nickname, ud.created_at
                 FROM devices d
                 JOIN user_devices ud ON d.id = ud.device_id
@@ -747,9 +813,12 @@ async def get_user_devices(request: Request):
                     "request_count": row[5],
                     "device_id": row[6],
                     "client_ip": row[7],
-                    "nickname": row[8],
-                    "claimed_at": row[9],
-                    "status": "online" if datetime.fromisoformat(row[3].replace('Z', '+00:00')) > datetime.now(pytz.UTC) - timedelta(hours=1) else "offline"
+                    "hardware_id": row[8],
+                    "mac_address": row[9],
+                    "software_version": row[10],
+                    "nickname": row[11],
+                    "claimed_at": row[12],
+                    "status": "offline"
                 }
                 devices.append(device)
             

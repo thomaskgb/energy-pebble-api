@@ -1,20 +1,14 @@
 users:
   thomas:
     displayname: "Thomas"
-    password: "$argon2id$v=19$m=65536,t=3,p=4$Vge7wDTkDEzDndnsdZ+EwQ$/ZxH1XWcKlkW+oyiio0Bo2RJpglud0sR07Z+DOFTS1w"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$kEPkP0C77Ti9zO0ORfVVlA$Skd5xk6Gt/9lNTyM10y4N8vXxWLCxo4zzNGwzjYAj2Y"
     email: "thomas@energypebble.local"
     groups:
       - admins
       - users
-  djom:
-    displayname: "Djom"
-    password: "$argon2id$v=19$m=65536,t=3,p=4$VSbYsW5mkRAz36TMyfME3g$AwJKVeYTc488XD12lbodzcGyWAKiVOs6HZLh1aLQhpg"
-    email: "djom@energypebble.local"
-    groups:
-      - users
-  herman:
-    displayname: "Herman"
-    password: "$argon2id$v=19$m=65536,t=3,p=4$cw8mG8CIq1H2YnYKe02CDQ$gbTJUeg7J2PYFoXaRg577ctQYYvWx4SWZt/obVgFONU"
-    email: "herman@energypebble.local"
+  seba:
+    displayname: "Seba"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$1F8LHH1opYQ3FWWwzTmaRw$YI+2nZkx4JIcrgE4QgFlMFxknK/Eaht/EYYQZeK10Tk"
+    email: "seba@energypebble.local"
     groups:
       - users

@@ -67,11 +67,12 @@ access_control:
         - "^/$"
         - "^/energy-pebble-image.jpg$"
     
-    # Require authentication for the dashboard
+    # Require authentication for the dashboard and impact circle
     - domain: energypebble.tdlx.nl
       policy: one_factor
       resources:
         - "^/dashboard.*$"
+        - "^/impact-circle.*$"
 
 # Session configuration (new format)
 session:
