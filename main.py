@@ -219,6 +219,32 @@ def get_real_client_ip(request: Request) -> str:
         (request.client.host if request.client else "unknown")
     )
 
+def calculate_device_status(last_seen_str: str) -> tuple[str, int]:
+    """Calculate device status based on last seen timestamp.
+    
+    Energy Pebbles poll every 15 minutes, so:
+    - online: <= 20 minutes ago
+    - recently_active: <= 60 minutes ago  
+    - offline: > 60 minutes ago
+    
+    Returns: (status, minutes_since_last_seen)
+    """
+    try:
+        last_seen_dt = datetime.fromisoformat(last_seen_str) if last_seen_str else datetime.min.replace(tzinfo=pytz.UTC)
+        now = datetime.now(pytz.UTC)
+        minutes_since_last_seen = (now - last_seen_dt).total_seconds() / 60
+        
+        if minutes_since_last_seen <= 20:
+            status = "online"
+        elif minutes_since_last_seen <= 60:
+            status = "recently_active"
+        else:
+            status = "offline"
+            
+        return status, int(minutes_since_last_seen)
+    except Exception:
+        return "offline", 999999
+
 def create_device_fingerprint(client_ip: str, user_agent: str, timestamp: datetime) -> str:
     """Create a unique fingerprint for device identification."""
     # Use client IP, user agent, and hour of first request to create fingerprint
@@ -813,10 +839,10 @@ async def get_sample_color_code():
 # Devices are now pre-assigned to users via database setup
 
 @app.get("/api/test/user/devices", tags=["user"])
-async def test_user_devices(request: Request):
-    """Test endpoint for local development - hardcodes thomas user."""
+async def test_user_devices(request: Request, user: str = Query("thomas", description="Test user (thomas or willie)")):
+    """Test endpoint for local development - allows switching between test users."""
     try:
-        user_id = "thomas"  # Hardcoded for testing
+        user_id = user  # Use query parameter, default to thomas
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -834,6 +860,8 @@ async def test_user_devices(request: Request):
             
             devices = []
             for row in cursor.fetchall():
+                status, minutes_ago = calculate_device_status(row[3])
+                
                 device = {
                     "id": row[0],
                     "fingerprint": row[1],
@@ -848,7 +876,8 @@ async def test_user_devices(request: Request):
                     "software_version": row[10],
                     "nickname": row[11],
                     "claimed_at": row[12],
-                    "status": "offline"
+                    "status": status,
+                    "minutes_since_last_seen": minutes_ago
                 }
                 devices.append(device)
             
@@ -887,6 +916,8 @@ async def get_user_devices(request: Request):
             
             devices = []
             for row in cursor.fetchall():
+                status, minutes_ago = calculate_device_status(row[3])
+                
                 device = {
                     "id": row[0],
                     "fingerprint": row[1],
@@ -901,7 +932,8 @@ async def get_user_devices(request: Request):
                     "software_version": row[10],
                     "nickname": row[11],
                     "claimed_at": row[12],
-                    "status": "offline"
+                    "status": status,
+                    "minutes_since_last_seen": minutes_ago
                 }
                 devices.append(device)
             
