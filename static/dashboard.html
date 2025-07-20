@@ -621,47 +621,96 @@
         // Toggle device management interface
         function toggleDeviceManagement() {
             const deviceManagement = document.getElementById('device-management');
-            if (deviceManagement.style.display === 'none') {
+            
+            if (deviceManagement.style.display === 'none' || deviceManagement.style.display === '') {
+                // Show the interface
                 deviceManagement.style.display = 'block';
+                
+                // Smooth scroll to the device management section
+                deviceManagement.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+                
+                // Load device data
+                showDeviceLoading();
                 refreshDeviceData();
+                
             } else {
+                // Hide the interface
                 deviceManagement.style.display = 'none';
             }
+        }
+
+        // Show loading state for device management
+        function showDeviceLoading() {
+            const claimedContainer = document.getElementById('claimed-devices');
+            const unclaimedContainer = document.getElementById('unclaimed-devices');
+            
+            claimedContainer.innerHTML = '<p class="loading-message">Loading your devices...</p>';
+            unclaimedContainer.innerHTML = '<p class="loading-message">Scanning for devices...</p>';
         }
 
         // Refresh device data
         async function refreshDeviceData() {
             try {
-                // Load detected devices
+                // Load detected devices (public endpoint)
                 const detectedResponse = await fetch('/api/devices');
-                const detectedData = await detectedResponse.json();
                 
-                // Load user devices
-                const userResponse = await fetch('/api/user/devices');
-                const userData = await userResponse.json();
+                if (!detectedResponse.ok) {
+                    throw new Error(`API error: ${detectedResponse.status}`);
+                }
+                
+                const detectedData = await detectedResponse.json();
+                console.log('Detected devices loaded:', detectedData);
+                
+                // Try to load user devices (protected endpoint)
+                let userData = { devices: [] };
+                try {
+                    const userResponse = await fetch('/api/user/devices');
+                    if (userResponse.ok) {
+                        userData = await userResponse.json();
+                    } else if (userResponse.status === 401) {
+                        console.log('User not authenticated - showing only detected devices');
+                    } else {
+                        console.warn('Failed to load user devices:', userResponse.status);
+                    }
+                } catch (userError) {
+                    console.warn('Error loading user devices:', userError);
+                }
                 
                 deviceData.claimed = userData.devices || [];
                 deviceData.unclaimed = detectedData.devices.filter(d => !d.is_claimed) || [];
                 
+                console.log('Device data prepared:', deviceData);
                 renderDevices();
                 loadDeviceStats(); // Refresh stats too
                 
             } catch (error) {
                 console.error('Failed to refresh device data:', error);
-                showDeviceError('Failed to load device data. Please try again.');
+                showDeviceError('Failed to load device data. Please check your connection and try again.');
             }
         }
 
         // Render device lists
         function renderDevices() {
-            renderClaimedDevices();
-            renderUnclaimedDevices();
+            console.log('renderDevices called');
+            try {
+                renderClaimedDevices();
+                console.log('renderClaimedDevices completed');
+                renderUnclaimedDevices();
+                console.log('renderUnclaimedDevices completed');
+            } catch (error) {
+                console.error('Error in renderDevices:', error);
+                showDeviceError('Error displaying devices: ' + error.message);
+            }
         }
 
         function renderClaimedDevices() {
             const container = document.getElementById('claimed-devices');
             
             if (deviceData.claimed.length === 0) {
+                // Check if user is authenticated by trying to see if we have auth headers
                 container.innerHTML = '<p class="loading-message">No devices claimed yet. Claim devices below to start managing them.</p>';
                 return;
             }
@@ -684,12 +733,18 @@
         }
 
         function renderUnclaimedDevices() {
+            console.log('renderUnclaimedDevices started');
             const container = document.getElementById('unclaimed-devices');
+            console.log('Container found:', container);
+            console.log('Unclaimed devices:', deviceData.unclaimed);
             
             if (deviceData.unclaimed.length === 0) {
+                console.log('No unclaimed devices, showing message');
                 container.innerHTML = '<p class="loading-message">No unclaimed devices detected. Make sure your Energy Dots are connected and requesting color data.</p>';
                 return;
             }
+            
+            console.log('Rendering', deviceData.unclaimed.length, 'unclaimed devices');
             
             container.innerHTML = deviceData.unclaimed.map(device => `
                 <div class="device-item">

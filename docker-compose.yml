@@ -44,6 +44,12 @@ services:
       - "traefik.http.routers.energypebble-docs.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-docs.priority=15"
       - "traefik.http.routers.energypebble-docs.service=energypebble-api"
+      # OpenAPI routes
+      - "traefik.http.routers.energypebble-openapi.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/openapi.json`)"
+      - "traefik.http.routers.energypebble-openapi.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-openapi.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-openapi.priority=15"
+      - "traefik.http.routers.energypebble-openapi.service=energypebble-api"
       - "traefik.http.services.energypebble-api.loadbalancer.server.port=8000"
     networks:
       - proxy
