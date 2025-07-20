@@ -76,6 +76,75 @@
             transform: translateY(-1px);
         }
 
+        /* User Menu Styles */
+        .user-menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .user-menu-trigger {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .user-menu-trigger:hover {
+            background: #2980b9;
+            transform: translateY(-1px);
+        }
+
+        .user-menu-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            min-width: 150px;
+            z-index: 1000;
+            margin-top: 5px;
+        }
+
+        .user-menu.active .user-menu-dropdown {
+            display: block;
+        }
+
+        .user-menu-item {
+            display: block;
+            padding: 10px 15px;
+            text-decoration: none;
+            color: #333;
+            border-bottom: 1px solid #f8f9fa;
+            transition: background-color 0.2s ease;
+        }
+
+        .user-menu-item:last-child {
+            border-bottom: none;
+        }
+
+        .user-menu-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .user-menu-item.logout {
+            color: #e74c3c;
+        }
+
+        .user-menu-item.logout:hover {
+            background-color: #fdf2f2;
+        }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -362,7 +431,8 @@
             <a href="/" class="nav-logo">
                 ⚡ Energy Pebble
             </a>
-            <div class="nav-buttons">
+            <div class="nav-buttons" id="nav-buttons">
+                <!-- Will be populated by JavaScript based on auth status -->
                 <a href="/dashboard" class="nav-btn login">🔐 Login</a>
             </div>
         </div>
@@ -526,7 +596,80 @@
         }
         
         // Load data when page loads
-        document.addEventListener('DOMContentLoaded', fetchColorData);
+        // Authentication and user menu functionality
+        async function checkAuthentication() {
+            try {
+                const response = await fetch('/api/user/profile');
+                if (response.ok) {
+                    const userData = await response.json();
+                    return userData.username;
+                }
+                return null;
+            } catch (error) {
+                console.log('Not authenticated');
+                return null;
+            }
+        }
+
+        function updateNavigation(username) {
+            const navButtons = document.getElementById('nav-buttons');
+            
+            if (username) {
+                // User is logged in - show user menu
+                navButtons.innerHTML = `
+                    <div class="user-menu" id="user-menu">
+                        <button class="user-menu-trigger" id="user-menu-trigger">
+                            👤 ${username} ▼
+                        </button>
+                        <div class="user-menu-dropdown">
+                            <a href="/dashboard" class="user-menu-item">📊 Dashboard</a>
+                            <a href="#" class="user-menu-item logout" onclick="logout()">🚪 Logout</a>
+                        </div>
+                    </div>
+                `;
+                
+                // Add click handler for dropdown
+                const userMenuTrigger = document.getElementById('user-menu-trigger');
+                const userMenu = document.getElementById('user-menu');
+                
+                userMenuTrigger.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    userMenu.classList.toggle('active');
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!userMenu.contains(e.target)) {
+                        userMenu.classList.remove('active');
+                    }
+                });
+            } else {
+                // User is not logged in - show login button
+                navButtons.innerHTML = `
+                    <a href="/dashboard" class="nav-btn login">🔐 Login</a>
+                `;
+            }
+        }
+
+        async function logout() {
+            try {
+                // Redirect to Authelia logout
+                window.location.href = 'https://auth.tdlx.nl/logout?rd=https://energypebble.tdlx.nl/';
+            } catch (error) {
+                console.error('Logout failed:', error);
+                // Fallback - just reload the page
+                window.location.reload();
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            fetchColorData();
+            
+            // Check authentication and update navigation
+            const username = await checkAuthentication();
+            updateNavigation(username);
+        });
         
         // Auto-refresh every 15 minutes
         setInterval(fetchColorData, 15 * 60 * 1000);
