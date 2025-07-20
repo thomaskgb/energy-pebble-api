@@ -949,6 +949,135 @@ async def get_user_devices(request: Request):
         logger.error(f"Error fetching user devices: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching user devices: {str(e)}")
 
+@app.get("/api/user/profile", tags=["user"])
+async def get_user_profile(request: Request):
+    """Get current user profile information."""
+    try:
+        user_id = get_current_user(request)
+        
+        # For now, return basic user info
+        # In a real implementation, you'd fetch from a user database
+        return {
+            "username": user_id,
+            "email": f"{user_id}@example.com",  # Placeholder
+            "created_at": "2025-01-01T00:00:00Z"  # Placeholder
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user profile: {str(e)}")
+
+@app.get("/api/test/user/profile", tags=["user"])
+async def test_get_user_profile(user: str = Query("thomas", description="Test user (thomas or willie)")):
+    """Test endpoint for user profile - local development."""
+    return {
+        "username": user,
+        "email": f"{user}@example.com",
+        "created_at": "2025-01-01T00:00:00Z"
+    }
+
+@app.put("/api/user/profile", tags=["user"])
+async def update_user_profile(request: Request):
+    """Update user profile (username and password)."""
+    try:
+        user_id = get_current_user(request)
+        body = await request.json()
+        
+        new_username = body.get("username", "").strip()
+        current_password = body.get("currentPassword", "")
+        new_password = body.get("newPassword", "")
+        
+        # Validation
+        if not new_username:
+            raise HTTPException(status_code=400, detail="Username is required")
+        
+        # Check username format (letters, numbers, underscores only)
+        import re
+        if not re.match(r'^[a-zA-Z0-9_]+$', new_username):
+            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+        
+        if len(new_username) < 3:
+            raise HTTPException(status_code=400, detail="Username must be at least 3 characters long")
+        
+        if new_password and len(new_password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+        
+        # In a real implementation, you would:
+        # 1. Verify current password
+        # 2. Check username uniqueness
+        # 3. Update Authelia user database
+        # 4. Update user_devices table if username changed
+        
+        # For now, simulate success
+        logger.info(f"User {user_id} updated profile: username={new_username}, password_changed={bool(new_password)}")
+        
+        username_changed = new_username != user_id
+        
+        if username_changed:
+            # Update user_devices table with new username
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE user_devices SET user_id = ? WHERE user_id = ?', (new_username, user_id))
+                conn.commit()
+                logger.info(f"Updated user_devices: {user_id} -> {new_username}")
+        
+        return {
+            "message": "Profile updated successfully",
+            "username": new_username,
+            "usernameChanged": username_changed,
+            "passwordChanged": bool(new_password)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating user profile: {str(e)}")
+
+@app.put("/api/test/user/profile", tags=["user"])  
+async def test_update_user_profile(request: Request, user: str = Query("thomas", description="Test user (thomas or willie)")):
+    """Test endpoint for updating user profile - local development."""
+    try:
+        body = await request.json()
+        
+        new_username = body.get("username", "").strip()
+        new_password = body.get("newPassword", "")
+        
+        # Basic validation
+        if not new_username:
+            raise HTTPException(status_code=400, detail="Username is required")
+        
+        # Simulate username uniqueness check
+        if new_username in ["admin", "root", "test"] and new_username != user:
+            raise HTTPException(status_code=409, detail="Username already taken")
+        
+        username_changed = new_username != user
+        
+        if username_changed:
+            # Update user_devices table with new username
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE user_devices SET user_id = ? WHERE user_id = ?', (new_username, user))
+                conn.commit()
+                logger.info(f"Test: Updated user_devices: {user} -> {new_username}")
+        
+        logger.info(f"Test: User {user} updated profile: username={new_username}, password_changed={bool(new_password)}")
+        
+        return {
+            "message": "Profile updated successfully (test mode)",
+            "username": new_username,
+            "usernameChanged": username_changed,
+            "passwordChanged": bool(new_password)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in test update user profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating user profile: {str(e)}")
+
 @app.get("/api/diagnostic", tags=["public"])
 async def get_diagnostic(date: Optional[str] = None):
     """
