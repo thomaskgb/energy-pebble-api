@@ -899,6 +899,8 @@ async def get_user_devices(request: Request):
     try:
         # Get user directly from authentication function
         user_id = get_current_user(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -954,6 +956,8 @@ async def get_user_profile(request: Request):
     """Get current user profile information."""
     try:
         user_id = get_current_user(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
         
         # For now, return basic user info
         # In a real implementation, you'd fetch from a user database
@@ -983,6 +987,8 @@ async def update_user_profile(request: Request):
     """Update user profile (username and password)."""
     try:
         user_id = get_current_user(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
         body = await request.json()
         
         new_username = body.get("username", "").strip()

@@ -11,4 +11,10 @@ users:
     password: "$argon2id$v=19$m=65536,t=3,p=4$1F8LHH1opYQ3FWWwzTmaRw$YI+2nZkx4JIcrgE4QgFlMFxknK/Eaht/EYYQZeK10Tk"
     email: "seba@energypebble.local"
     groups:
+      - users    
+  willie:
+    displayname: "Willie"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$EKQrOdPhZGOJdfF0fl2ktg$vyn8gTWO0Gu7x+HawfXHG3oq/5LGhGeCWOxHORMJq10"
+    email: "willie@energypebble.local"
+    groups:
       - users

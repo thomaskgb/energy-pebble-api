@@ -855,12 +855,11 @@
         // Load device statistics
         async function loadDeviceStats() {
             try {
-                // Try production endpoint first, fallback to test endpoint
+                // Authentication required - redirect to login if not authenticated
                 let userResponse = await fetch('/api/user/devices');
                 if (!userResponse.ok && userResponse.status === 401) {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const testUser = urlParams.get('testuser') || 'thomas';
-                    userResponse = await fetch(`/api/test/user/devices?user=${testUser}`);
+                    window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
+                    return;
                 }
                 
                 if (userResponse.ok) {
@@ -930,16 +929,12 @@
                 // Load user devices (only devices assigned to the user)
                 let userData = { devices: [] };
                 
-                // First try the production endpoint (with Authelia headers)
+                // Authentication required - redirect to login if not authenticated
                 let userResponse = await fetch('/api/user/devices');
                 
-                // If that fails (401), try the test endpoint for local development
                 if (!userResponse.ok && userResponse.status === 401) {
-                    console.log('Production auth failed, trying test endpoint for local development');
-                    // Check URL for test user parameter (e.g., ?testuser=willie)
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const testUser = urlParams.get('testuser') || 'thomas';
-                    userResponse = await fetch(`/api/test/user/devices?user=${testUser}`);
+                    window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
+                    return;
                 }
                 
                 if (userResponse.ok) {
@@ -1147,12 +1142,11 @@
 
         async function loadCurrentUserData() {
             try {
-                // Try to get current user info
+                // Authentication required - redirect to login if not authenticated
                 let userResponse = await fetch('/api/user/profile');
                 if (!userResponse.ok && userResponse.status === 401) {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const testUser = urlParams.get('testuser') || 'thomas';
-                    userResponse = await fetch(`/api/test/user/profile?user=${testUser}`);
+                    window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
+                    return;
                 }
                 
                 if (userResponse.ok) {
@@ -1229,17 +1223,10 @@
                     body: JSON.stringify(updateData)
                 });
                 
-                // Fallback to test endpoint
+                // Authentication required
                 if (!response.ok && response.status === 401) {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const testUser = urlParams.get('testuser') || 'thomas';
-                    response = await fetch(`/api/test/user/profile?user=${testUser}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(updateData)
-                    });
+                    window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
+                    return;
                 }
                 
                 if (response.ok) {
@@ -1271,11 +1258,31 @@
             }
         });
 
+        // Check authentication before loading page content
+        async function checkAuthentication() {
+            try {
+                const response = await fetch('/api/user/profile');
+                if (response.status === 401) {
+                    // Not authenticated, redirect to login
+                    window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                console.error('Authentication check failed:', error);
+                window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
+                return false;
+            }
+        }
+
         // Load page data
-        document.addEventListener('DOMContentLoaded', function() {
-            loadCurrentColor();
-            loadDeviceStats();
-            loadCurrentUserData(); // Load user info for display
+        document.addEventListener('DOMContentLoaded', async function() {
+            const isAuthenticated = await checkAuthentication();
+            if (isAuthenticated) {
+                loadCurrentColor();
+                loadDeviceStats();
+                loadCurrentUserData(); // Load user info for display
+            }
         });
     </script>
 </body>

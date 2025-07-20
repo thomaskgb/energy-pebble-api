@@ -80,7 +80,7 @@ session:
     - name: authelia_session
       domain: tdlx.nl
       authelia_url: https://auth.tdlx.nl/
-      default_redirection_url: https://energypebble.tdlx.nl
+      default_redirection_url: https://energypebble.tdlx.nl/dashboard
       same_site: lax
       inactivity: 5m
       expiration: 1h

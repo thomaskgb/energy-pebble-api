@@ -35,7 +35,13 @@ services:
       - ./data:/tmp
     labels:
       - "traefik.enable=true"
-      # API routes
+      # Protected API routes (user endpoints)
+      - "traefik.http.routers.energypebble-api-auth.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api/user`)"
+      - "traefik.http.routers.energypebble-api-auth.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-api-auth.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-api-auth.priority=15"
+      - "traefik.http.routers.energypebble-api-auth.middlewares=authelia@docker,real-ip"
+      # Public API routes (everything else)
       - "traefik.http.routers.energypebble-api.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api`)"
       - "traefik.http.routers.energypebble-api.entrypoints=websecure"
       - "traefik.http.routers.energypebble-api.tls.certresolver=myresolver"
