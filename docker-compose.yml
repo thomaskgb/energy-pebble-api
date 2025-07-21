@@ -33,14 +33,21 @@ services:
     restart: unless-stopped
     volumes:
       - ./data:/tmp
+      - ./firmware:/home/cumulus/github/energy_pebble/firmware
     labels:
       - "traefik.enable=true"
-      # Protected API routes (user endpoints)
-      - "traefik.http.routers.energypebble-api-auth.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api/user`)"
+      # Protected API routes (user, firmware, admin, and auth endpoints)  
+      - "traefik.http.routers.energypebble-api-auth.rule=Host(`energypebble.tdlx.nl`) && (PathPrefix(`/api/user`) || PathPrefix(`/api/firmware`) || PathPrefix(`/api/admin`) || PathPrefix(`/api/verify`))"
       - "traefik.http.routers.energypebble-api-auth.entrypoints=websecure"
       - "traefik.http.routers.energypebble-api-auth.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-api-auth.priority=15"
       - "traefik.http.routers.energypebble-api-auth.middlewares=authelia@docker,real-ip"
+      # Firmware download routes (open to all)
+      - "traefik.http.routers.energypebble-firmware.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/firmware`)"
+      - "traefik.http.routers.energypebble-firmware.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-firmware.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-firmware.priority=12"
+      - "traefik.http.routers.energypebble-firmware.middlewares=real-ip"
       # Public API routes (everything else)
       - "traefik.http.routers.energypebble-api.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api`)"
       - "traefik.http.routers.energypebble-api.entrypoints=websecure"
@@ -85,6 +92,12 @@ services:
       - "traefik.http.routers.energypebble-web-impact.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-web-impact.middlewares=authelia@docker"
       - "traefik.http.routers.energypebble-web-impact.priority=10"
+      # Protected routes (admin area)
+      - "traefik.http.routers.energypebble-web-admin.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.energypebble-web-admin.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-web-admin.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-web-admin.middlewares=authelia@docker"
+      - "traefik.http.routers.energypebble-web-admin.priority=11"
       # Public routes (everything else)
       - "traefik.http.routers.energypebble-web.rule=Host(`energypebble.tdlx.nl`)"
       - "traefik.http.routers.energypebble-web.entrypoints=websecure"
