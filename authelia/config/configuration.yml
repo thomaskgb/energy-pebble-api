@@ -59,13 +59,27 @@ authentication_backend:
 access_control:
   default_policy: deny
   rules:
-    # Allow access to the public API endpoints and main page
+    # Allow access to public API endpoints and main page
     - domain: energypebble.tdlx.nl
       policy: bypass
       resources:
-        - "^/api/.*$"
+        - "^/api/color-code.*$"
+        - "^/api/json.*$"
+        - "^/api/sample.*$"
+        - "^/docs.*$"
+        - "^/openapi.json$"
         - "^/$"
         - "^/energy-pebble-image.jpg$"
+        - "^/components.css$"
+    
+    # Require authentication for protected API endpoints
+    - domain: energypebble.tdlx.nl
+      policy: one_factor
+      resources:
+        - "^/api/verify.*$"
+        - "^/api/user.*$"
+        - "^/api/admin.*$"
+        - "^/api/firmware.*$"
     
     # Require authentication for the dashboard and impact circle
     - domain: energypebble.tdlx.nl
@@ -73,6 +87,12 @@ access_control:
       resources:
         - "^/dashboard.*$"
         - "^/impact-circle.*$"
+    
+    # Require authentication for admin area  
+    - domain: energypebble.tdlx.nl
+      policy: one_factor
+      resources:
+        - "^/admin.*$"
 
 # Session configuration (new format)
 session:

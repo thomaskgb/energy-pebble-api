@@ -20,6 +20,24 @@
         file_server
     }
     
+    # Handle admin firmware route
+    handle /admin/firmware {
+        rewrite * /admin-firmware.html
+        file_server
+    }
+    
+    # Handle admin devices route
+    handle /admin/devices {
+        rewrite * /admin-devices.html
+        file_server
+    }
+    
+    # Handle admin users route
+    handle /admin/users {
+        rewrite * /admin-users.html
+        file_server
+    }
+    
     # Enable file serving for all other routes
     file_server
     
