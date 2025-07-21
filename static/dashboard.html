@@ -84,6 +84,59 @@
             transform: translateY(-1px);
         }
 
+        .nav-btn.admin {
+            background: #9b59b6;
+            color: white;
+            cursor: pointer;
+        }
+
+        .nav-btn.admin:hover {
+            background: #8e44ad;
+            transform: translateY(-1px);
+        }
+
+        /* Admin Dropdown Styles */
+        .admin-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .admin-dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            min-width: 180px;
+            z-index: 1000;
+            margin-top: 5px;
+        }
+
+        .admin-dropdown-content.show {
+            display: block;
+        }
+
+        .admin-dropdown-item {
+            display: block;
+            padding: 12px 16px;
+            color: #2c3e50;
+            text-decoration: none;
+            transition: background 0.2s ease;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .admin-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .admin-dropdown-item:hover {
+            background: #f8f9fa;
+            color: #9b59b6;
+        }
+
         /* User Menu Styles */
         .user-menu {
             position: relative;
@@ -658,6 +711,14 @@
             </a>
             <div class="nav-buttons">
                 <a href="/" class="nav-btn home">🏠 Home</a>
+                <div class="admin-dropdown" id="adminDropdown" style="display: none;">
+                    <div class="nav-btn admin" onclick="toggleAdminMenu()">🔧 Admin ▼</div>
+                    <div class="admin-dropdown-content" id="adminMenuDropdown">
+                        <a href="/admin/users" class="admin-dropdown-item">👥 Users</a>
+                        <a href="/admin/devices" class="admin-dropdown-item">📱 Devices</a>
+                        <a href="/admin/firmware" class="admin-dropdown-item">💾 Firmware</a>
+                    </div>
+                </div>
                 <div class="user-menu">
                     <button class="user-menu-trigger" onclick="toggleUserMenu()">
                         👤 <span id="current-username">User</span> ▼
@@ -690,7 +751,11 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="connected-devices">-</div>
-                    <div class="stat-label">My Energy Dots</div>
+                    <div class="stat-label">Connected Energy Dots</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="unclaimed-devices">-</div>
+                    <div class="stat-label">Unclaimed Devices</div>
                 </div>
             </div>
         </div>
@@ -846,7 +911,7 @@
         }
 
         // Device management variables
-        let deviceData = { claimed: [] };
+        let deviceData = { claimed: [], unclaimed: [] };
 
         // Load device statistics
         async function loadDeviceStats() {
@@ -862,10 +927,16 @@
                     const data = await userResponse.json();
                     
                     const connectedElement = document.getElementById('connected-devices');
+                    const unclaimedElement = document.getElementById('unclaimed-devices');
                     
                     if (connectedElement) {
                         connectedElement.textContent = data.total_devices || 0;
                         connectedElement.style.color = data.total_devices > 0 ? '#27ae60' : '#6c757d';
+                    }
+                    
+                    if (unclaimedElement) {
+                        unclaimedElement.textContent = 0; // No unclaimed devices in simplified version
+                        unclaimedElement.style.color = '#6c757d';
                     }
                     
                     // Update device summary
@@ -1033,6 +1104,10 @@
                     <span class="detail-value">${device.device_id || 'Not provided'}</span>
                 </div>
                 <div class="detail-row">
+                    <span class="detail-label">Hardware ID:</span>
+                    <span class="detail-value">${device.hardware_id || 'Unknown'}</span>
+                </div>
+                <div class="detail-row">
                     <span class="detail-label">MAC Address:</span>
                     <span class="detail-value">${device.mac_address || 'Unknown'}</span>
                 </div>
@@ -1096,13 +1171,27 @@
             dropdown.classList.toggle('show');
         }
 
-        // Close user menu when clicking outside
+        // Admin menu functionality
+        function toggleAdminMenu() {
+            const dropdown = document.getElementById('adminMenuDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close menus when clicking outside
         document.addEventListener('click', function(event) {
             const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userMenuDropdown');
+            const userDropdown = document.getElementById('userMenuDropdown');
+            const adminMenu = document.querySelector('.admin-dropdown');
+            const adminDropdown = document.getElementById('adminMenuDropdown');
             
+            // Close user menu if clicking outside
             if (!userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
+                userDropdown.classList.remove('show');
+            }
+            
+            // Close admin menu if clicking outside
+            if (adminMenu && !adminMenu.contains(event.target)) {
+                adminDropdown.classList.remove('show');
             }
         });
 
@@ -1128,8 +1217,10 @@
 
         async function loadCurrentUserData() {
             try {
-                // Authentication required - redirect to login if not authenticated
-                let userResponse = await fetch('/api/user/profile');
+                // Check authentication using the verify endpoint which includes admin status
+                let userResponse = await fetch('/api/verify', {
+                    credentials: 'include'
+                });
                 if (!userResponse.ok && userResponse.status === 401) {
                     window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
                     return;
@@ -1137,22 +1228,30 @@
                 
                 if (userResponse.ok) {
                     currentUserData = await userResponse.json();
-                    const username = currentUserData.username;
+                    const displayName = currentUserData.display_name || currentUserData.user || 'User';
                     
                     // Update navigation menu username
-                    document.getElementById('current-username').textContent = username;
+                    document.getElementById('current-username').textContent = displayName;
+                    
+                    // Show admin dropdown if user is admin
+                    if (currentUserData.is_admin) {
+                        const adminDropdown = document.getElementById('adminDropdown');
+                        if (adminDropdown) {
+                            adminDropdown.style.display = 'inline-block';
+                        }
+                    }
                     
                     // Update settings form when opened
                     const usernameInput = document.getElementById('newUsername');
-                    if (usernameInput) {
-                        usernameInput.value = username;
+                    if (usernameInput && currentUserData.user) {
+                        usernameInput.value = currentUserData.user.split('@')[0]; // Use username part before @
                     }
                     
                     // Update welcome greeting with personalized message
                     const greetingElement = document.getElementById('welcome-greeting');
                     if (greetingElement) {
-                        const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
-                        greetingElement.textContent = `👋 Welcome back, ${capitalizedUsername}!`;
+                        const capitalizedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+                        greetingElement.textContent = `👋 Welcome back, ${capitalizedName}!`;
                     }
                 }
             } catch (error) {
