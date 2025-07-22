@@ -3,6 +3,7 @@ services:
     image: authelia/authelia:latest
     container_name: authelia
     restart: unless-stopped
+    user: "1000:1000"
     volumes:
       - ./authelia/config:/config
       - ./authelia/secrets:/secrets:ro
@@ -34,6 +35,7 @@ services:
     volumes:
       - ./data:/tmp
       - ./firmware:/home/cumulus/github/energy_pebble/firmware
+      - ./authelia/config:/app/authelia/config:ro
     labels:
       - "traefik.enable=true"
       # Protected API routes (user, firmware, admin, and auth endpoints)  

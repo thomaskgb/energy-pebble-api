@@ -16,6 +16,7 @@ import sqlite3
 import threading
 import time
 import shutil
+import yaml
 
 # Pydantic models for OTA requests
 class OTAStatusReport(BaseModel):
@@ -2418,13 +2419,33 @@ async def get_user_management_data(request: Request):
         if not is_admin_user(user_id, request):
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # Known users with roles (in production this would come from Authelia)
-        users_data = [
-            {"username": "thomas", "display_name": "Thomas", "role": "admin"},
-            {"username": "willie", "display_name": "Willie", "role": "admin"},
-            {"username": "seba", "display_name": "Seba", "role": "admin"},
-            {"username": "herman", "display_name": "Herman", "role": "user"}
-        ]
+        # Read users from Authelia configuration
+        authelia_users_path = Path("authelia/config/users.yml")
+        if not authelia_users_path.exists():
+            raise HTTPException(status_code=500, detail="Authelia configuration not found")
+        
+        try:
+            with open(authelia_users_path, 'r') as f:
+                authelia_config = yaml.safe_load(f)
+                users_config = authelia_config.get('users', {})
+                
+                users_data = []
+                for username, user_info in users_config.items():
+                    # Determine role based on groups
+                    groups = user_info.get('groups', [])
+                    role = "admin" if "admins" in groups else "user"
+                    
+                    users_data.append({
+                        "username": username,
+                        "display_name": user_info.get('displayname', username),
+                        "role": role,
+                        "email": user_info.get('email', ''),
+                        "groups": groups
+                    })
+        except yaml.YAMLError as e:
+            raise HTTPException(status_code=500, detail=f"Error parsing Authelia configuration: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error reading user configuration: {str(e)}")
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
