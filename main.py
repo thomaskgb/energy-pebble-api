@@ -17,6 +17,8 @@ import threading
 import time
 import shutil
 import yaml
+import secrets
+import bcrypt
 
 # Pydantic models for OTA requests
 class OTAStatusReport(BaseModel):
@@ -33,6 +35,22 @@ class FirmwareUpload(BaseModel):
     rollback_version: Optional[str] = None
     release_notes: Optional[str] = None
     target_devices: Optional[str] = None
+
+# Pydantic models for API tokens
+class TokenCreate(BaseModel):
+    token_name: str
+    scopes: List[str]
+    expires_days: Optional[int] = None  # None = no expiration
+
+class TokenResponse(BaseModel):
+    id: int
+    token_name: str
+    scopes: List[str]
+    created_at: str
+    expires_at: Optional[str]
+    last_used_at: Optional[str]
+    is_active: bool
+    created_by: str
 
 app = FastAPI(
     title="Electricity Price API", 
@@ -105,31 +123,36 @@ security = HTTPBearer()
 
 def get_current_user(request: Request):
     """
-    Get current user from Authelia headers or Bearer token.
-    This function supports both Authelia proxy headers and Bearer token authentication for the docs.
+    Hybrid authentication: supports both Authelia headers and API Bearer tokens.
+    Returns user info dict with authentication details.
     """
-    # First try to get user from Authelia headers (for normal web requests)
+    # First try to get user from Authelia headers (for web requests through proxy)
     user_id = request.headers.get("Remote-User")
     if user_id:
-        return user_id
+        remote_groups = request.headers.get("Remote-Groups", "")
+        groups = [group.strip() for group in remote_groups.split(",") if group.strip()]
+        return {
+            'user_id': user_id,
+            'auth_method': 'authelia',
+            'is_admin': 'admins' in groups,
+            'groups': groups
+        }
     
-    # Try to get from Authorization header for API docs
+    # Try to get from Authorization header for API tokens
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:]  # Remove "Bearer " prefix
         if token:
-            # Simple token format: "user:password" base64 encoded or just username
-            try:
-                import base64
-                decoded = base64.b64decode(token).decode('utf-8')
-                if ':' in decoded:
-                    username = decoded.split(':')[0]
-                else:
-                    username = decoded
-                return username
-            except:
-                # If not base64, treat as plain username for demo
-                return token
+            # Validate API token
+            token_info = validate_api_token(token)
+            if token_info:
+                return {
+                    'user_id': 'system',  # API tokens are system-wide
+                    'auth_method': 'bearer_token',
+                    'is_admin': token_info['is_admin'],
+                    'token_name': token_info['token_name'],
+                    'scopes': token_info['scopes']
+                }
     
     raise HTTPException(
         status_code=401,
@@ -140,6 +163,13 @@ def get_current_user(request: Request):
 def get_optional_user(request: Request) -> Optional[str]:
     """Get user from headers without raising exception if not authenticated."""
     return request.headers.get("Remote-User")
+
+def get_admin_user(request: Request):
+    """Get current user and verify admin privileges."""
+    user_info = get_current_user(request)
+    if not user_info['is_admin']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user_info
 
 # Database setup
 DB_PATH = Path("/tmp/energy_pebble.db")
@@ -261,6 +291,22 @@ def init_database():
                 install_duration INTEGER,
                 ip_address TEXT,
                 user_agent TEXT
+            )
+        ''')
+        
+        # Create API tokens table for bearer token authentication
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS api_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash TEXT UNIQUE NOT NULL,
+                token_name TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                scopes TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                last_used_at TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by TEXT
             )
         ''')
         
@@ -554,6 +600,118 @@ def is_admin_user(user_id: str, request: Request = None) -> bool:
     
     # Simple admin check - in production you'd check against proper user roles  
     return username in ["thomas", "admin", "willie", "seba"]
+
+# API Token Management Functions
+def generate_api_token() -> str:
+    """Generate a secure API token"""
+    return secrets.token_urlsafe(32)
+
+def hash_token(token: str) -> str:
+    """Hash a token for secure storage"""
+    return bcrypt.hashpw(token.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_token(token: str, token_hash: str) -> bool:
+    """Verify a token against its hash"""
+    try:
+        return bcrypt.checkpw(token.encode('utf-8'), token_hash.encode('utf-8'))
+    except Exception:
+        return False
+
+def create_api_token(token_name: str, scopes: List[str], created_by: str, expires_days: Optional[int] = None) -> tuple[str, int]:
+    """Create a new API token and return (token, token_id)"""
+    token = generate_api_token()
+    token_hash = hash_token(token)
+    
+    expires_at = None
+    if expires_days:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
+    
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO api_tokens (token_hash, token_name, user_id, scopes, expires_at, created_by)
+                VALUES (?, ?, 'system', ?, ?, ?)
+            ''', (token_hash, token_name, json.dumps(scopes), expires_at, created_by))
+            
+            token_id = cursor.lastrowid
+            conn.commit()
+            
+    return token, token_id
+
+def validate_api_token(token: str) -> Optional[Dict[str, Any]]:
+    """Validate an API token and return token info if valid"""
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, token_hash, token_name, scopes, expires_at, is_active
+                FROM api_tokens 
+                WHERE is_active = TRUE
+            ''')
+            
+            for row in cursor.fetchall():
+                token_id, token_hash, token_name, scopes_json, expires_at, is_active = row
+                
+                if verify_token(token, token_hash):
+                    # Check if token is expired
+                    if expires_at:
+                        expires_datetime = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                        if datetime.now(timezone.utc) > expires_datetime:
+                            return None
+                    
+                    # Update last_used_at
+                    cursor.execute('''
+                        UPDATE api_tokens SET last_used_at = ? WHERE id = ?
+                    ''', (datetime.now(timezone.utc), token_id))
+                    conn.commit()
+                    
+                    return {
+                        'id': token_id,
+                        'token_name': token_name,
+                        'scopes': json.loads(scopes_json),
+                        'is_admin': True  # All tokens are admin since only admins can create them
+                    }
+    
+    return None
+
+def get_all_api_tokens() -> List[Dict[str, Any]]:
+    """Get all API tokens for admin dashboard"""
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, token_name, scopes, created_at, expires_at, last_used_at, is_active, created_by
+                FROM api_tokens
+                ORDER BY created_at DESC
+            ''')
+            
+            tokens = []
+            for row in cursor.fetchall():
+                token_id, token_name, scopes_json, created_at, expires_at, last_used_at, is_active, created_by = row
+                tokens.append({
+                    'id': token_id,
+                    'token_name': token_name,
+                    'scopes': json.loads(scopes_json),
+                    'created_at': created_at,
+                    'expires_at': expires_at,
+                    'last_used_at': last_used_at,
+                    'is_active': bool(is_active),
+                    'created_by': created_by
+                })
+            
+            return tokens
+
+def revoke_api_token(token_id: int) -> bool:
+    """Revoke an API token"""
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE api_tokens SET is_active = FALSE WHERE id = ?
+            ''', (token_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
 def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str] = None):
     """Log a device request for tracking purposes. Only tracks devices with device_id."""
@@ -1233,9 +1391,8 @@ async def get_user_devices(request: Request):
     """
     try:
         # Get user directly from authentication function
-        user_id = get_current_user(request)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required")
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -1295,9 +1452,8 @@ async def get_user_devices(request: Request):
 async def get_user_profile(request: Request):
     """Get current user profile information."""
     try:
-        user_id = get_current_user(request)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required")
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
         
         # For now, return basic user info
         # In a real implementation, you'd fetch from a user database
@@ -1326,9 +1482,8 @@ async def test_get_user_profile(user: str = Query("thomas", description="Test us
 async def update_user_profile(request: Request):
     """Update user profile (username and password)."""
     try:
-        user_id = get_current_user(request)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required")
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
         body = await request.json()
         
         new_username = body.get("username", "").strip()
@@ -1482,8 +1637,9 @@ async def upload_firmware(
     """
     try:
         # Check authentication and admin privileges
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin privileges required")
         
         # Validate firmware file
@@ -1578,8 +1734,9 @@ async def list_firmware_versions(request: Request):
     Requires admin authentication.
     """
     try:
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin privileges required")
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -1633,8 +1790,9 @@ async def delete_firmware_version(version: str, request: Request):
     Requires admin authentication.
     """
     try:
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin privileges required")
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -1684,8 +1842,9 @@ async def get_ota_statistics(request: Request):
     Requires admin authentication.
     """
     try:
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin privileges required")
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -2020,8 +2179,9 @@ async def get_all_devices(
     """
     try:
         # Check authentication and admin privileges
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -2153,8 +2313,9 @@ async def get_device_stats(request: Request):
     """
     try:
         # Check authentication and admin privileges
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -2219,8 +2380,9 @@ async def delete_device(device_id: int, request: Request):
     """
     try:
         # Check authentication and admin privileges
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -2258,8 +2420,9 @@ async def set_device_nickname(device_id: int, nickname: str, request: Request):
     """
     try:
         # Check authentication and admin privileges
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         # Validate nickname
@@ -2324,8 +2487,9 @@ async def get_all_users(request: Request):
     """
     try:
         # Check authentication and admin privileges
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         # For now, return known admin users - in production this would query Authelia
@@ -2351,8 +2515,9 @@ async def claim_device_for_user(device_id: int, user: str, request: Request):
     """
     try:
         # Check authentication and admin privileges
-        admin_user = get_current_user(request)
-        if not is_admin_user(admin_user):
+        admin_user_info = get_current_user(request)
+        admin_user = admin_user_info['user_id']
+        if not admin_user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         # Validate user parameter
@@ -2415,8 +2580,9 @@ async def get_user_management_data(request: Request):
     """
     try:
         # Check authentication and admin privileges
-        user_id = get_current_user(request)
-        if not is_admin_user(user_id, request):
+        user_info = get_current_user(request)
+        user_id = user_info['user_id']
+        if not user_info['is_admin']:
             raise HTTPException(status_code=403, detail="Admin access required")
         
         # Read users from Authelia configuration
@@ -2520,6 +2686,77 @@ async def get_user_management_data(request: Request):
     except Exception as e:
         logger.error(f"Error getting user management data: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting user management data: {str(e)}")
+
+# API Token Management Endpoints
+@app.get("/api/admin/tokens", tags=["admin"])
+async def get_api_tokens(request: Request, user_info = Depends(get_admin_user)):
+    """Get all API tokens for admin dashboard"""
+    try:
+        tokens = get_all_api_tokens()
+        return {"tokens": tokens, "total": len(tokens)}
+    except Exception as e:
+        logger.error(f"Error getting API tokens: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting API tokens: {str(e)}")
+
+@app.post("/api/admin/tokens", tags=["admin"])
+async def create_api_token_endpoint(
+    request: Request,
+    token_data: TokenCreate,
+    user_info = Depends(get_admin_user)
+):
+    """Create a new API token"""
+    try:
+        # Validate scopes
+        valid_scopes = ["read", "write", "admin", "firmware", "devices", "users"]
+        invalid_scopes = [scope for scope in token_data.scopes if scope not in valid_scopes]
+        if invalid_scopes:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid scopes: {invalid_scopes}. Valid scopes: {valid_scopes}"
+            )
+        
+        # Get creator info
+        created_by = user_info['user_id']
+        if user_info['auth_method'] == 'bearer_token':
+            created_by = f"token:{user_info['token_name']}"
+        
+        # Create the token
+        token, token_id = create_api_token(
+            token_name=token_data.token_name,
+            scopes=token_data.scopes,
+            created_by=created_by,
+            expires_days=token_data.expires_days
+        )
+        
+        return {
+            "token": token,
+            "token_id": token_id,
+            "message": "Token created successfully. Save this token securely - it will not be shown again."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating API token: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating API token: {str(e)}")
+
+@app.delete("/api/admin/tokens/{token_id}", tags=["admin"])
+async def revoke_api_token_endpoint(
+    request: Request,
+    token_id: int,
+    user_info = Depends(get_admin_user)
+):
+    """Revoke an API token"""
+    try:
+        success = revoke_api_token(token_id)
+        if success:
+            return {"message": "Token revoked successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Token not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error revoking API token: {e}")
+        raise HTTPException(status_code=500, detail=f"Error revoking API token: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
