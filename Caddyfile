@@ -38,6 +38,12 @@
         file_server
     }
     
+    # Handle admin tokens route
+    handle /admin/tokens {
+        rewrite * /admin-tokens.html
+        file_server
+    }
+    
     # Enable file serving for all other routes
     file_server
     
