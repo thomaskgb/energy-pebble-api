@@ -38,12 +38,18 @@ services:
       - ./authelia/config:/app/authelia/config:ro
     labels:
       - "traefik.enable=true"
-      # Protected API routes (user, firmware, admin, and auth endpoints)  
-      - "traefik.http.routers.energypebble-api-auth.rule=Host(`energypebble.tdlx.nl`) && (PathPrefix(`/api/user`) || PathPrefix(`/api/firmware`) || PathPrefix(`/api/admin`) || PathPrefix(`/api/verify`))"
+      # Protected API routes (user, admin, auth endpoints, and firmware routes except upload)  
+      - "traefik.http.routers.energypebble-api-auth.rule=Host(`energypebble.tdlx.nl`) && (PathPrefix(`/api/user`) || PathPrefix(`/api/admin`) || PathPrefix(`/api/verify`) || (PathPrefix(`/api/firmware`) && !Path(`/api/firmware/upload`)))"
       - "traefik.http.routers.energypebble-api-auth.entrypoints=websecure"
       - "traefik.http.routers.energypebble-api-auth.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-api-auth.priority=15"
       - "traefik.http.routers.energypebble-api-auth.middlewares=authelia@docker,real-ip"
+      # Firmware upload route (bypasses Authelia for Bearer token support)
+      - "traefik.http.routers.energypebble-firmware-upload.rule=Host(`energypebble.tdlx.nl`) && Path(`/api/firmware/upload`)"
+      - "traefik.http.routers.energypebble-firmware-upload.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-firmware-upload.tls.certresolver=myresolver"
+      - "traefik.http.routers.energypebble-firmware-upload.priority=16"
+      - "traefik.http.routers.energypebble-firmware-upload.middlewares=real-ip"
       # Firmware download routes (open to all)
       - "traefik.http.routers.energypebble-firmware.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/firmware`)"
       - "traefik.http.routers.energypebble-firmware.entrypoints=websecure"
