@@ -12,11 +12,14 @@ users:
     email: "seba@energypebble.local"
     groups:
       - users    
+      - admins
+
   willie:
     displayname: "Willie"
     password: "$argon2id$v=19$m=65536,t=3,p=4$EKQrOdPhZGOJdfF0fl2ktg$vyn8gTWO0Gu7x+HawfXHG3oq/5LGhGeCWOxHORMJq10"
     email: "willie@energypebble.local"
     groups:
+      - admins
       - users
 
   herman:
@@ -28,14 +31,14 @@ users:
 
   frederic:
     displayname: "Frederic"
-    password: "$argon2id$v=19$m=65536,t=3,p=4$RUSrHKrnPpEaa+3vM3Yk/Q$OVphlYuShkyJT7neigCJqlO70hMVQR83KANupX/Ajj8"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$KDvoNJulHoqW520VT6agqw$R8QIjH1A5M6lPPYGak+xzINpB4nM78vWc6L4qA9EMJE"
     email: "frederic@energypebble.local"
     groups:
       - users
 
   edumarcu:
     displayname: "Edumarcu"
-    password: "$argon2id$v=19$m=65536,t=3,p=4$30oB+bZwCvhH52czvD2UcQ$HNLY1jV7XbeXdsNmWhi7bh0EMcenxuN9VfFcR0T1nM0"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$tm7GkMVYsTKFp0hqT11fTA$9KovcApKbKAS/1tBw2rJLPojCsoeoYL4pzniC9UTt/8"
     email: "edumarcu@energypebble.local"
     groups:
       - admins
