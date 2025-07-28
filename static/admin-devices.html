@@ -775,9 +775,8 @@
                         ${devices.map(device => `
                             <tr>
                                 <td>
-                                    <div class="device-nickname">${device.nickname || device.device_id || 'Unknown Device'}</div>
-                                    <div class="device-id">${device.device_id || 'No ID'}</div>
-                                    ${device.mac_address ? `<div class="device-mac">${device.mac_address}</div>` : ''}
+                                    <div class="device-nickname">${device.device_nickname || (device.mac_address ? `Device ${device.mac_address.slice(-4)}` : 'Unknown Device')}</div>
+                                    ${device.mac_address ? `<div class="device-mac">${device.mac_address}</div>` : '<div class="device-mac">No MAC Address</div>'}
                                 </td>
                                 <td>
                                     <span class="status-badge status-${device.status || 'offline'}">
@@ -797,7 +796,9 @@
                                 <td>
                                     <small style="color: #6c757d;">
                                         Requests: ${device.request_count || 0}<br>
-                                        ${device.software_version ? `FW: ${device.software_version}<br>` : ''}
+                                        ${device.current_firmware_version ? `Version: ${device.current_firmware_version}<br>` : ''}
+                                        ${device.software_version ? `Reported: ${device.software_version}<br>` : ''}
+                                        ${device.last_ota_check ? `Last OTA Check: ${formatLastSeen(device.last_ota_check)}<br>` : ''}
                                         IP: ${device.client_ip || 'Unknown'}
                                     </small>
                                 </td>
@@ -827,7 +828,20 @@
 
         function formatLastSeen(timestamp) {
             if (!timestamp) return 'Never';
-            const date = new Date(timestamp);
+            
+            // Handle different timestamp formats from SQLite
+            let date;
+            if (timestamp.includes('+00:00')) {
+                // Already has UTC timezone info
+                date = new Date(timestamp);
+            } else if (timestamp.includes('T')) {
+                // ISO format without timezone - assume UTC
+                date = new Date(timestamp + 'Z');
+            } else {
+                // SQLite format without timezone (YYYY-MM-DD HH:MM:SS) - assume UTC
+                date = new Date(timestamp + ' UTC');
+            }
+            
             const now = new Date();
             const diffMinutes = Math.floor((now - date) / (1000 * 60));
             
