@@ -305,6 +305,18 @@
             border-left: 3px solid #27ae60;
         }
 
+        .device-item.online {
+            border-left-color: #27ae60;
+        }
+
+        .device-item.recently_active {
+            border-left-color: #f39c12;
+        }
+
+        .device-item.offline {
+            border-left-color: #e74c3c;
+        }
+
         .loading {
             text-align: center;
             color: #6c757d;
@@ -551,6 +563,35 @@
             }
         }
 
+        // Calculate device status based on last seen timestamp
+        function calculateDeviceStatus(lastSeenStr) {
+            if (!lastSeenStr) return 'offline';
+            
+            // Handle different timestamp formats from SQLite
+            let date;
+            if (lastSeenStr.includes('+00:00')) {
+                // Already has UTC timezone info
+                date = new Date(lastSeenStr);
+            } else if (lastSeenStr.includes('T')) {
+                // ISO format without timezone - assume UTC
+                date = new Date(lastSeenStr + 'Z');
+            } else {
+                // SQLite format without timezone (YYYY-MM-DD HH:MM:SS) - assume UTC
+                date = new Date(lastSeenStr + ' UTC');
+            }
+            
+            const now = new Date();
+            const minutesSinceLastSeen = Math.floor((now - date) / (1000 * 60));
+            
+            if (minutesSinceLastSeen <= 20) {
+                return 'online';
+            } else if (minutesSinceLastSeen <= 60) {
+                return 'recently_active';
+            } else {
+                return 'offline';
+            }
+        }
+
         // Render users table
         function renderUsersTable(users) {
             const container = document.getElementById('userList');
@@ -592,12 +633,15 @@
                                 </td>
                                 <td>
                                     <div class="device-list">
-                                        ${user.devices.length > 0 ? user.devices.map(device => `
-                                            <div class="device-item">
-                                                <strong>${device.device_id}</strong>
-                                                ${device.nickname ? `<br><small>📝 ${device.nickname}</small>` : ''}
-                                            </div>
-                                        `).join('') : '<span style="color: #6c757d;">No devices</span>'}
+                                        ${user.devices.length > 0 ? user.devices.map(device => {
+                                            const status = calculateDeviceStatus(device.last_seen);
+                                            return `
+                                                <div class="device-item ${status}">
+                                                    <strong>${device.device_id}</strong>
+                                                    ${device.nickname ? `<br><small>📝 ${device.nickname}</small>` : ''}
+                                                </div>
+                                            `;
+                                        }).join('') : '<span style="color: #6c757d;">No devices</span>'}
                                     </div>
                                 </td>
                             </tr>

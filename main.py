@@ -36,16 +36,21 @@ class FirmwareUpload(BaseModel):
     release_notes: Optional[str] = None
     target_devices: Optional[str] = None
 
+# Pydantic models for device management
+class DeviceNicknameUpdate(BaseModel):
+    nickname: str
+
+class DeviceClaimRequest(BaseModel):
+    user: str
+
 # Pydantic models for API tokens
 class TokenCreate(BaseModel):
     token_name: str
-    scopes: List[str]
     expires_days: Optional[int] = None  # None = no expiration
 
 class TokenResponse(BaseModel):
     id: int
     token_name: str
-    scopes: List[str]
     created_at: str
     expires_at: Optional[str]
     last_used_at: Optional[str]
@@ -150,8 +155,7 @@ def get_current_user(request: Request):
                     'user_id': 'system',  # API tokens are system-wide
                     'auth_method': 'bearer_token',
                     'is_admin': token_info['is_admin'],
-                    'token_name': token_info['token_name'],
-                    'scopes': token_info['scopes']
+                    'token_name': token_info['token_name']
                 }
     
     raise HTTPException(
@@ -286,7 +290,7 @@ def init_database():
                 check_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 current_version TEXT,
                 offered_version TEXT,
-                status TEXT CHECK(status IN ('check', 'downloading', 'installing', 'completed', 'failed', 'skipped')) DEFAULT 'check',
+                status TEXT DEFAULT 'check',
                 error_message TEXT,
                 install_duration INTEGER,
                 ip_address TEXT,
@@ -301,7 +305,6 @@ def init_database():
                 token_hash TEXT UNIQUE NOT NULL,
                 token_name TEXT NOT NULL,
                 user_id TEXT NOT NULL,
-                scopes TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP,
                 last_used_at TIMESTAMP,
@@ -323,6 +326,40 @@ def init_database():
         except sqlite3.OperationalError:
             pass  # Column already exists
             
+        # Remove scopes column from api_tokens table if it exists (migration from old schema)
+        try:
+            # Check if scopes column exists
+            cursor.execute("PRAGMA table_info(api_tokens)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'scopes' in columns:
+                logger.info("Migrating api_tokens table to remove scopes column")
+                # Create new table without scopes
+                cursor.execute('''
+                    CREATE TABLE api_tokens_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        token_hash TEXT UNIQUE NOT NULL,
+                        token_name TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP,
+                        last_used_at TIMESTAMP,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_by TEXT
+                    )
+                ''')
+                # Copy data from old table
+                cursor.execute('''
+                    INSERT INTO api_tokens_new (id, token_hash, token_name, user_id, created_at, expires_at, last_used_at, is_active, created_by)
+                    SELECT id, token_hash, token_name, user_id, created_at, expires_at, last_used_at, is_active, created_by
+                    FROM api_tokens
+                ''')
+                # Drop old table and rename new one
+                cursor.execute('DROP TABLE api_tokens')
+                cursor.execute('ALTER TABLE api_tokens_new RENAME TO api_tokens')
+                logger.info("Successfully migrated api_tokens table")
+        except sqlite3.OperationalError:
+            pass  # Migration not needed or already completed
+            
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN current_firmware_version TEXT DEFAULT "v1.0.0"')
             logger.info("Added current_firmware_version column to devices table")
@@ -340,6 +377,53 @@ def init_database():
             logger.info("Added ota_status column to devices table")
         except sqlite3.OperationalError:
             pass  # Column already exists
+            
+        try:
+            cursor.execute('ALTER TABLE firmware_versions ADD COLUMN md5_checksum TEXT')
+            logger.info("Added md5_checksum column to firmware_versions table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Migration: Remove CHECK constraint from ota_logs.status column
+        try:
+            # Check if constraint exists by trying to insert an invalid status
+            cursor.execute("INSERT INTO ota_logs (device_id, status) VALUES ('test', 'invalid_status')")
+            cursor.execute("DELETE FROM ota_logs WHERE device_id = 'test'")
+            logger.info("ota_logs table already migrated (no CHECK constraint)")
+        except sqlite3.IntegrityError:
+            # Constraint exists, need to migrate
+            logger.info("Migrating ota_logs table to remove status CHECK constraint")
+            
+            # Create new table without CHECK constraint
+            cursor.execute('''
+                CREATE TABLE ota_logs_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    check_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    current_version TEXT,
+                    offered_version TEXT,
+                    status TEXT DEFAULT 'check',
+                    error_message TEXT,
+                    install_duration INTEGER,
+                    ip_address TEXT,
+                    user_agent TEXT
+                )
+            ''')
+            
+            # Copy data from old table
+            cursor.execute('''
+                INSERT INTO ota_logs_new 
+                SELECT * FROM ota_logs
+            ''')
+            
+            # Drop old table and rename new one
+            cursor.execute('DROP TABLE ota_logs')
+            cursor.execute('ALTER TABLE ota_logs_new RENAME TO ota_logs')
+            
+            logger.info("Successfully migrated ota_logs table")
+        except Exception as e:
+            logger.error(f"Error during ota_logs migration: {e}")
+            pass
         
         # Create index for performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices (client_ip)')
@@ -519,7 +603,7 @@ def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict
         
         # Get latest stable firmware that's newer than current version
         cursor.execute('''
-            SELECT version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version
+            SELECT version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum
             FROM firmware_versions 
             WHERE is_stable = TRUE 
             AND (target_devices IS NULL OR target_devices LIKE ? OR target_devices = '[]')
@@ -531,7 +615,7 @@ def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict
         if not result:
             return None
             
-        version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version = result
+        version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum = result
         
         # Check if this version is newer than current
         if not version_is_newer(version, current_version):
@@ -545,6 +629,7 @@ def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict
             'version': version,
             'filename': filename,
             'checksum': checksum,
+            'md5_checksum': md5_checksum,
             'file_size': file_size,
             'force_update': bool(force_update),
             'rollback_version': rollback_version,
@@ -563,24 +648,37 @@ def log_ota_check(device_id: str, current_version: str, offered_version: str = N
                 VALUES (?, ?, ?, 'check', ?, ?)
             ''', (device_id, current_version, offered_version, ip_address, user_agent))
             
-            # Update device's last OTA check timestamp
+            # Update device's last OTA check timestamp and current firmware version
             cursor.execute('''
                 UPDATE devices 
-                SET last_ota_check = CURRENT_TIMESTAMP 
+                SET last_ota_check = CURRENT_TIMESTAMP,
+                    current_firmware_version = ?
                 WHERE device_id = ?
-            ''', (device_id,))
+            ''', (current_version, device_id))
             
             conn.commit()
     except Exception as e:
         logger.error(f"Failed to log OTA check: {e}")
 
 def calculate_file_checksum(file_path: Path) -> str:
-    """Calculate SHA256 checksum of a file"""
+    """Calculate SHA256 checksum of a file (legacy function for compatibility)"""
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             sha256_hash.update(chunk)
     return f"sha256:{sha256_hash.hexdigest()}"
+
+def calculate_file_checksums(file_path: Path) -> tuple[str, str]:
+    """Calculate both SHA256 and MD5 checksums of a file"""
+    sha256_hash = hashlib.sha256()
+    md5_hash = hashlib.md5()
+    
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(chunk)
+            md5_hash.update(chunk)
+    
+    return f"sha256:{sha256_hash.hexdigest()}", md5_hash.hexdigest()
 
 def get_firmware_storage_path() -> Path:
     """Get the firmware storage directory path"""
@@ -617,7 +715,7 @@ def verify_token(token: str, token_hash: str) -> bool:
     except Exception:
         return False
 
-def create_api_token(token_name: str, scopes: List[str], created_by: str, expires_days: Optional[int] = None) -> tuple[str, int]:
+def create_api_token(token_name: str, created_by: str, expires_days: Optional[int] = None) -> tuple[str, int]:
     """Create a new API token and return (token, token_id)"""
     token = generate_api_token()
     token_hash = hash_token(token)
@@ -630,9 +728,9 @@ def create_api_token(token_name: str, scopes: List[str], created_by: str, expire
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO api_tokens (token_hash, token_name, user_id, scopes, expires_at, created_by)
-                VALUES (?, ?, 'system', ?, ?, ?)
-            ''', (token_hash, token_name, json.dumps(scopes), expires_at, created_by))
+                INSERT INTO api_tokens (token_hash, token_name, user_id, expires_at, created_by)
+                VALUES (?, ?, 'system', ?, ?)
+            ''', (token_hash, token_name, expires_at, created_by))
             
             token_id = cursor.lastrowid
             conn.commit()
@@ -645,13 +743,13 @@ def validate_api_token(token: str) -> Optional[Dict[str, Any]]:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, token_hash, token_name, scopes, expires_at, is_active
+                SELECT id, token_hash, token_name, expires_at, is_active
                 FROM api_tokens 
                 WHERE is_active = TRUE
             ''')
             
             for row in cursor.fetchall():
-                token_id, token_hash, token_name, scopes_json, expires_at, is_active = row
+                token_id, token_hash, token_name, expires_at, is_active = row
                 
                 if verify_token(token, token_hash):
                     # Check if token is expired
@@ -669,8 +767,7 @@ def validate_api_token(token: str) -> Optional[Dict[str, Any]]:
                     return {
                         'id': token_id,
                         'token_name': token_name,
-                        'scopes': json.loads(scopes_json),
-                        'is_admin': True  # All tokens are admin since only admins can create them
+                        'is_admin': True  # All tokens have admin access
                     }
     
     return None
@@ -681,18 +778,17 @@ def get_all_api_tokens() -> List[Dict[str, Any]]:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, token_name, scopes, created_at, expires_at, last_used_at, is_active, created_by
+                SELECT id, token_name, created_at, expires_at, last_used_at, is_active, created_by
                 FROM api_tokens
                 ORDER BY created_at DESC
             ''')
             
             tokens = []
             for row in cursor.fetchall():
-                token_id, token_name, scopes_json, created_at, expires_at, last_used_at, is_active, created_by = row
+                token_id, token_name, created_at, expires_at, last_used_at, is_active, created_by = row
                 tokens.append({
                     'id': token_id,
                     'token_name': token_name,
-                    'scopes': json.loads(scopes_json),
                     'created_at': created_at,
                     'expires_at': expires_at,
                     'last_used_at': last_used_at,
@@ -1096,10 +1192,15 @@ async def root():
 @app.get("/api/json", tags=["public"])
 async def get_json_data(date: Optional[str] = None):
     """
-    Get electricity price data in JSON format.
+    Get raw electricity price data in JSON format from Elia's day-ahead market.
     
-    Optional query parameter:
-    - date: Date in YYYY-MM-DD format
+    Authentication: None required - public endpoint.
+    
+    Optional query parameters:
+    - date: Specific date in YYYY-MM-DD format (defaults to today)
+    
+    Returns unprocessed price data for the specified date, useful for analysis
+    and custom applications requiring raw market data.
     """
     # Validate date format if provided
     if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
@@ -1135,7 +1236,10 @@ async def get_color_code(request: Request, date: Optional[str] = None, device_id
     
     Optional query parameters:
     - date: Date in YYYY-MM-DD format
-    - device_id: Device identifier for potential device-specific color logic (future use)
+    - device_id: ESP32 eFuse MAC address (12-character hex string, e.g., '904fb0453ab4') for device tracking
+    
+    Alternative device identification:
+    Device ID can also be provided via X-Device-ID header for improved security and cleaner URLs.
     """
     # Log device request for tracking (non-breaking)
     try:
@@ -1207,7 +1311,13 @@ async def get_color_code(request: Request, date: Optional[str] = None, device_id
 @app.get("/api/sample", tags=["public"])
 async def get_sample_data():
     """
-    Get sample electricity price data for testing.
+    Get sample electricity price data for testing and development.
+    
+    Authentication: None required - public endpoint.
+    
+    Returns realistic sample data spanning multiple days with various price
+    scenarios for testing color calculations and application development
+    without relying on live market data.
     """
     # Create sample data that includes various price scenarios
     sample_data = []
@@ -1268,6 +1378,12 @@ async def get_sample_data():
 async def get_sample_color_code():
     """
     Get sample color codes for the current hour and next 11 hours for testing.
+    
+    Authentication: None required - public endpoint.
+    
+    Returns processed color codes (G/Y/R) based on sample price data,
+    useful for testing device behavior and UI components without affecting
+    production color commitments.
     """
     # Get sample data from the sample endpoint that will span multiple days if needed
     sample_data_response = await get_sample_data()
@@ -1297,8 +1413,13 @@ async def get_sample_color_code():
 @app.get("/api/verify", tags=["auth"])
 async def verify_user(request: Request):
     """
-    Verify user authentication and return user information from Authelia headers.
-    This endpoint is used by the dashboard to check authentication status.
+    Verify user authentication and return user information from Authelia.
+    
+    Authentication: Requires valid Authelia session (forwarded headers).
+    
+    Used by the dashboard and protected routes to check authentication status
+    and retrieve user details. Returns user ID, display name, email, groups,
+    and admin status based on Authelia headers.
     """
     # Get user information from Authelia headers
     remote_user = request.headers.get("Remote-User")
@@ -1338,7 +1459,7 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
             cursor.execute('''
                 SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
                        d.user_agent, d.request_count, d.device_id, d.client_ip,
-                       d.mac_address, d.software_version,
+                       d.mac_address, d.software_version, d.last_ota_check,
                        ud.nickname, ud.created_at
                 FROM devices d
                 JOIN user_devices ud ON d.id = ud.device_id
@@ -1367,8 +1488,9 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
                     "client_ip": row[7],
                     "mac_address": mac_address,
                     "software_version": row[9],
-                    "nickname": row[10],
-                    "claimed_at": row[11],
+                    "last_ota_check": row[10],
+                    "nickname": row[11],
+                    "claimed_at": row[12],
                     "status": status,
                     "minutes_since_last_seen": minutes_ago
                 }
@@ -1387,7 +1509,12 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
 @app.get("/api/user/devices", tags=["user"])  
 async def get_user_devices(request: Request):
     """
-    Get all devices claimed by the authenticated user.
+    Get all devices claimed by the authenticated user with detection info.
+    
+    Authentication: Requires valid Authelia session.
+    
+    Returns both claimed devices (user's named devices) and detected devices
+    (discovered on user's network) for device management dashboard.
     """
     try:
         # Get user directly from authentication function
@@ -1400,7 +1527,7 @@ async def get_user_devices(request: Request):
             cursor.execute('''
                 SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
                        d.user_agent, d.request_count, d.device_id, d.client_ip,
-                       d.mac_address, d.software_version,
+                       d.mac_address, d.software_version, d.last_ota_check,
                        ud.nickname, ud.created_at
                 FROM devices d
                 JOIN user_devices ud ON d.id = ud.device_id
@@ -1429,8 +1556,9 @@ async def get_user_devices(request: Request):
                     "client_ip": row[7],
                     "mac_address": mac_address,
                     "software_version": row[9],
-                    "nickname": row[10],
-                    "claimed_at": row[11],
+                    "last_ota_check": row[10],
+                    "nickname": row[11],
+                    "claimed_at": row[12],
                     "status": status,
                     "minutes_since_last_seen": minutes_ago
                 }
@@ -1582,10 +1710,15 @@ async def test_update_user_profile(request: Request, user: str = Query("thomas",
 @app.get("/api/diagnostic", tags=["public"])
 async def get_diagnostic(date: Optional[str] = None):
     """
-    Diagnostic endpoint to check available data.
+    Diagnostic endpoint to check data availability and system status.
     
-    Optional query parameter:
-    - date: Date in YYYY-MM-DD format
+    Authentication: None required - public endpoint.
+    
+    Optional query parameters:
+    - date: Specific date in YYYY-MM-DD format (defaults to today)
+    
+    Returns diagnostic information including data availability, API status,
+    and system health metrics for troubleshooting and monitoring.
     """
     # Validate date format if provided
     if date and not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
@@ -1629,11 +1762,29 @@ async def upload_firmware(
     min_version: str = Form(None),
     rollback_version: str = Form(None),
     release_notes: str = Form(None),
-    target_devices: str = Form(None)
+    target_devices: str = Form(None),
+    sha256_checksum: str = Form(...),
+    md5_checksum: str = Form(...)
 ):
     """
     Upload a new firmware binary file.
     Requires admin authentication. Designed for use by GitHub Actions.
+    
+    Parameters:
+    - firmware_file: The firmware binary (.bin file)
+    - version: Version in semantic versioning format (e.g., "v1.2.0", "1.2.0") - 'v' prefix will be added if missing
+    - product_name: Product name (default: "energy_pebble")  
+    - variant: Build variant (default: "release")
+    - is_stable: Whether this is a stable release (default: true)
+    - force_update: Whether to force device updates (default: false)
+    - min_version: Minimum version required for update in same format as version (optional)
+    - rollback_version: Version to rollback to if update fails in same format as version (optional)
+    - release_notes: Release notes for this version (optional)
+    - target_devices: JSON array of target ESP32 eFuse MAC addresses (optional, e.g., '["904fb0453ab4"]')
+    - sha256_checksum: Pre-calculated SHA256 checksum (required)
+    - md5_checksum: Pre-calculated MD5 checksum (required)
+    
+    Both checksums are trusted from the compilation process and stored directly.
     """
     try:
         # Check authentication and admin privileges
@@ -1686,8 +1837,10 @@ async def upload_firmware(
         with open(firmware_path, "wb") as buffer:
             shutil.copyfileobj(firmware_file.file, buffer)
         
-        # Calculate checksum and file size
-        checksum = calculate_file_checksum(firmware_path)
+        # Use provided checksums (trusted from compilation process)
+        checksum = sha256_checksum
+        logger.info(f"Using provided checksums - SHA256: {sha256_checksum}, MD5: {md5_checksum} (trusted)")
+            
         file_size = firmware_path.stat().st_size
         
         # Insert into database
@@ -1695,10 +1848,10 @@ async def upload_firmware(
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO firmware_versions 
-                (version, filename, checksum, file_size, is_stable, force_update, 
+                (version, filename, checksum, md5_checksum, file_size, is_stable, force_update, 
                  min_version, rollback_version, release_notes, target_devices, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (version, filename, checksum, file_size, is_stable, force_update,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (version, filename, checksum, md5_checksum, file_size, is_stable, force_update,
                   min_version, rollback_version, release_notes, target_devices, user_id))
             
             firmware_id = cursor.lastrowid
@@ -1711,6 +1864,7 @@ async def upload_firmware(
             "version": version,
             "filename": filename,
             "checksum": checksum,
+            "md5_checksum": md5_checksum,
             "file_size": file_size,
             "message": f"Firmware {version} uploaded successfully"
         }
@@ -1730,8 +1884,12 @@ async def upload_firmware(
 @app.get("/api/firmware/versions", tags=["firmware"])
 async def list_firmware_versions(request: Request):
     """
-    List all firmware versions.
-    Requires admin authentication.
+    List all firmware versions with detailed information.
+    
+    Authentication: Requires admin privileges via Authelia.
+    
+    Returns all firmware entries with version info, stability status, file details,
+    and metadata for administrative management.
     """
     try:
         user_info = get_current_user(request)
@@ -1787,7 +1945,14 @@ async def list_firmware_versions(request: Request):
 async def delete_firmware_version(version: str, request: Request):
     """
     Delete a firmware version and its associated file.
-    Requires admin authentication.
+    
+    Authentication: Requires admin privileges via Authelia.
+    
+    Path parameters:
+    - version: Firmware version to delete (e.g., 'v1.2.0')
+    
+    Permanently removes the firmware version from database and deletes the
+    associated binary file from the filesystem. This action cannot be undone.
     """
     try:
         user_info = get_current_user(request)
@@ -1838,8 +2003,13 @@ async def delete_firmware_version(version: str, request: Request):
 @app.get("/api/firmware/ota-stats", tags=["firmware"])
 async def get_ota_statistics(request: Request):
     """
-    Get OTA update statistics.
-    Requires admin authentication.
+    Get comprehensive OTA update statistics and metrics.
+    
+    Authentication: Requires admin privileges via Authelia.
+    
+    Returns detailed analytics including total checks, success rates, version
+    distribution, device activity, and update performance metrics for
+    administrative monitoring and insights.
     """
     try:
         user_info = get_current_user(request)
@@ -1899,13 +2069,36 @@ async def get_ota_statistics(request: Request):
 
 # OTA (Over-The-Air) Update Endpoints
 
-@app.get("/api/ota/check/{device_id}", tags=["ota"])
-async def check_ota_updates(device_id: str, current_version: str = Query(..., description="Current firmware version (e.g., v1.0.0)"), request: Request = None):
+@app.get("/api/ota/check", tags=["ota"])
+async def check_ota_updates(request: Request):
     """
     Check for available OTA updates for a device.
     Called by devices every 12 hours to check for firmware updates.
+    
+    Required headers:
+    - X-Device-ID: ESP32 eFuse MAC address (12-character hex string, e.g., '904fb0453ab4')
+    - X-Current-Version: Current firmware version in semantic versioning format (e.g., 'v1.2.0', '1.2.0')
+    
+    Device ID Format:
+    The device ID should be the ESP32's eFuse MAC address, which is a unique 12-character 
+    hexadecimal string burned into each chip during manufacturing. This is different from 
+    the WiFi MAC address and provides a more stable device identifier.
+    
+    Version Format:
+    Versions should follow semantic versioning (MAJOR.MINOR.PATCH) with optional 'v' prefix.
+    Examples: 'v1.0.0', '1.2.3', 'v2.1.0'. The system will normalize versions by adding 
+    the 'v' prefix if missing.
     """
     try:
+        # Extract device info from headers
+        device_id = request.headers.get("x-device-id")
+        current_version = request.headers.get("x-current-version")
+        
+        if not device_id:
+            raise HTTPException(status_code=400, detail="X-Device-ID header is required")
+        if not current_version:
+            raise HTTPException(status_code=400, detail="X-Current-Version header is required")
+        
         # Extract client info for logging
         client_ip = get_real_client_ip(request) if request else None
         user_agent = request.headers.get("user-agent") if request else None
@@ -1922,6 +2115,7 @@ async def check_ota_updates(device_id: str, current_version: str = Query(..., de
                 "version": latest_firmware['version'],
                 "download_url": f"https://energypebble.tdlx.nl/firmware/{latest_firmware['filename']}",
                 "checksum": latest_firmware['checksum'],
+                "md5_checksum": latest_firmware['md5_checksum'],
                 "size_bytes": latest_firmware['file_size'],
                 "force_update": latest_firmware['force_update'],
                 "rollback_version": latest_firmware['rollback_version'],
@@ -1947,6 +2141,11 @@ async def report_ota_status(device_id: str, status_report: OTAStatusReport, requ
     """
     Device reports OTA installation status.
     Called by devices during/after firmware update process.
+    
+    Path parameters:
+    - device_id: ESP32 eFuse MAC address (12-character hex string, e.g., '904fb0453ab4')
+    
+    Request body should contain OTAStatusReport with installation status and details.
     """
     try:
         client_ip = get_real_client_ip(request) if request else None
@@ -2096,7 +2295,12 @@ async def download_firmware(filename: str, request: Request = None):
 async def get_latest_stable_firmware():
     """
     Get the latest stable firmware version and its details.
-    Public endpoint for displaying current stable firmware information.
+    
+    Authentication: None required - public endpoint.
+    
+    Returns the most recent stable firmware release with version info, checksums,
+    file size, and release metadata. Used for displaying current stable version
+    information to users and for reference purposes.
     """
     try:
         with sqlite3.connect(DB_PATH) as conn:
@@ -2108,6 +2312,7 @@ async def get_latest_stable_firmware():
                     version,
                     filename,
                     checksum,
+                    md5_checksum,
                     file_size,
                     release_date,
                     release_notes
@@ -2125,7 +2330,7 @@ async def get_latest_stable_firmware():
                     "message": "No stable firmware version available"
                 }
             
-            version, filename, checksum, file_size, release_date, release_notes = result
+            version, filename, checksum, md5_checksum, file_size, release_date, release_notes = result
             
             # Extract hash from checksum
             hash_value = checksum[7:] if checksum.startswith('sha256:') else checksum
@@ -2155,7 +2360,8 @@ async def get_latest_stable_firmware():
                 "download_url": f"https://energypebble.tdlx.nl/firmware/{filename}",
                 "checksum_url": f"https://energypebble.tdlx.nl/api/firmware/{filename}/checksum",
                 "checksum": hash_value,
-                "algorithm": "sha256"
+                "algorithm": "sha256",
+                "md5_checksum": md5_checksum or ""
             }
             
     except Exception as e:
@@ -2413,7 +2619,7 @@ async def delete_device(device_id: int, request: Request):
         raise HTTPException(status_code=500, detail=f"Error deleting device: {str(e)}")
 
 @app.put("/api/admin/devices/{device_id}/nickname", tags=["admin"])
-async def set_device_nickname(device_id: int, nickname: str, request: Request):
+async def set_device_nickname(device_id: int, nickname_data: DeviceNicknameUpdate, request: Request):
     """
     Set or update a device nickname/location note.
     Creates a user_devices entry if it doesn't exist.
@@ -2426,6 +2632,7 @@ async def set_device_nickname(device_id: int, nickname: str, request: Request):
             raise HTTPException(status_code=403, detail="Admin access required")
         
         # Validate nickname
+        nickname = nickname_data.nickname
         if not nickname or len(nickname.strip()) == 0:
             raise HTTPException(status_code=400, detail="Nickname cannot be empty")
         
@@ -2509,7 +2716,7 @@ async def get_all_users(request: Request):
         raise HTTPException(status_code=500, detail=f"Error getting users: {str(e)}")
 
 @app.put("/api/admin/devices/{device_id}/claim", tags=["admin"])
-async def claim_device_for_user(device_id: int, user: str, request: Request):
+async def claim_device_for_user(device_id: int, claim_data: DeviceClaimRequest, request: Request):
     """
     Claim a device for a specific user (admin only).
     """
@@ -2521,6 +2728,7 @@ async def claim_device_for_user(device_id: int, user: str, request: Request):
             raise HTTPException(status_code=403, detail="Admin access required")
         
         # Validate user parameter
+        user = claim_data.user
         if not user or len(user.strip()) == 0:
             raise HTTPException(status_code=400, detail="User cannot be empty")
         
@@ -2706,15 +2914,6 @@ async def create_api_token_endpoint(
 ):
     """Create a new API token"""
     try:
-        # Validate scopes
-        valid_scopes = ["read", "write", "admin", "firmware", "devices", "users"]
-        invalid_scopes = [scope for scope in token_data.scopes if scope not in valid_scopes]
-        if invalid_scopes:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid scopes: {invalid_scopes}. Valid scopes: {valid_scopes}"
-            )
-        
         # Get creator info
         created_by = user_info['user_id']
         if user_info['auth_method'] == 'bearer_token':
@@ -2723,7 +2922,6 @@ async def create_api_token_endpoint(
         # Create the token
         token, token_id = create_api_token(
             token_name=token_data.token_name,
-            scopes=token_data.scopes,
             created_by=created_by,
             expires_days=token_data.expires_days
         )
