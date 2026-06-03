@@ -11,8 +11,9 @@ data/
 *.db
 *.sqlite3
 
-# Secrets — never commit these (mount them on the host instead)
+# Secrets & credentials — never commit these (mount them on the host instead)
 authelia/secrets/
+authelia/config/users.yml
 
 # OS / editor
 .DS_Store
