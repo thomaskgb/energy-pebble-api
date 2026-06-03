@@ -1,2 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
 venv/
+.venv/
+
+# Application data
 data/
+*.db
+*.sqlite3
+
+# Secrets — never commit these (mount them on the host instead)
+authelia/secrets/
+
+# OS / editor
+.DS_Store
+*.swp
