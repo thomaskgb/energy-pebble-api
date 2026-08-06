@@ -12,8 +12,14 @@ data/
 *.sqlite3
 
 # Secrets & credentials — never commit these (mount them on the host instead)
-authelia/secrets/
-authelia/config/users.yml
+# Traefik and Authelia now live in ../cumulus/edge; these paths are ignored
+# wholesale so credentials can never be re-added here by accident.
+authelia/
+traefik/
+
+# ACME account key + certificate private keys (stale copy; live store is
+# ../cumulus/edge/letsencrypt)
+letsencrypt/
 
 # OS / editor
 .DS_Store

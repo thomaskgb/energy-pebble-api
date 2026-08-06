@@ -1,32 +1,17 @@
-services:
-  authelia:
-    image: authelia/authelia:latest
-    container_name: authelia
-    restart: unless-stopped
-    user: "1000:1000"
-    volumes:
-      - ./authelia/config:/config
-      - ./authelia/secrets:/secrets:ro
-    environment:
-      - TZ=UTC
-      - AUTHELIA_JWT_SECRET_FILE=/secrets/jwt_secret
-      - AUTHELIA_SESSION_SECRET_FILE=/secrets/session_secret
-      - AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/secrets/storage_encryption_key
-    labels:
-      - "traefik.enable=true"
-      # Authelia portal
-      - "traefik.http.routers.authelia.rule=Host(`auth.tdlx.nl`)"
-      - "traefik.http.routers.authelia.entrypoints=websecure"
-      - "traefik.http.routers.authelia.tls.certresolver=myresolver"
-      - "traefik.http.routers.authelia.priority=20"
-      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
-      # Forward auth middleware
-      - "traefik.http.middlewares.authelia.forwardAuth.address=http://authelia:9091/api/authz/forward-auth"
-      - "traefik.http.middlewares.authelia.forwardAuth.trustForwardHeader=true"
-      - "traefik.http.middlewares.authelia.forwardAuth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Email,Remote-Name"
-    networks:
-      - proxy
+# Energy Pebble application stack.
+#
+# The reverse proxy (Traefik) and SSO (Authelia) are NOT here -- they are
+# server-wide infrastructure living in ../cumulus/edge. Bring that stack up
+# first; this one joins its external `proxy` network.
+#
+# TLS: the websecure entrypoint sets certResolver=letsencrypt by default, so
+# individual routers do not repeat it.
+#
+# Auth is opt-in per router: a route without `authelia@file` is public. Any
+# route that devices call must stay public -- ESPHome firmware holds no session
+# and cannot follow a login redirect.
 
+services:
   api:
     build: .
     ports:
@@ -35,48 +20,62 @@ services:
     volumes:
       - ./data:/tmp
       - ./firmware:/home/cumulus/github/energy_pebble/firmware
-      - ./authelia/config:/app/authelia/config:ro
+      # /api/admin/users/management reads the Authelia user list (main.py:2797).
+      # Path is relative to this compose file.
+      - ../cumulus/edge/authelia/config:/app/authelia/config:ro
     labels:
       - "traefik.enable=true"
-      # Protected API routes (user, admin, auth endpoints, and firmware routes except upload)  
-      - "traefik.http.routers.energypebble-api-auth.rule=Host(`energypebble.tdlx.nl`) && (PathPrefix(`/api/user`) || PathPrefix(`/api/admin`) || PathPrefix(`/api/verify`) || (PathPrefix(`/api/firmware`) && !Path(`/api/firmware/upload`)))"
+
+      # ---- Protected API (browser session required) --------------------
+      # Listed positively rather than as "all of /api/firmware except
+      # upload": the blanket prefix used to swallow the device-facing
+      # /api/firmware/latest-stable and /api/firmware/<file>/checksum
+      # endpoints and redirect them to the login page.
+      - "traefik.http.routers.energypebble-api-auth.rule=Host(`energypebble.tdlx.nl`) && (PathPrefix(`/api/user`) || PathPrefix(`/api/verify`) || PathPrefix(`/api/admin`) || PathPrefix(`/api/firmware/versions`) || PathPrefix(`/api/firmware/ota-stats`))"
       - "traefik.http.routers.energypebble-api-auth.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-api-auth.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-api-auth.priority=15"
-      - "traefik.http.routers.energypebble-api-auth.middlewares=authelia@docker,real-ip"
-      # Firmware upload route (bypasses Authelia for Bearer token support)
+      - "traefik.http.routers.energypebble-api-auth.middlewares=authelia@file,real-ip@file"
+      - "traefik.http.routers.energypebble-api-auth.service=energypebble-api"
+
+      # ---- Local-development test endpoints: blocked at the edge -------
+      # /api/test/user/* take a ?user= parameter and perform no auth check
+      # of their own, so they must never be reachable from the internet.
+      - "traefik.http.routers.energypebble-api-test.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api/test`)"
+      - "traefik.http.routers.energypebble-api-test.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-api-test.priority=20"
+      - "traefik.http.routers.energypebble-api-test.middlewares=block-internal@file"
+      - "traefik.http.routers.energypebble-api-test.service=energypebble-api"
+
+      # ---- Firmware upload (CI) ---------------------------------------
+      # Bypasses Authelia so GitHub Actions can use a Bearer token; the
+      # handler enforces admin privileges itself (main.py:1790).
       - "traefik.http.routers.energypebble-firmware-upload.rule=Host(`energypebble.tdlx.nl`) && Path(`/api/firmware/upload`)"
       - "traefik.http.routers.energypebble-firmware-upload.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-firmware-upload.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-firmware-upload.priority=16"
-      - "traefik.http.routers.energypebble-firmware-upload.middlewares=real-ip"
-      # Firmware download routes (open to all)
+      - "traefik.http.routers.energypebble-firmware-upload.middlewares=real-ip@file"
+      - "traefik.http.routers.energypebble-firmware-upload.service=energypebble-api"
+
+      # ---- Firmware binary download (devices) -------------------------
       - "traefik.http.routers.energypebble-firmware.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/firmware`)"
       - "traefik.http.routers.energypebble-firmware.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-firmware.tls.certresolver=myresolver"
       - "traefik.http.routers.energypebble-firmware.priority=12"
-      - "traefik.http.routers.energypebble-firmware.middlewares=real-ip"
-      # Public API routes (everything else)
+      - "traefik.http.routers.energypebble-firmware.middlewares=real-ip@file"
+      - "traefik.http.routers.energypebble-firmware.service=energypebble-api"
+
+      # ---- Docs / OpenAPI ---------------------------------------------
+      - "traefik.http.routers.energypebble-docs.rule=Host(`energypebble.tdlx.nl`) && (PathPrefix(`/docs`) || Path(`/openapi.json`))"
+      - "traefik.http.routers.energypebble-docs.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-docs.priority=10"
+      - "traefik.http.routers.energypebble-docs.service=energypebble-api"
+
+      # ---- Public API: colour codes, OTA check/status, samples --------
       - "traefik.http.routers.energypebble-api.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/api`)"
       - "traefik.http.routers.energypebble-api.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-api.tls.certresolver=myresolver"
-      - "traefik.http.routers.energypebble-api.priority=10"
-      - "traefik.http.routers.energypebble-api.middlewares=real-ip"
-      # Docs routes
-      - "traefik.http.routers.energypebble-docs.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/docs`)"
-      - "traefik.http.routers.energypebble-docs.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-docs.tls.certresolver=myresolver"
-      - "traefik.http.routers.energypebble-docs.priority=15"
-      - "traefik.http.routers.energypebble-docs.service=energypebble-api"
-      # OpenAPI routes
-      - "traefik.http.routers.energypebble-openapi.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/openapi.json`)"
-      - "traefik.http.routers.energypebble-openapi.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-openapi.tls.certresolver=myresolver"
-      - "traefik.http.routers.energypebble-openapi.priority=15"
-      - "traefik.http.routers.energypebble-openapi.service=energypebble-api"
+      - "traefik.http.routers.energypebble-api.priority=5"
+      - "traefik.http.routers.energypebble-api.middlewares=real-ip@file"
+      - "traefik.http.routers.energypebble-api.service=energypebble-api"
+
       - "traefik.http.services.energypebble-api.loadbalancer.server.port=8000"
-      # Real IP middleware to forward client IP  
-      - "traefik.http.middlewares.real-ip.headers.customrequestheaders.X-Forwarded-Proto=https"
     networks:
       - proxy
 
@@ -88,37 +87,33 @@ services:
       - ./static:/usr/share/caddy
     labels:
       - "traefik.enable=true"
-      # Protected routes (dashboard)
-      - "traefik.http.routers.energypebble-web-auth.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/dashboard`)"
-      - "traefik.http.routers.energypebble-web-auth.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-web-auth.tls.certresolver=myresolver"
-      - "traefik.http.routers.energypebble-web-auth.middlewares=authelia@docker"
-      - "traefik.http.routers.energypebble-web-auth.priority=10"
-      # Protected routes (impact-circle)
-      - "traefik.http.routers.energypebble-web-impact.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/impact-circle`)"
-      - "traefik.http.routers.energypebble-web-impact.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-web-impact.tls.certresolver=myresolver"
-      - "traefik.http.routers.energypebble-web-impact.middlewares=authelia@docker"
-      - "traefik.http.routers.energypebble-web-impact.priority=10"
-      # Protected routes (admin area)
+
+      # ---- Admin area: admins only (enforced in Authelia) -------------
       - "traefik.http.routers.energypebble-web-admin.rule=Host(`energypebble.tdlx.nl`) && PathPrefix(`/admin`)"
       - "traefik.http.routers.energypebble-web-admin.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-web-admin.tls.certresolver=myresolver"
-      - "traefik.http.routers.energypebble-web-admin.middlewares=authelia@docker"
       - "traefik.http.routers.energypebble-web-admin.priority=11"
-      # Public routes (everything else)
+      - "traefik.http.routers.energypebble-web-admin.middlewares=authelia@file,security-headers@file"
+      - "traefik.http.routers.energypebble-web-admin.service=energypebble-web"
+
+      # ---- Signed-in areas -------------------------------------------
+      - "traefik.http.routers.energypebble-web-auth.rule=Host(`energypebble.tdlx.nl`) && (PathPrefix(`/dashboard`) || PathPrefix(`/impact-circle`))"
+      - "traefik.http.routers.energypebble-web-auth.entrypoints=websecure"
+      - "traefik.http.routers.energypebble-web-auth.priority=10"
+      - "traefik.http.routers.energypebble-web-auth.middlewares=authelia@file,security-headers@file"
+      - "traefik.http.routers.energypebble-web-auth.service=energypebble-web"
+
+      # ---- Public site -----------------------------------------------
       - "traefik.http.routers.energypebble-web.rule=Host(`energypebble.tdlx.nl`)"
       - "traefik.http.routers.energypebble-web.entrypoints=websecure"
-      - "traefik.http.routers.energypebble-web.tls.certresolver=myresolver"
-      - "traefik.http.services.energypebble-web.loadbalancer.server.port=80"
       - "traefik.http.routers.energypebble-web.priority=1"
+      - "traefik.http.routers.energypebble-web.middlewares=security-headers@file"
+      - "traefik.http.routers.energypebble-web.service=energypebble-web"
+
+      - "traefik.http.services.energypebble-web.loadbalancer.server.port=80"
     networks:
       - proxy
-    depends_on:
-      - authelia
 
 networks:
   proxy:
-    driver: bridge
     external: true
-      
+    name: proxy
