@@ -8,6 +8,7 @@ import pytz
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
+import os
 import re
 import json
 import hashlib
@@ -46,6 +47,10 @@ class DeviceClaimRequest(BaseModel):
 # Pydantic models for API tokens
 class TokenCreate(BaseModel):
     token_name: str
+    expires_days: Optional[int] = None  # None = no expiration
+
+class UserTokenCreate(BaseModel):
+    token_name: str = "Home Assistant"
     expires_days: Optional[int] = None  # None = no expiration
 
 class TokenResponse(BaseModel):
@@ -126,6 +131,14 @@ logger = logging.getLogger(__name__)
 # Security scheme for OpenAPI docs
 security = HTTPBearer()
 
+# Local development auth shim: set LOCAL_DEV_USER=<name> to act as that user
+# without Traefik/Authelia in front. NEVER set this in production compose.
+LOCAL_DEV_USER = os.environ.get("LOCAL_DEV_USER")
+if LOCAL_DEV_USER:
+    logging.getLogger(__name__).warning(
+        f"LOCAL_DEV_USER={LOCAL_DEV_USER}: authentication is BYPASSED — local development only"
+    )
+
 def get_current_user(request: Request):
     """
     Hybrid authentication: supports both Authelia headers and API Bearer tokens.
@@ -151,13 +164,24 @@ def get_current_user(request: Request):
             # Validate API token
             token_info = validate_api_token(token)
             if token_info:
+                # User-bound tokens (Home Assistant etc.) authenticate as the
+                # user; legacy 'system' tokens stay system-wide admin.
                 return {
-                    'user_id': 'system',  # API tokens are system-wide
+                    'user_id': token_info.get('user_id') or 'system',
                     'auth_method': 'bearer_token',
                     'is_admin': token_info['is_admin'],
                     'token_name': token_info['token_name']
                 }
     
+    # Local development fallback (see LOCAL_DEV_USER above)
+    if LOCAL_DEV_USER:
+        return {
+            'user_id': LOCAL_DEV_USER,
+            'auth_method': 'local_dev',
+            'is_admin': True,
+            'groups': ['admins', 'users']
+        }
+
     raise HTTPException(
         status_code=401,
         detail="Not authenticated",
@@ -176,7 +200,10 @@ def get_admin_user(request: Request):
     return user_info
 
 # Database setup
-DB_PATH = Path("/tmp/energy_pebble.db")
+# /tmp is volume-mounted to ./data in docker-compose; ENERGY_PEBBLE_DATA_DIR
+# allows tests and alternative deployments to relocate all persistent state.
+DATA_DIR = Path(os.environ.get("ENERGY_PEBBLE_DATA_DIR", "/tmp"))
+DB_PATH = DATA_DIR / "energy_pebble.db"
 db_lock = threading.Lock()
 
 def init_database():
@@ -298,6 +325,44 @@ def init_database():
             )
         ''')
         
+        # Create user_settings table: per-person signal & display preferences.
+        # Every column default reproduces the pure price-based behavior, so a
+        # missing row means "default pebble".
+        # Users describe their household (contract, solar, battery); the color
+        # signal is derived from that — see derive_signal_source().
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id TEXT PRIMARY KEY,
+                contract_type TEXT NOT NULL DEFAULT 'dynamic',
+                has_solar BOOLEAN NOT NULL DEFAULT 0,
+                has_battery BOOLEAN NOT NULL DEFAULT 0,
+                palette TEXT NOT NULL DEFAULT 'standard',
+                brightness INTEGER NOT NULL DEFAULT 100,
+                night_dim_enabled BOOLEAN NOT NULL DEFAULT 1,
+                night_dim_start TEXT NOT NULL DEFAULT '22:00',
+                night_dim_end TEXT NOT NULL DEFAULT '07:00',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        for ddl, log_msg in [
+            ("ALTER TABLE user_settings ADD COLUMN has_battery BOOLEAN NOT NULL DEFAULT 0",
+             "Added has_battery column to user_settings table"),
+            ("ALTER TABLE user_settings ADD COLUMN contract_type TEXT NOT NULL DEFAULT 'dynamic'",
+             "Added contract_type column to user_settings table"),
+        ]:
+            try:
+                cursor.execute(ddl)
+                logger.info(log_msg)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        # Migrate rows saved under the old signal_source model, if any
+        cursor.execute("PRAGMA table_info(user_settings)")
+        if 'signal_source' in [col[1] for col in cursor.fetchall()]:
+            cursor.execute("UPDATE user_settings SET contract_type = 'day_night' WHERE signal_source = 'day_night'")
+            cursor.execute("UPDATE user_settings SET has_solar = 1 WHERE signal_source = 'solar'")
+
         # Create API tokens table for bearer token authentication
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS api_tokens (
@@ -737,39 +802,67 @@ def create_api_token(token_name: str, created_by: str, expires_days: Optional[in
             
     return token, token_id
 
+def create_user_api_token(user_id: str, token_name: str, expires_days: Optional[int] = None) -> tuple[str, int]:
+    """Create a token bound to a user (e.g. for Home Assistant); returns (token, token_id).
+
+    Unlike the legacy 'system' tokens (CI/admin), user tokens authenticate as
+    the user and carry no admin rights.
+    """
+    token = generate_api_token()
+    token_hash = hash_token(token)
+
+    expires_at = None
+    if expires_days:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
+
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO api_tokens (token_hash, token_name, user_id, expires_at, created_by)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (token_hash, token_name, user_id, expires_at, user_id))
+            token_id = cursor.lastrowid
+            conn.commit()
+
+    return token, token_id
+
 def validate_api_token(token: str) -> Optional[Dict[str, Any]]:
     """Validate an API token and return token info if valid"""
     with db_lock:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, token_hash, token_name, expires_at, is_active
-                FROM api_tokens 
+                SELECT id, token_hash, token_name, expires_at, is_active, user_id
+                FROM api_tokens
                 WHERE is_active = TRUE
             ''')
-            
+
             for row in cursor.fetchall():
-                token_id, token_hash, token_name, expires_at, is_active = row
-                
+                token_id, token_hash, token_name, expires_at, is_active, user_id = row
+
                 if verify_token(token, token_hash):
                     # Check if token is expired
                     if expires_at:
                         expires_datetime = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
                         if datetime.now(timezone.utc) > expires_datetime:
                             return None
-                    
+
                     # Update last_used_at
                     cursor.execute('''
                         UPDATE api_tokens SET last_used_at = ? WHERE id = ?
                     ''', (datetime.now(timezone.utc), token_id))
                     conn.commit()
-                    
+
                     return {
                         'id': token_id,
                         'token_name': token_name,
-                        'is_admin': True  # All tokens have admin access
+                        'user_id': user_id,
+                        # Legacy 'system' tokens (CI/firmware upload) keep admin
+                        # access; user-bound tokens are never admin.
+                        'is_admin': user_id == 'system'
                     }
-    
+
     return None
 
 def get_all_api_tokens() -> List[Dict[str, Any]]:
@@ -808,6 +901,314 @@ def revoke_api_token(token_id: int) -> bool:
             ''', (token_id,))
             conn.commit()
             return cursor.rowcount > 0
+
+# --- Per-person settings (household parameters & display preferences) --------
+# The pebble stays dumb: all personalization is resolved server-side from the
+# claiming user's profile. Users describe their household — contract type,
+# solar, battery — and the color signal is derived from that. Defaults
+# reproduce the pure price-based behavior.
+
+CONTRACT_TYPES = ("dynamic", "day_night", "fixed")
+PALETTES = ("standard", "colorblind")
+
+DEFAULT_USER_SETTINGS = {
+    "contract_type": "dynamic",
+    "has_solar": False,
+    "has_battery": False,  # solar-charged battery: bridges the evening peak on sunny days
+    "palette": "standard",
+    "brightness": 100,
+    "night_dim_enabled": True,
+    "night_dim_start": "22:00",
+    "night_dim_end": "07:00",
+}
+
+def derive_signal_source(settings: Dict[str, Any]) -> str:
+    """Map household parameters to the color signal.
+
+    - day/night tariff contract -> two-state day/night colors (solar still
+      turns production hours green, battery extends that into the evening)
+    - fixed contract -> the price carries no signal: neutral, except solar
+      production hours (self-consumption is the only lever)
+    - dynamic + solar panels -> price colors boosted by the solar forecast
+    - otherwise -> pure day-ahead price colors
+    """
+    if settings["contract_type"] == "day_night":
+        return "day_night"
+    if settings["contract_type"] == "fixed":
+        return "fixed"
+    if settings["has_solar"]:
+        return "solar"
+    return "price"
+
+TIME_RE = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
+
+BRUSSELS_TZ = pytz.timezone("Europe/Brussels")
+SOLAR_WINDOW_HOURS = (10, 16)   # local hours treated as the solar production window
+NIGHT_TARIFF_START = 22         # Belgian day/night tariff: night from 22:00...
+NIGHT_TARIFF_END = 7            # ...to 07:00 local, plus weekends
+
+class UserSettingsUpdate(BaseModel):
+    contract_type: Optional[str] = None
+    has_solar: Optional[bool] = None
+    has_battery: Optional[bool] = None
+    palette: Optional[str] = None
+    brightness: Optional[int] = None
+    night_dim_enabled: Optional[bool] = None
+    night_dim_start: Optional[str] = None
+    night_dim_end: Optional[str] = None
+
+def get_user_settings(user_id: str) -> Dict[str, Any]:
+    """Return the user's settings merged over defaults."""
+    settings = dict(DEFAULT_USER_SETTINGS)
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT contract_type, has_solar, has_battery, palette, brightness,
+                   night_dim_enabled, night_dim_start, night_dim_end
+            FROM user_settings WHERE user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+    if row:
+        settings.update({
+            "contract_type": row[0],
+            "has_solar": bool(row[1]),
+            "has_battery": bool(row[2]),
+            "palette": row[3],
+            "brightness": row[4],
+            "night_dim_enabled": bool(row[5]),
+            "night_dim_start": row[6],
+            "night_dim_end": row[7],
+        })
+    return settings
+
+def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, Any]:
+    """Validate and persist a partial settings update; returns the merged result."""
+    changes = {k: v for k, v in updates.model_dump().items() if v is not None}
+
+    if "contract_type" in changes and changes["contract_type"] not in CONTRACT_TYPES:
+        raise HTTPException(status_code=400, detail=f"contract_type must be one of {list(CONTRACT_TYPES)}")
+    if "palette" in changes and changes["palette"] not in PALETTES:
+        raise HTTPException(status_code=400, detail=f"palette must be one of {list(PALETTES)}")
+    if "brightness" in changes and not (5 <= changes["brightness"] <= 100):
+        raise HTTPException(status_code=400, detail="brightness must be between 5 and 100")
+    for field in ("night_dim_start", "night_dim_end"):
+        if field in changes and not TIME_RE.match(changes[field]):
+            raise HTTPException(status_code=400, detail=f"{field} must be HH:MM (24h)")
+
+    settings = get_user_settings(user_id)
+    settings.update(changes)
+
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO user_settings (user_id, contract_type, has_solar, has_battery, palette, brightness,
+                                       night_dim_enabled, night_dim_start, night_dim_end, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET
+                contract_type = excluded.contract_type,
+                has_solar = excluded.has_solar,
+                has_battery = excluded.has_battery,
+                palette = excluded.palette,
+                brightness = excluded.brightness,
+                night_dim_enabled = excluded.night_dim_enabled,
+                night_dim_start = excluded.night_dim_start,
+                night_dim_end = excluded.night_dim_end,
+                updated_at = CURRENT_TIMESTAMP
+        ''', (user_id, settings["contract_type"], settings["has_solar"], settings["has_battery"],
+              settings["palette"], settings["brightness"], settings["night_dim_enabled"],
+              settings["night_dim_start"], settings["night_dim_end"]))
+        conn.commit()
+
+    logger.info(f"Saved settings for user {user_id}: {changes}")
+    return settings
+
+def get_settings_for_device(device_id: Optional[str]) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """Resolve a device id to its claiming user's settings.
+
+    Returns (user_id, settings); (None, None) for unknown or unclaimed devices.
+    """
+    if not device_id:
+        return None, None
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT ud.user_id
+            FROM devices d
+            JOIN user_devices ud ON d.id = ud.device_id
+            WHERE d.device_id = ?
+            ORDER BY ud.created_at ASC
+            LIMIT 1
+        ''', (device_id,))
+        row = cursor.fetchone()
+    if not row:
+        return None, None
+    return row[0], get_user_settings(row[0])
+
+BATTERY_BRIDGE_HOURS = (17, 22)      # local evening window a charged battery can cover
+BATTERY_MIN_CHARGE_HOURS = 3         # solar hours before 17:00 needed to call the battery "charged"
+
+def _battery_charged_days(solar_boost: Optional[set]) -> Optional[set]:
+    """Local calendar days on which a solar-charged battery filled up.
+
+    A day counts when the forecast gave at least BATTERY_MIN_CHARGE_HOURS of
+    production before the evening window. None means "no forecast, assume
+    charged" (matches the fixed-window fallback of 6 midday hours).
+    """
+    if solar_boost is None:
+        return None
+    counts: Dict[Any, int] = {}
+    for hour_key in solar_boost:
+        local = datetime.fromisoformat(hour_key.replace('Z', '+00:00')).astimezone(BRUSSELS_TZ)
+        if local.hour < BATTERY_BRIDGE_HOURS[0]:
+            counts[local.date()] = counts.get(local.date(), 0) + 1
+    return {day for day, n in counts.items() if n >= BATTERY_MIN_CHARGE_HOURS}
+
+def apply_signal_source(color_codes: List[Dict[str, Any]], settings: Dict[str, Any],
+                        solar_boost: Optional[set] = None) -> List[Dict[str, Any]]:
+    """Transform the committed price-based colors according to the profile.
+
+    Transforms are deterministic functions of (committed color, hour), so the
+    8-hour stability guarantee of the default pipeline carries over unchanged.
+    For 'solar', solar_boost is the set of hour_keys with committed forecast
+    boost (see get_solar_boost_hours); without it a fixed midday window is the
+    offline fallback.
+
+    Solar households with a battery get the evening bridge: a solar-charged
+    battery delays evening grid consumption, but only on days it actually
+    charged -> soften R to Y during 17:00-22:00 local after a sunny day.
+    (Curtailment at negative prices is assumed: it is a prerequisite of a
+    dynamic contract, so it needs no setting and no color handling.)
+    """
+    source = derive_signal_source(settings)
+    if source == "price":
+        return color_codes
+
+    charged_days = _battery_charged_days(solar_boost) if settings.get("has_battery") else set()
+
+    result = []
+    for entry in color_codes:
+        entry = dict(entry)
+        hour_utc = datetime.fromisoformat(entry["hour"].replace('Z', '+00:00'))
+        local = hour_utc.astimezone(BRUSSELS_TZ)
+
+        if solar_boost is not None:
+            solar_hour = entry["hour"] in solar_boost
+        else:
+            solar_hour = SOLAR_WINDOW_HOURS[0] <= local.hour < SOLAR_WINDOW_HOURS[1]
+        in_bridge = BATTERY_BRIDGE_HOURS[0] <= local.hour < BATTERY_BRIDGE_HOURS[1]
+        battery_charged = (settings.get("has_battery") and settings.get("has_solar")
+                           and (charged_days is None or local.date() in charged_days))
+
+        if source == "day_night":
+            # Two-state display for day/night tariff contracts: night + weekend
+            # is the cheap tariff, daytime on weekdays is not. Never red.
+            is_night = local.hour >= NIGHT_TARIFF_START or local.hour < NIGHT_TARIFF_END
+            is_weekend = local.weekday() >= 5
+            entry["color_code"] = "G" if (is_night or is_weekend) else "Y"
+            # Solar panels still beat the day tariff: self-consuming during
+            # production hours is free energy, so those hours go green too...
+            if settings.get("has_solar") and solar_hour:
+                entry["color_code"] = "G"
+            # ...and a battery charged on a sunny day carries that into the
+            # evening until the night tariff takes over.
+            if battery_charged and in_bridge and entry["color_code"] == "Y":
+                entry["color_code"] = "G"
+        elif source == "fixed":
+            # Flat tariff: the price carries no signal. Neutral, except own
+            # solar production, which is the one lever a fixed household has.
+            entry["color_code"] = "G" if (settings.get("has_solar") and solar_hour) else "Y"
+        elif source == "solar":
+            # Surplus solar makes consuming one step "greener" than price alone
+            # says: forecast-driven when available, fixed midday window otherwise.
+            if solar_hour:
+                entry["color_code"] = {"R": "Y", "Y": "G", "G": "G"}[entry["color_code"]]
+            # Battery evening bridge: soften the evening peak on charged days
+            if battery_charged and in_bridge and entry["color_code"] == "R":
+                entry["color_code"] = "Y"
+        result.append(entry)
+    return result
+
+NIGHT_DIM_BRIGHTNESS = 30  # % brightness while night dimming is active
+
+def build_display_block(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Display instructions for the firmware; old firmware ignores this block."""
+    return {
+        "palette": settings["palette"],
+        "brightness": settings["brightness"],
+        "night_dim": ({
+            "from": settings["night_dim_start"],
+            "to": settings["night_dim_end"],
+            "brightness": NIGHT_DIM_BRIGHTNESS,
+        } if settings["night_dim_enabled"] else None),
+    }
+
+# --- Solar forecast (Open-Meteo) ---------------------------------------------
+# For the 'solar' signal source: instead of a fixed midday window, boost hours
+# where the radiation forecast says there is meaningful solar production.
+# Boost decisions are committed per hour (like colors) so a shifting forecast
+# never flips a color the user has already seen.
+
+SOLAR_FORECAST_URL = (
+    "https://api.open-meteo.com/v1/forecast"
+    "?latitude=50.85&longitude=4.35"          # Brussels; good enough country-wide
+    "&hourly=shortwave_radiation&forecast_days=3&timezone=UTC"
+)
+SOLAR_FORECAST_TTL_SECONDS = 3600
+SOLAR_BOOST_MIN_WM2 = 100        # absolute floor: below this, no meaningful production
+SOLAR_BOOST_RELATIVE = 0.35      # ...and at least 35% of the forecast window's peak
+
+solar_forecast_cache: Dict[str, Any] = {"fetched_at": 0.0, "radiation": {}}
+solar_boost_file = DATA_DIR / "solar_boost.json"
+
+def compute_solar_boost(radiation: Dict[str, float]) -> Dict[str, bool]:
+    """Pure decision function: hour_key -> should this hour be boosted."""
+    if not radiation:
+        return {}
+    peak = max(radiation.values())
+    threshold = max(SOLAR_BOOST_MIN_WM2, SOLAR_BOOST_RELATIVE * peak)
+    return {hour: value >= threshold for hour, value in radiation.items()}
+
+async def get_solar_boost_hours() -> Optional[set]:
+    """Set of hour_keys with committed solar boost; None if no forecast available."""
+    now = time.time()
+    if now - solar_forecast_cache["fetched_at"] > SOLAR_FORECAST_TTL_SECONDS:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(SOLAR_FORECAST_URL)
+                resp.raise_for_status()
+                data = resp.json()
+            hours = data["hourly"]["time"]
+            values = data["hourly"]["shortwave_radiation"]
+            solar_forecast_cache["radiation"] = {
+                f"{t}:00Z": (v or 0.0) for t, v in zip(hours, values)
+            }
+            solar_forecast_cache["fetched_at"] = now
+        except Exception as e:
+            logger.warning(f"Solar forecast fetch failed: {e}")
+
+    radiation = solar_forecast_cache["radiation"]
+    if not radiation:
+        return None
+
+    # Commit each hour's boost decision the first time we see it, prune the past.
+    try:
+        committed = json.loads(solar_boost_file.read_text()) if solar_boost_file.exists() else {}
+    except Exception:
+        committed = {}
+    fresh = compute_solar_boost(radiation)
+    current_hour = datetime.now(pytz.UTC).replace(minute=0, second=0, microsecond=0)
+    for hour_key, boosted in fresh.items():
+        committed.setdefault(hour_key, boosted)
+    committed = {
+        k: v for k, v in committed.items()
+        if datetime.fromisoformat(k.replace('Z', '+00:00')) >= current_hour
+    }
+    try:
+        solar_boost_file.write_text(json.dumps(committed))
+    except Exception as e:
+        logger.warning(f"Could not persist solar boost cache: {e}")
+
+    return {hour for hour, boosted in committed.items() if boosted}
 
 def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str] = None):
     """Log a device request for tracking purposes. Only tracks devices with device_id."""
@@ -885,6 +1286,27 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
 )
+
+# Serve the static site under /static for local development (in production
+# Caddy serves these files at / and Traefik never routes /static here).
+_static_dir = Path(__file__).parent / "static"
+if _static_dir.is_dir():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/static", StaticFiles(directory=str(_static_dir), html=True), name="static")
+
+# Local development page routes, mirroring Caddy's rewrites so links like the
+# homepage Login button work without the edge stack. Only registered with the
+# LOCAL_DEV_USER shim; in production these paths never reach this app.
+if LOCAL_DEV_USER:
+    from fastapi.responses import RedirectResponse
+
+    @app.get("/dashboard", include_in_schema=False)
+    async def _dev_dashboard():
+        return RedirectResponse("/static/dashboard.html")
+
+    @app.get("/impact-circle", include_in_schema=False)
+    async def _dev_impact_circle():
+        return RedirectResponse("/static/impact-circle.html")
 
 async def fetch_data(date_str: Optional[str] = None):
     """Fetch data from Elia's API for a given date."""
@@ -989,7 +1411,7 @@ async def fetch_data_for_date_range(start_date: datetime, num_days: int = 3):
 
 # Global cache for committed colors
 committed_colors_cache = {}
-cache_file_path = Path("/tmp/committed_colors.json")
+cache_file_path = DATA_DIR / "committed_colors.json"
 
 def load_committed_colors():
     """Load committed colors from file cache."""
@@ -1182,9 +1604,10 @@ async def root():
         "message": "Electricity Price API",
         "endpoints": {
             "/api/json": "Get electricity price data in JSON format (Optional query param: date=YYYY-MM-DD)",
-            "/api/color-code": "Get color codes for current hour and next 11 hours (Optional query params: date=YYYY-MM-DD, device_id=string)",
+            "/api/color-code": "Color codes for the current hour and next 8 hours. Devices sending X-Device-ID get their household's personalized signal plus a display block (palette, brightness, night dim)",
+            "/api/user/settings": "GET/PUT the household profile driving personalization: contract type, solar, battery, display preferences (authentication required)",
             "/api/sample": "Get sample electricity price data for testing",
-            "/api/sample-color-code": "Get sample color codes for current hour and next 11 hours",
+            "/api/sample-color-code": "Get sample color codes for testing",
             "/docs": "API documentation (Swagger UI)"
         }
     }
@@ -1231,22 +1654,28 @@ async def get_json_data(date: Optional[str] = None):
 @app.get("/api/color-code", tags=["public"])
 async def get_color_code(request: Request, date: Optional[str] = None, device_id: Optional[str] = None):
     """
-    Get color codes (G, Y, R) for the current hour and next 7 hours based on price analysis.
+    Get color codes (G, Y, R) for the current hour and next 8 hours based on price analysis.
     Uses commitment-based stability - colors won't change once committed.
-    
+
+    Personalization: when the device id (X-Device-ID header or device_id query
+    parameter) belongs to a claimed device, the colors are transformed for that
+    household's profile (contract type, solar with live radiation forecast,
+    battery evening bridge) and the response carries a `display` block with
+    palette, brightness, and night-dim instructions for the firmware. Unknown
+    or unclaimed devices get the default pure price-based signal; the response
+    shape is backward compatible either way (`meta.personalized` tells which).
+
     Optional query parameters:
     - date: Date in YYYY-MM-DD format
-    - device_id: ESP32 eFuse MAC address (12-character hex string, e.g., '904fb0453ab4') for device tracking
-    
-    Alternative device identification:
-    Device ID can also be provided via X-Device-ID header for improved security and cleaner URLs.
+    - device_id: ESP32 eFuse MAC address (12-character hex string, e.g., '904fb0453ab4')
     """
+    final_device_id = device_id or request.headers.get("x-device-id")
+
     # Log device request for tracking (non-breaking)
     try:
         client_ip = get_real_client_ip(request)
         user_agent = request.headers.get("user-agent", "unknown")
-        final_device_id = device_id or request.headers.get("x-device-id")
-        
+
         # Log request asynchronously to avoid blocking
         log_device_request(client_ip, user_agent, final_device_id)
     except Exception as e:
@@ -1291,20 +1720,37 @@ async def get_color_code(request: Request, date: Optional[str] = None, device_id
     
     # Return the first 9 hours for display (current + next 8)
     display_colors = color_codes[:9]
-    
+
     # Add metadata about commitment status
     committed_count = sum(1 for color in display_colors if color.get("committed", False))
-    
+
+    # Personalize for claimed devices; unknown/unclaimed devices get defaults.
+    settings = None
+    try:
+        _, settings = get_settings_for_device(final_device_id)
+        if settings:
+            solar_boost = None
+            if settings.get("has_solar"):
+                solar_boost = await get_solar_boost_hours()
+            display_colors = apply_signal_source(display_colors, settings, solar_boost)
+    except Exception as e:
+        logger.warning(f"Settings resolution failed (falling back to defaults): {e}")
+        settings = None
+    effective_settings = settings or DEFAULT_USER_SETTINGS
+
     # Return both the current hour and display color codes
     return {
         "current_hour": current_hour,
         "hour_color_codes": display_colors,
+        "display": build_display_block(effective_settings),
         "meta": {
             "total_hours": len(display_colors),
             "committed_hours": committed_count,
             "flexible_hours": len(display_colors) - committed_count,
             "reference_window_hours": 48,
-            "commitment_window_hours": 8
+            "commitment_window_hours": 8,
+            "signal_source": derive_signal_source(effective_settings),
+            "personalized": settings is not None
         }
     }
 
@@ -1423,10 +1869,15 @@ async def verify_user(request: Request):
     """
     # Get user information from Authelia headers
     remote_user = request.headers.get("Remote-User")
-    remote_name = request.headers.get("Remote-Name") 
+    remote_name = request.headers.get("Remote-Name")
     remote_email = request.headers.get("Remote-Email")
     remote_groups = request.headers.get("Remote-Groups")
-    
+
+    # Local development fallback (see LOCAL_DEV_USER at the top of this file)
+    if not remote_user and LOCAL_DEV_USER:
+        remote_user = LOCAL_DEV_USER
+        remote_groups = "admins,users"
+
     if not remote_user:
         raise HTTPException(status_code=401, detail="User not authenticated")
     
@@ -1706,6 +2157,186 @@ async def test_update_user_profile(request: Request, user: str = Query("thomas",
     except Exception as e:
         logger.error(f"Error in test update user profile: {e}")
         raise HTTPException(status_code=500, detail=f"Error updating user profile: {str(e)}")
+
+@app.get("/api/user/settings", tags=["user"])
+async def get_user_settings_endpoint(request: Request):
+    """
+    Get the authenticated user's pebble settings (signal source & display).
+
+    Authentication: Requires valid Authelia session or API token.
+
+    Missing settings fall back to defaults, which reproduce the pure
+    price-based behavior.
+    """
+    try:
+        user_info = get_current_user(request)
+        settings = get_user_settings(user_info['user_id'])
+        return {
+            "user_id": user_info['user_id'],
+            "settings": settings,
+            "derived_signal": derive_signal_source(settings),
+            "options": {
+                "contract_type": list(CONTRACT_TYPES),
+                "palette": list(PALETTES),
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user settings: {str(e)}")
+
+@app.put("/api/user/settings", tags=["user"])
+async def update_user_settings_endpoint(updates: UserSettingsUpdate, request: Request):
+    """
+    Update the authenticated user's pebble settings (partial update).
+
+    Authentication: Requires valid Authelia session or API token.
+
+    Households are described, not configured: contract_type
+    ('dynamic' | 'day_night' | 'fixed'), has_solar, has_battery — the color
+    signal is derived from these. Display fields: palette
+    ('standard' | 'colorblind'), brightness (5-100), night_dim_enabled,
+    night_dim_start/night_dim_end ('HH:MM').
+    Devices pick the change up on their next /api/color-code poll.
+    """
+    try:
+        user_info = get_current_user(request)
+        settings = save_user_settings(user_info['user_id'], updates)
+        return {
+            "message": "Settings updated successfully",
+            "user_id": user_info['user_id'],
+            "settings": settings,
+            "derived_signal": derive_signal_source(settings)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating user settings: {str(e)}")
+
+@app.get("/api/test/user/settings", tags=["user"])
+async def test_get_user_settings(user: str = Query("thomas", description="Test user (thomas or willie)")):
+    """Test endpoint for user settings - local development (blocked at the edge)."""
+    settings = get_user_settings(user)
+    return {
+        "user_id": user,
+        "settings": settings,
+        "derived_signal": derive_signal_source(settings),
+        "options": {
+            "contract_type": list(CONTRACT_TYPES),
+            "palette": list(PALETTES),
+        }
+    }
+
+@app.put("/api/test/user/settings", tags=["user"])
+async def test_update_user_settings(updates: UserSettingsUpdate, user: str = Query("thomas", description="Test user (thomas or willie)")):
+    """Test endpoint for updating user settings - local development (blocked at the edge)."""
+    settings = save_user_settings(user, updates)
+    return {
+        "message": "Settings updated successfully (test mode)",
+        "user_id": user,
+        "settings": settings,
+        "derived_signal": derive_signal_source(settings)
+    }
+
+# --- Personal API tokens (Home Assistant & other integrations) ---------------
+# Managed from the dashboard (Authelia-protected /api/user path). The tokens
+# themselves are used against the public /api/ha/* endpoints below, which the
+# edge does not gate — integrations cannot follow an Authelia login redirect.
+
+@app.get("/api/user/tokens", tags=["user"])
+async def list_user_tokens(request: Request):
+    """List the authenticated user's personal API tokens (no secrets)."""
+    user_info = get_current_user(request)
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, token_name, created_at, expires_at, last_used_at
+            FROM api_tokens
+            WHERE user_id = ? AND is_active = TRUE
+            ORDER BY created_at DESC
+        ''', (user_info['user_id'],))
+        tokens = [{
+            "id": row[0], "token_name": row[1], "created_at": row[2],
+            "expires_at": row[3], "last_used_at": row[4],
+        } for row in cursor.fetchall()]
+    return {"tokens": tokens}
+
+@app.post("/api/user/tokens", tags=["user"])
+async def create_user_token_endpoint(token_data: UserTokenCreate, request: Request):
+    """
+    Create a personal API token for integrations like Home Assistant.
+
+    The token is returned once and never stored in plain text. It
+    authenticates as you (never as admin) against /api/ha/* endpoints.
+    """
+    user_info = get_current_user(request)
+    if user_info['auth_method'] == 'bearer_token':
+        raise HTTPException(status_code=403, detail="Tokens cannot create other tokens")
+    name = token_data.token_name.strip() or "Home Assistant"
+    token, token_id = create_user_api_token(user_info['user_id'], name, token_data.expires_days)
+    logger.info(f"User {user_info['user_id']} created personal token '{name}'")
+    return {"id": token_id, "token_name": name, "token": token}
+
+@app.delete("/api/user/tokens/{token_id}", tags=["user"])
+async def revoke_user_token_endpoint(token_id: int, request: Request):
+    """Revoke one of the authenticated user's personal tokens."""
+    user_info = get_current_user(request)
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE api_tokens SET is_active = FALSE
+            WHERE id = ? AND user_id = ?
+        ''', (token_id, user_info['user_id']))
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Token not found")
+    return {"message": "Token revoked"}
+
+# --- Home Assistant endpoints (public path, bearer-token auth) ----------------
+
+def _require_token_user(request: Request) -> Dict[str, Any]:
+    """Authenticate a personal (user-bound) bearer token."""
+    user_info = get_current_user(request)
+    if user_info['user_id'] == 'system':
+        raise HTTPException(status_code=403, detail="A personal API token is required")
+    return user_info
+
+@app.get("/api/ha/me", tags=["user"])
+async def ha_me(request: Request):
+    """
+    Validate a personal API token (used by the Home Assistant config flow).
+
+    Authentication: Bearer token created via /api/user/tokens (dashboard).
+    """
+    user_info = _require_token_user(request)
+    return {"user_id": user_info['user_id']}
+
+@app.get("/api/ha/devices", tags=["user"])
+async def ha_devices(request: Request):
+    """
+    List the token owner's claimed pebbles (Home Assistant device picker).
+
+    Authentication: Bearer token created via /api/user/tokens (dashboard).
+    Poll colors via the public /api/color-code with the X-Device-ID header.
+    """
+    user_info = _require_token_user(request)
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT d.device_id, ud.nickname, d.last_seen
+            FROM devices d
+            JOIN user_devices ud ON d.id = ud.device_id
+            WHERE ud.user_id = ? AND d.device_id IS NOT NULL
+            ORDER BY d.last_seen DESC
+        ''', (user_info['user_id'],))
+        devices = [{
+            "device_id": row[0],
+            "nickname": row[1] or row[0],
+            "last_seen": row[2],
+        } for row in cursor.fetchall()]
+    return {"user_id": user_info['user_id'], "devices": devices}
 
 @app.get("/api/diagnostic", tags=["public"])
 async def get_diagnostic(date: Optional[str] = None):

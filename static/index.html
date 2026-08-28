@@ -61,9 +61,14 @@
             padding: 8px 16px;
             border-radius: 8px;
             text-decoration: none;
+            font-size: 1em;
+            line-height: 1.5;
             font-weight: 500;
             transition: all 0.2s ease;
             border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .nav-btn.login {
@@ -99,6 +104,9 @@
             padding: 8px 16px;
             border-radius: 8px;
             cursor: pointer;
+            font-family: inherit;
+            font-size: 1em;
+            line-height: 1.5;
             font-weight: 500;
             transition: all 0.2s ease;
             display: flex;
@@ -443,7 +451,7 @@
             </a>
             <div class="nav-buttons" id="nav-buttons">
                 <!-- Will be populated by JavaScript based on auth status -->
-                <a href="/dashboard" class="nav-btn login">🔐 Login</a>
+                <a href="/dashboard" class="nav-btn login">Login</a>
             </div>
         </div>
     </nav>
@@ -458,7 +466,7 @@
         <div class="content">
             <div class="card">
                 <h2>How It Works</h2>
-                <p>Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption:</p>
+                <p>Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption. Signed-in users tune the signal to their household &mdash; energy contract, solar panels, home battery &mdash; and their pebble follows automatically:</p>
                 
                 <div class="color-legend">
                     <div class="color-item color-green">GREEN</div>
@@ -483,21 +491,14 @@
                 </div>
             </div>
             
-            <div class="card current-colors">
+            <div class="card current-colors" style="text-align: center;">
                 <div class="color-codes-header">
-                    <h2>Current Color Codes</h2>
+                    <h2>Your Pebble, Right Now</h2>
                     <button class="refresh-button" onclick="fetchColorData()">🔄 Refresh</button>
                 </div>
-                
-                <div id="loading" style="text-align: center; padding: 40px; color: #6c757d;">
-                    Loading current electricity prices...
-                </div>
-                
-                <div id="color-data" style="display: none;">
-                    <div class="hours-grid" id="hours-container">
-                        <!-- Color data will be loaded here -->
-                    </div>
-                </div>
+                <p style="color: #6c757d;">The center dot is the current hour; each ring segment is labeled with the hour it applies to. Try the settings &mdash; signed-in users can save them for their own pebble.</p>
+                <p style="margin-top: 10px;"><a href="simulator.html" style="color: #27ae60; font-weight: 600;">Explore typical days in the full simulator &rarr;</a></p>
+                <pebble-sim id="home-pebble" src="/api/color-code" controls></pebble-sim>
             </div>
         </div>
 
@@ -505,10 +506,11 @@
             <div class="card">
                 <h2>API Endpoints</h2>
                 <ul class="api-endpoints">
-                    <li><strong><a href="/api/color-code" target="_blank">GET /api/color-code</a></strong> - Current and upcoming color codes</li>
+                    <li><strong><a href="/api/color-code" target="_blank">GET /api/color-code</a></strong> - Current and upcoming color codes; devices sending <code>X-Device-ID</code> get their household's personalized signal and display settings</li>
                     <li><strong><a href="/api/json" target="_blank">GET /api/json</a></strong> - Raw electricity price data</li>
                     <li><strong><a href="/api/sample" target="_blank">GET /api/sample</a></strong> - Sample data for testing</li>
                     <li><strong><a href="/api/sample-color-code" target="_blank">GET /api/sample-color-code</a></strong> - Sample color codes</li>
+                    <li><strong>GET/PUT /api/user/settings</strong> - Your household profile (contract, solar, battery, display) &mdash; sign-in required</li>
                     <li><strong><a href="/docs" target="_blank">GET /docs</a></strong> - Interactive API documentation</li>
                 </ul>
             </div>
@@ -530,6 +532,7 @@
         </div>
     </div>
 
+    <script src="pebble-sim.js"></script>
     <script>
         function getColorClass(colorCode) {
             switch(colorCode) {
@@ -549,60 +552,9 @@
             }
         }
         
-        async function fetchColorData() {
-            const loadingDiv = document.getElementById('loading');
-            const colorDataDiv = document.getElementById('color-data');
-            const hoursContainer = document.getElementById('hours-container');
-            const refreshBtn = document.querySelector('.refresh-button');
-            
-            // Show loading state
-            loadingDiv.style.display = 'block';
-            colorDataDiv.style.display = 'none';
-            refreshBtn.disabled = true;
-            refreshBtn.textContent = '🔄 Loading...';
-            
-            try {
-                const response = await fetch('/api/color-code');
-                const data = await response.json();
-                
-                // Clear previous data
-                hoursContainer.innerHTML = '';
-                
-                // Add current time info
-                const currentTime = new Date();
-                
-                data.hour_color_codes.forEach((item, index) => {
-                    const hourTime = new Date(item.hour);
-                    const isCurrentHour = index === 0;
-                    
-                    const hourCard = document.createElement('div');
-                    hourCard.className = `hour-card ${isCurrentHour ? 'current' : ''}`;
-                    
-                    const timeString = hourTime.toLocaleTimeString('en-US', { 
-                        hour: '2-digit', 
-                        minute: '2-digit',
-                        hour12: false 
-                    });
-                    
-                    hourCard.innerHTML = `
-                        <div class="hour-time">${isCurrentHour ? 'NOW' : timeString}</div>
-                        <div class="hour-color ${getColorClass(item.color_code)}">${getColorName(item.color_code)}</div>
-                    `;
-                    
-                    hoursContainer.appendChild(hourCard);
-                });
-                
-                // Show data
-                loadingDiv.style.display = 'none';
-                colorDataDiv.style.display = 'block';
-                
-            } catch (error) {
-                console.error('Error fetching color data:', error);
-                loadingDiv.innerHTML = '<p style="color: #e74c3c;">❌ Failed to load data. Please try again.</p>';
-            } finally {
-                refreshBtn.disabled = false;
-                refreshBtn.textContent = '🔄 Refresh';
-            }
+        function fetchColorData() {
+            // The pebble simulator IS the color-code view; just re-fetch it.
+            document.getElementById('home-pebble').refresh();
         }
         
         // Load data when page loads
@@ -657,7 +609,7 @@
             } else {
                 // User is not logged in - show login button
                 navButtons.innerHTML = `
-                    <a href="/dashboard" class="nav-btn login">🔐 Login</a>
+                    <a href="/dashboard" class="nav-btn login">Login</a>
                 `;
             }
         }

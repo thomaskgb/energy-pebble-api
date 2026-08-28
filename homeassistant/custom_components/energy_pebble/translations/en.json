@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to Energy Pebble",
+        "description": "Create a personal API token on your Energy Pebble dashboard (user menu → Settings → Account → Home Assistant token) and paste it here.",
+        "data": {
+          "host": "Server",
+          "api_token": "Personal API token"
+        }
+      },
+      "device": {
+        "title": "Choose your pebble",
+        "description": "Which pebble should Home Assistant follow?",
+        "data": {
+          "device_id": "Pebble"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "That token was not accepted — check it on your dashboard.",
+      "cannot_connect": "Could not reach the Energy Pebble server.",
+      "no_devices": "No pebbles are claimed by this account yet — claim your device on the dashboard first."
+    },
+    "abort": {
+      "already_configured": "This pebble is already configured."
+    }
+  }
+}

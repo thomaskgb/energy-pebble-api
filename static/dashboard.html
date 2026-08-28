@@ -59,9 +59,14 @@
             padding: 8px 16px;
             border-radius: 8px;
             text-decoration: none;
+            font-size: 1em;
+            line-height: 1.5;
             font-weight: 500;
             transition: all 0.2s ease;
             border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .nav-btn.home {
@@ -150,6 +155,9 @@
             padding: 8px 16px;
             border-radius: 8px;
             cursor: pointer;
+            font-family: inherit;
+            font-size: 1em;
+            line-height: 1.5;
             font-weight: 500;
             transition: all 0.2s ease;
             display: flex;
@@ -556,6 +564,19 @@
             }
         }
 
+        .settings-tab {
+            border: none; background: none; padding: 8px 16px; cursor: pointer;
+            font-size: 14px; color: #6c757d; border-bottom: 2px solid transparent;
+        }
+        .settings-tab.active { color: #27ae60; border-bottom-color: #27ae60; font-weight: 600; }
+
+        .settings-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 16px; padding: 9px 0; border-bottom: 1px solid #f1f3f4; cursor: pointer;
+        }
+        .settings-row small { color: #adb5bd; font-weight: 400; }
+        .settings-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: #27ae60; }
+
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -701,6 +722,7 @@
             }
         }
     </style>
+    <script src="pebble-sim.js"></script>
 </head>
 <body>
     <!-- Top Navigation Bar -->
@@ -710,23 +732,23 @@
                 ⚡ Energy Pebble
             </a>
             <div class="nav-buttons">
-                <a href="/" class="nav-btn home">🏠 Home</a>
+                <a href="/" class="nav-btn home">Home</a>
                 <div class="admin-dropdown" id="adminDropdown" style="display: none;">
-                    <div class="nav-btn admin" onclick="toggleAdminMenu()">🔧 Admin ▼</div>
+                    <div class="nav-btn admin" onclick="toggleAdminMenu()">Admin ▼</div>
                     <div class="admin-dropdown-content" id="adminMenuDropdown">
-                        <a href="/admin/users" class="admin-dropdown-item">👥 Users</a>
-                        <a href="/admin/devices" class="admin-dropdown-item">📱 Devices</a>
-                        <a href="/admin/firmware" class="admin-dropdown-item">💾 Firmware</a>
-                        <a href="/admin/tokens" class="admin-dropdown-item">🔑 API Tokens</a>
+                        <a href="/admin/users" class="admin-dropdown-item">Users</a>
+                        <a href="/admin/devices" class="admin-dropdown-item">Devices</a>
+                        <a href="/admin/firmware" class="admin-dropdown-item">Firmware</a>
+                        <a href="/admin/tokens" class="admin-dropdown-item">API Tokens</a>
                     </div>
                 </div>
                 <div class="user-menu">
                     <button class="user-menu-trigger" onclick="toggleUserMenu()">
-                        👤 <span id="current-username">User</span> ▼
+                        <span id="current-username">User</span> ▼
                     </button>
                     <div class="user-menu-dropdown" id="userMenuDropdown">
-                        <a href="#" onclick="openUserSettings()" class="user-menu-item">⚙️ Settings</a>
-                        <a href="https://auth.tdlx.nl/logout" class="user-menu-item logout">🚪 Logout</a>
+                        <a href="#" onclick="openUserSettings()" class="user-menu-item">Settings</a>
+                        <a href="https://auth.tdlx.nl/logout" class="user-menu-item logout">Logout</a>
                     </div>
                 </div>
             </div>
@@ -736,7 +758,7 @@
     <div class="container">
         <div class="welcome-section">
             <div class="welcome-message">
-                <h2 id="welcome-greeting">👋 Welcome back!</h2>
+                <h2 id="welcome-greeting">Welcome back!</h2>
                 <p>Ready to optimize your energy usage and manage your connected devices?</p>
             </div>
             
@@ -757,9 +779,19 @@
         </div>
 
         <div class="dashboard-grid">
+            <div class="dashboard-card" style="grid-column: 1 / -1; text-align: center;">
+                <h3 class="card-title">My Pebble</h3>
+                <p class="card-description">
+                    What your pebble shows right now, based on your household profile.
+                    Adjust it under <strong>Settings</strong> in your user menu &mdash; devices pick up changes within 15 minutes.
+                </p>
+                <div style="display: flex; justify-content: center; margin-top: 10px;">
+                    <pebble-sim id="my-pebble" src="/api/color-code"></pebble-sim>
+                </div>
+            </div>
+
             <div class="dashboard-card">
-                <span class="card-icon">🔴</span>
-                <h3 class="card-title">My Energy Dots</h3>
+                                <h3 class="card-title">My Energy Dots</h3>
                 <p class="card-description">
                     View and manage your assigned Energy Dot devices. Monitor their status and configure device settings.
                 </p>
@@ -772,8 +804,7 @@
             </div>
 
             <div class="dashboard-card">
-                <span class="card-icon">☀️</span>
-                <h3 class="card-title">Solar Data Integration</h3>
+                                <h3 class="card-title">Solar Data Integration</h3>
                 <p class="card-description">
                     Connect your Enode account to access real-time solar production data. 
                     Optimize energy usage based on your solar generation and grid prices.
@@ -784,8 +815,7 @@
             </div>
 
             <div class="dashboard-card">
-                <span class="card-icon">🔋</span>
-                <h3 class="card-title">Impact Circle</h3>
+                                <h3 class="card-title">Impact Circle</h3>
                 <p class="card-description">
                     Discover the energy secrets that help you save money and protect the planet. 
                     Learn about optimal energy usage times and hidden green hours.
@@ -796,8 +826,7 @@
             </div>
 
             <div class="dashboard-card">
-                <span class="card-icon">📊</span>
-                <h3 class="card-title">Energy Analytics</h3>
+                                <h3 class="card-title">Energy Analytics</h3>
                 <p class="card-description">
                     View detailed analytics of your energy usage patterns, savings achieved, 
                     and environmental impact. Track your optimization progress over time.
@@ -811,7 +840,7 @@
         <!-- Device Management Section (Hidden by default) -->
         <div id="device-management" class="device-management" style="display: none;">
             <div class="card" style="margin-top: 30px;">
-                <h2>🔴 My Energy Dots</h2>
+                <h2>My Energy Dots</h2>
                 
                 <!-- User's Devices -->
                 <div class="device-section">
@@ -822,7 +851,7 @@
                 </div>
                 
                 <div style="margin-top: 20px; text-align: center;">
-                    <button class="refresh-button" onclick="refreshDeviceData()">🔄 Refresh Status</button>
+                    <button class="refresh-button" onclick="refreshDeviceData()">Refresh Status</button>
                     <button class="card-action" onclick="toggleDeviceManagement()" style="margin-left: 10px; background: #6c757d;">Close</button>
                 </div>
             </div>
@@ -850,6 +879,41 @@
                 <button class="close-btn" onclick="closeUserSettings()">&times;</button>
             </div>
             <div class="modal-body">
+                <div class="settings-tabs" style="display: flex; gap: 6px; border-bottom: 1px solid #e9ecef; margin-bottom: 20px;">
+                    <button type="button" id="tab-pebble" class="settings-tab active" onclick="switchSettingsTab('pebble')">Pebble</button>
+                    <button type="button" id="tab-account" class="settings-tab" onclick="switchSettingsTab('account')">Account</button>
+                </div>
+                <div id="pane-pebble">
+                <div style="text-align: center; margin-bottom: 18px;">
+                    <pebble-sim id="settings-preview" src="/api/color-code"></pebble-sim>
+                    <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">
+                        Live preview &mdash; this is what your pebble will show once you save
+                    </div>
+                </div>
+                    <form id="pebble-settings-form" style="display: grid; gap: 2px; text-align: left;">
+                    <label class="settings-row"><span>Energy contract</span>
+                        <select id="ps-contract" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                            <option value="dynamic">Dynamic prices</option>
+                            <option value="day_night">Day &amp; night tariff</option>
+                            <option value="fixed">Fixed price</option>
+                        </select>
+                    </label>
+                    <label class="settings-row"><span>Solar panels</span><input type="checkbox" id="ps-solar"></label>
+                    <label class="settings-row"><span>Home battery <small>bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
+                    <label class="settings-row"><span>Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
+                    <label class="settings-row"><span>Dim at night to 30%
+                        (<input type="time" id="ps-dim-start" value="22:00" style="border: 1px solid #dee2e6; border-radius: 4px;"> &ndash;
+                        <input type="time" id="ps-dim-end" value="07:00" style="border: 1px solid #dee2e6; border-radius: 4px;">)</span>
+                        <input type="checkbox" id="ps-night-dim"></label>
+                    <label class="settings-row"><span>Brightness <small><span id="ps-bri-val">100</span>%</small></span>
+                        <input type="range" id="ps-brightness" min="5" max="100" value="100" style="width: 160px;"></label>
+                    <div style="margin-top: 14px;">
+                        <button type="submit" class="card-action">Save Settings</button>
+                        <span id="ps-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
+                    </div>
+                </form>
+                </div>
+                <div id="pane-account" style="display: none;">
                 <form id="userSettingsForm">
                     <div style="margin-bottom: 20px;">
                         <label for="newUsername" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Username:</label>
@@ -878,6 +942,25 @@
                         <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Save Changes</button>
                     </div>
                 </form>
+
+                <div style="border-top: 1px solid #e9ecef; margin-top: 25px; padding-top: 18px;">
+                    <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">API tokens</h3>
+                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
+                        For integrations like Home Assistant. A token acts as you (never as admin) and is shown only once.
+                    </p>
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                        <input type="text" id="token-name" placeholder="Token name (e.g. Home Assistant)"
+                               style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                        <button type="button" class="card-action" onclick="createUserToken()">Create token</button>
+                    </div>
+                    <div id="new-token-box" style="display: none; background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;">Copy this token now — it won't be shown again:</div>
+                        <input type="text" id="new-token-value" readonly onclick="this.select()"
+                               style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px; font-family: monospace; font-size: 12px;">
+                    </div>
+                    <div id="token-list" style="font-size: 0.9em; color: #495057;"></div>
+                </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1194,12 +1277,71 @@
         // User settings functionality
         let currentUserData = null;
 
+        function switchSettingsTab(tab) {
+            document.getElementById('tab-pebble').classList.toggle('active', tab === 'pebble');
+            document.getElementById('tab-account').classList.toggle('active', tab === 'account');
+            document.getElementById('pane-pebble').style.display = tab === 'pebble' ? 'block' : 'none';
+            document.getElementById('pane-account').style.display = tab === 'account' ? 'block' : 'none';
+        }
+
+        // --- Personal API tokens (Home Assistant) ---
+        async function loadUserTokens() {
+            try {
+                const resp = await fetch('/api/user/tokens');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const list = document.getElementById('token-list');
+                if (!data.tokens.length) {
+                    list.innerHTML = '<em style="color:#adb5bd;">No tokens yet.</em>';
+                    return;
+                }
+                list.innerHTML = data.tokens.map(t =>
+                    `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
+                        <span>${t.token_name}
+                            <small style="color:#adb5bd;">· created ${(t.created_at || '').slice(0, 10)}${t.last_used_at ? ' · last used ' + t.last_used_at.slice(0, 10) : ''}</small>
+                        </span>
+                        <button type="button" onclick="revokeUserToken(${t.id})"
+                                style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">Revoke</button>
+                    </div>`).join('');
+            } catch (e) {
+                console.error('Error loading tokens:', e);
+            }
+        }
+
+        async function createUserToken() {
+            const name = document.getElementById('token-name').value.trim() || 'Home Assistant';
+            try {
+                const resp = await fetch('/api/user/tokens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token_name: name })
+                });
+                if (!resp.ok) { alert('Could not create token'); return; }
+                const data = await resp.json();
+                document.getElementById('new-token-box').style.display = 'block';
+                document.getElementById('new-token-value').value = data.token;
+                document.getElementById('token-name').value = '';
+                loadUserTokens();
+            } catch (e) {
+                alert('Could not create token');
+            }
+        }
+
+        async function revokeUserToken(id) {
+            if (!confirm('Revoke this token? Integrations using it will stop working.')) return;
+            await fetch('/api/user/tokens/' + id, { method: 'DELETE' });
+            loadUserTokens();
+        }
+
         function openUserSettings() {
             // Close user menu
             document.getElementById('userMenuDropdown').classList.remove('show');
-            
-            // Load current user data and populate form
+
+            // Load current user data and populate forms
             loadCurrentUserData();
+            loadPebbleSettings();
+            loadUserTokens();
+            switchSettingsTab('pebble');
             
             // Show modal
             document.getElementById('userSettingsModal').style.display = 'block';
@@ -1247,7 +1389,7 @@
                     const greetingElement = document.getElementById('welcome-greeting');
                     if (greetingElement) {
                         const capitalizedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-                        greetingElement.textContent = `👋 Welcome back, ${capitalizedName}!`;
+                        greetingElement.textContent = `Welcome back, ${capitalizedName}!`;
                     }
                 }
             } catch (error) {
@@ -1255,7 +1397,7 @@
                 // Fallback to generic greeting
                 const greetingElement = document.getElementById('welcome-greeting');
                 if (greetingElement) {
-                    greetingElement.textContent = '👋 Welcome back!';
+                    greetingElement.textContent = 'Welcome back!';
                 }
             }
         }
@@ -1322,7 +1464,7 @@
                     const greetingElement = document.getElementById('welcome-greeting');
                     if (greetingElement) {
                         const capitalizedUsername = newUsername.charAt(0).toUpperCase() + newUsername.slice(1);
-                        greetingElement.textContent = `👋 Welcome back, ${capitalizedUsername}!`;
+                        greetingElement.textContent = `Welcome back, ${capitalizedUsername}!`;
                     }
                     
                     // If username changed significantly, might need to refresh
@@ -1356,6 +1498,99 @@
             }
         }
 
+        // --- Pebble settings (per-person signal & display) ---
+        function pebbleFormToSettings() {
+            return {
+                contract_type: document.getElementById('ps-contract').value,
+                has_solar: document.getElementById('ps-solar').checked,
+                has_battery: document.getElementById('ps-battery').checked,
+                palette: document.getElementById('ps-palette').checked ? 'colorblind' : 'standard',
+                brightness: Number(document.getElementById('ps-brightness').value),
+                night_dim_enabled: document.getElementById('ps-night-dim').checked,
+                night_dim_start: document.getElementById('ps-dim-start').value || '22:00',
+                night_dim_end: document.getElementById('ps-dim-end').value || '07:00'
+            };
+        }
+
+        function pebbleSettingsToForm(settings) {
+            document.getElementById('ps-contract').value = settings.contract_type;
+            document.getElementById('ps-solar').checked = settings.has_solar;
+            document.getElementById('ps-battery').checked = settings.has_battery;
+            document.getElementById('ps-palette').checked = settings.palette === 'colorblind';
+            document.getElementById('ps-brightness').value = settings.brightness;
+            document.getElementById('ps-bri-val').textContent = settings.brightness;
+            document.getElementById('ps-night-dim').checked = settings.night_dim_enabled;
+            document.getElementById('ps-dim-start').value = settings.night_dim_start;
+            document.getElementById('ps-dim-end').value = settings.night_dim_end;
+        }
+
+        function applySettingsToSim(simId, s) {
+            const sim = document.getElementById(simId);
+            if (sim && sim.setSettings) sim.setSettings({
+                contract_type: s.contract_type,
+                has_solar: s.has_solar,
+                has_battery: s.has_battery,
+                palette: s.palette,
+                brightness: s.brightness,
+                night_dim_enabled: s.night_dim_enabled,
+                night_dim_start: s.night_dim_start,
+                night_dim_end: s.night_dim_end
+            });
+        }
+
+        // The modal preview follows the (unsaved) form; the card follows saved settings
+        function previewPebble() {
+            applySettingsToSim('settings-preview', pebbleFormToSettings());
+        }
+
+        async function loadPebbleSettings() {
+            try {
+                const response = await fetch('/api/user/settings');
+                if (!response.ok) return;
+                const data = await response.json();
+                pebbleSettingsToForm(data.settings);
+                applySettingsToSim('my-pebble', data.settings);
+                applySettingsToSim('settings-preview', data.settings);
+            } catch (error) {
+                console.error('Error loading pebble settings:', error);
+            }
+        }
+
+        document.getElementById('pebble-settings-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const status = document.getElementById('ps-status');
+            try {
+                const response = await fetch('/api/user/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pebbleFormToSettings())
+                });
+                if (response.ok) {
+                    status.style.color = '#27ae60';
+                    status.textContent = '✓ Saved — devices update within 15 min';
+                    // The card now reflects the newly saved profile
+                    const result = await response.json();
+                    applySettingsToSim('my-pebble', result.settings);
+                } else {
+                    const error = await response.json();
+                    status.style.color = '#e74c3c';
+                    status.textContent = 'Error: ' + (error.detail || response.status);
+                }
+            } catch (error) {
+                status.style.color = '#e74c3c';
+                status.textContent = 'Error saving settings';
+            }
+            setTimeout(() => { status.textContent = ''; }, 5000);
+        });
+
+        ['ps-contract', 'ps-solar', 'ps-battery', 'ps-palette', 'ps-brightness',
+         'ps-night-dim', 'ps-dim-start', 'ps-dim-end'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                document.getElementById('ps-bri-val').textContent = document.getElementById('ps-brightness').value;
+                previewPebble();
+            });
+        });
+
         // Load page data
         document.addEventListener('DOMContentLoaded', async function() {
             const isAuthenticated = await checkAuthentication();
@@ -1363,6 +1598,7 @@
                 loadCurrentColor();
                 loadDeviceStats();
                 loadCurrentUserData(); // Load user info for display
+                loadPebbleSettings();
             }
         });
     </script>
