@@ -53,6 +53,21 @@ class UserTokenCreate(BaseModel):
     token_name: str = "Home Assistant"
     expires_days: Optional[int] = None  # None = no expiration
 
+class HomeCreate(BaseModel):
+    name: str = "Home"
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class HomeUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class DeviceHomeAssign(BaseModel):
+    home_id: int
+
 class TokenResponse(BaseModel):
     id: int
     token_name: str
@@ -362,6 +377,69 @@ def init_database():
         if 'signal_source' in [col[1] for col in cursor.fetchall()]:
             cursor.execute("UPDATE user_settings SET contract_type = 'day_night' WHERE signal_source = 'day_night'")
             cursor.execute("UPDATE user_settings SET has_solar = 1 WHERE signal_source = 'solar'")
+
+        # Homes: a user can have several; devices and settings hang off a home.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS homes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT 'Home',
+                address TEXT,
+                latitude REAL,
+                longitude REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS home_settings (
+                home_id INTEGER PRIMARY KEY,
+                contract_type TEXT NOT NULL DEFAULT 'dynamic',
+                has_solar BOOLEAN NOT NULL DEFAULT 0,
+                has_battery BOOLEAN NOT NULL DEFAULT 0,
+                palette TEXT NOT NULL DEFAULT 'standard',
+                brightness INTEGER NOT NULL DEFAULT 100,
+                night_dim_enabled BOOLEAN NOT NULL DEFAULT 1,
+                night_dim_start TEXT NOT NULL DEFAULT '22:00',
+                night_dim_end TEXT NOT NULL DEFAULT '07:00',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (home_id) REFERENCES homes (id)
+            )
+        ''')
+        try:
+            cursor.execute("ALTER TABLE devices ADD COLUMN home_id INTEGER")
+            logger.info("Added home_id column to devices table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_homes_user ON homes (user_id)')
+
+        # Migration: every user with settings or claimed devices gets a default
+        # home; their user_settings row becomes that home's settings, and their
+        # claimed devices attach to it.
+        cursor.execute('''
+            SELECT DISTINCT user_id FROM user_settings
+            UNION SELECT DISTINCT user_id FROM user_devices
+        ''')
+        for (uid,) in cursor.fetchall():
+            cursor.execute('SELECT id FROM homes WHERE user_id = ? ORDER BY created_at, id LIMIT 1', (uid,))
+            row = cursor.fetchone()
+            if row:
+                home_id = row[0]
+            else:
+                cursor.execute('INSERT INTO homes (user_id, name) VALUES (?, ?)', (uid, 'Home'))
+                home_id = cursor.lastrowid
+                logger.info(f"Created default home {home_id} for user {uid}")
+            cursor.execute('''
+                INSERT OR IGNORE INTO home_settings
+                    (home_id, contract_type, has_solar, has_battery, palette, brightness,
+                     night_dim_enabled, night_dim_start, night_dim_end, updated_at)
+                SELECT ?, contract_type, has_solar, has_battery, palette, brightness,
+                       night_dim_enabled, night_dim_start, night_dim_end, updated_at
+                FROM user_settings WHERE user_id = ?
+            ''', (home_id, uid))
+            cursor.execute('''
+                UPDATE devices SET home_id = ?
+                WHERE home_id IS NULL AND id IN (SELECT device_id FROM user_devices WHERE user_id = ?)
+            ''', (home_id, uid))
 
         # Create API tokens table for bearer token authentication
         cursor.execute('''
@@ -957,16 +1035,49 @@ class UserSettingsUpdate(BaseModel):
     night_dim_start: Optional[str] = None
     night_dim_end: Optional[str] = None
 
-def get_user_settings(user_id: str) -> Dict[str, Any]:
-    """Return the user's settings merged over defaults."""
+def get_or_create_default_home(user_id: str) -> int:
+    """The user's oldest home; created on first touch."""
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT id FROM homes WHERE user_id = ? ORDER BY created_at, id LIMIT 1', (user_id,))
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        cursor.execute('INSERT INTO homes (user_id, name) VALUES (?, ?)', (user_id, 'Home'))
+        conn.commit()
+        return cursor.lastrowid
+
+def get_user_homes(user_id: str) -> List[Dict[str, Any]]:
+    """The user's homes with their device counts."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT h.id, h.name, h.address, h.latitude, h.longitude, h.created_at,
+                   (SELECT COUNT(*) FROM devices d WHERE d.home_id = h.id) AS device_count
+            FROM homes h WHERE h.user_id = ?
+            ORDER BY h.created_at, h.id
+        ''', (user_id,))
+        return [{
+            "id": row[0], "name": row[1], "address": row[2],
+            "latitude": row[3], "longitude": row[4],
+            "created_at": row[5], "device_count": row[6],
+        } for row in cursor.fetchall()]
+
+def get_home_owner(home_id: int) -> Optional[str]:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute('SELECT user_id FROM homes WHERE id = ?', (home_id,)).fetchone()
+    return row[0] if row else None
+
+def get_home_settings(home_id: int) -> Dict[str, Any]:
+    """Return the home's settings merged over defaults."""
     settings = dict(DEFAULT_USER_SETTINGS)
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT contract_type, has_solar, has_battery, palette, brightness,
                    night_dim_enabled, night_dim_start, night_dim_end
-            FROM user_settings WHERE user_id = ?
-        ''', (user_id,))
+            FROM home_settings WHERE home_id = ?
+        ''', (home_id,))
         row = cursor.fetchone()
     if row:
         settings.update({
@@ -981,8 +1092,8 @@ def get_user_settings(user_id: str) -> Dict[str, Any]:
         })
     return settings
 
-def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, Any]:
-    """Validate and persist a partial settings update; returns the merged result."""
+def save_home_settings(home_id: int, updates: UserSettingsUpdate) -> Dict[str, Any]:
+    """Validate and persist a partial settings update for a home."""
     changes = {k: v for k, v in updates.model_dump().items() if v is not None}
 
     if "contract_type" in changes and changes["contract_type"] not in CONTRACT_TYPES:
@@ -995,16 +1106,16 @@ def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, A
         if field in changes and not TIME_RE.match(changes[field]):
             raise HTTPException(status_code=400, detail=f"{field} must be HH:MM (24h)")
 
-    settings = get_user_settings(user_id)
+    settings = get_home_settings(home_id)
     settings.update(changes)
 
     with db_lock, sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO user_settings (user_id, contract_type, has_solar, has_battery, palette, brightness,
+            INSERT INTO home_settings (home_id, contract_type, has_solar, has_battery, palette, brightness,
                                        night_dim_enabled, night_dim_start, night_dim_end, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id) DO UPDATE SET
+            ON CONFLICT(home_id) DO UPDATE SET
                 contract_type = excluded.contract_type,
                 has_solar = excluded.has_solar,
                 has_battery = excluded.has_battery,
@@ -1014,27 +1125,38 @@ def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, A
                 night_dim_start = excluded.night_dim_start,
                 night_dim_end = excluded.night_dim_end,
                 updated_at = CURRENT_TIMESTAMP
-        ''', (user_id, settings["contract_type"], settings["has_solar"], settings["has_battery"],
+        ''', (home_id, settings["contract_type"], settings["has_solar"], settings["has_battery"],
               settings["palette"], settings["brightness"], settings["night_dim_enabled"],
               settings["night_dim_start"], settings["night_dim_end"]))
         conn.commit()
 
-    logger.info(f"Saved settings for user {user_id}: {changes}")
+    logger.info(f"Saved settings for home {home_id}: {changes}")
     return settings
 
-def get_settings_for_device(device_id: Optional[str]) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
-    """Resolve a device id to its claiming user's settings.
+def get_user_settings(user_id: str) -> Dict[str, Any]:
+    """The user's default home's settings (backward-compatible helper)."""
+    return get_home_settings(get_or_create_default_home(user_id))
 
-    Returns (user_id, settings); (None, None) for unknown or unclaimed devices.
+def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, Any]:
+    """Save to the user's default home (backward-compatible helper)."""
+    return save_home_settings(get_or_create_default_home(user_id), updates)
+
+def get_settings_for_device(device_id: Optional[str]) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """Resolve a device id to its home's settings.
+
+    Devices belong to a home (devices.home_id); a claimed device without a
+    home falls back to its owner's default home. Returns (user_id, settings);
+    (None, None) for unknown or unclaimed devices.
     """
     if not device_id:
         return None, None
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT ud.user_id
+            SELECT d.home_id, h.user_id, ud.user_id
             FROM devices d
-            JOIN user_devices ud ON d.id = ud.device_id
+            LEFT JOIN homes h ON h.id = d.home_id
+            LEFT JOIN user_devices ud ON ud.device_id = d.id
             WHERE d.device_id = ?
             ORDER BY ud.created_at ASC
             LIMIT 1
@@ -1042,7 +1164,12 @@ def get_settings_for_device(device_id: Optional[str]) -> tuple[Optional[str], Op
         row = cursor.fetchone()
     if not row:
         return None, None
-    return row[0], get_user_settings(row[0])
+    home_id, home_owner, claimer = row
+    if home_id and home_owner:
+        return home_owner, get_home_settings(home_id)
+    if claimer:
+        return claimer, get_user_settings(claimer)
+    return None, None
 
 BATTERY_BRIDGE_HOURS = (17, 22)      # local evening window a charged battery can cover
 BATTERY_MIN_CHARGE_HOURS = 3         # solar hours before 17:00 needed to call the battery "charged"
@@ -2159,20 +2286,26 @@ async def test_update_user_profile(request: Request, user: str = Query("thomas",
         raise HTTPException(status_code=500, detail=f"Error updating user profile: {str(e)}")
 
 @app.get("/api/user/settings", tags=["user"])
-async def get_user_settings_endpoint(request: Request):
+async def get_user_settings_endpoint(request: Request, home_id: Optional[int] = None):
     """
-    Get the authenticated user's pebble settings (signal source & display).
+    Get the authenticated user's pebble settings for one home.
 
     Authentication: Requires valid Authelia session or API token.
 
-    Missing settings fall back to defaults, which reproduce the pure
-    price-based behavior.
+    Optional home_id selects which home (default: your oldest home). Missing
+    settings fall back to defaults, which reproduce the pure price-based
+    behavior.
     """
     try:
         user_info = get_current_user(request)
-        settings = get_user_settings(user_info['user_id'])
+        if home_id is None:
+            home_id = get_or_create_default_home(user_info['user_id'])
+        else:
+            _require_own_home(user_info['user_id'], home_id)
+        settings = get_home_settings(home_id)
         return {
             "user_id": user_info['user_id'],
+            "home_id": home_id,
             "settings": settings,
             "derived_signal": derive_signal_source(settings),
             "options": {
@@ -2187,12 +2320,14 @@ async def get_user_settings_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=f"Error fetching user settings: {str(e)}")
 
 @app.put("/api/user/settings", tags=["user"])
-async def update_user_settings_endpoint(updates: UserSettingsUpdate, request: Request):
+async def update_user_settings_endpoint(updates: UserSettingsUpdate, request: Request,
+                                        home_id: Optional[int] = None):
     """
-    Update the authenticated user's pebble settings (partial update).
+    Update the pebble settings of one of the user's homes (partial update).
 
     Authentication: Requires valid Authelia session or API token.
 
+    Optional home_id selects which home (default: your oldest home).
     Households are described, not configured: contract_type
     ('dynamic' | 'day_night' | 'fixed'), has_solar, has_battery — the color
     signal is derived from these. Display fields: palette
@@ -2202,10 +2337,15 @@ async def update_user_settings_endpoint(updates: UserSettingsUpdate, request: Re
     """
     try:
         user_info = get_current_user(request)
-        settings = save_user_settings(user_info['user_id'], updates)
+        if home_id is None:
+            home_id = get_or_create_default_home(user_info['user_id'])
+        else:
+            _require_own_home(user_info['user_id'], home_id)
+        settings = save_home_settings(home_id, updates)
         return {
             "message": "Settings updated successfully",
             "user_id": user_info['user_id'],
+            "home_id": home_id,
             "settings": settings,
             "derived_signal": derive_signal_source(settings)
         }
@@ -2239,6 +2379,85 @@ async def test_update_user_settings(updates: UserSettingsUpdate, user: str = Que
         "settings": settings,
         "derived_signal": derive_signal_source(settings)
     }
+
+# --- Homes --------------------------------------------------------------------
+# A user can have several homes; devices and household settings belong to a
+# home. The user's oldest home acts as the default for backward compatibility.
+
+def _require_own_home(user_id: str, home_id: int) -> None:
+    if get_home_owner(home_id) != user_id:
+        raise HTTPException(status_code=404, detail="Home not found")
+
+@app.get("/api/user/homes", tags=["user"])
+async def list_homes(request: Request):
+    """List the authenticated user's homes (a default home is created on first use)."""
+    user_info = get_current_user(request)
+    get_or_create_default_home(user_info['user_id'])
+    return {"homes": get_user_homes(user_info['user_id'])}
+
+@app.post("/api/user/homes", tags=["user"])
+async def create_home(home: HomeCreate, request: Request):
+    """Add a home (name, optional address/coordinates)."""
+    user_info = get_current_user(request)
+    name = home.name.strip() or "Home"
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO homes (user_id, name, address, latitude, longitude)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_info['user_id'], name, home.address, home.latitude, home.longitude))
+        conn.commit()
+        home_id = cursor.lastrowid
+    logger.info(f"User {user_info['user_id']} created home {home_id} ({name})")
+    return {"id": home_id, "name": name, "address": home.address}
+
+@app.put("/api/user/homes/{home_id}", tags=["user"])
+async def update_home(home_id: int, home: HomeUpdate, request: Request):
+    """Rename a home or update its address/coordinates."""
+    user_info = get_current_user(request)
+    _require_own_home(user_info['user_id'], home_id)
+    changes = {k: v for k, v in home.model_dump().items() if v is not None}
+    if "name" in changes and not changes["name"].strip():
+        raise HTTPException(status_code=400, detail="name cannot be empty")
+    if changes:
+        with db_lock, sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                f"UPDATE homes SET {', '.join(f'{k} = ?' for k in changes)} WHERE id = ?",
+                (*changes.values(), home_id))
+            conn.commit()
+    return {"message": "Home updated", "id": home_id}
+
+@app.delete("/api/user/homes/{home_id}", tags=["user"])
+async def delete_home(home_id: int, request: Request):
+    """Delete a home. Refused while devices are attached or for the last home."""
+    user_info = get_current_user(request)
+    _require_own_home(user_info['user_id'], home_id)
+    if len(get_user_homes(user_info['user_id'])) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete your last home")
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM devices WHERE home_id = ?', (home_id,))
+        if cursor.fetchone()[0]:
+            raise HTTPException(status_code=400, detail="Move the home's devices first")
+        cursor.execute('DELETE FROM home_settings WHERE home_id = ?', (home_id,))
+        cursor.execute('DELETE FROM homes WHERE id = ?', (home_id,))
+        conn.commit()
+    return {"message": "Home deleted"}
+
+@app.put("/api/user/devices/{device_db_id}/home", tags=["user"])
+async def assign_device_home(device_db_id: int, assign: DeviceHomeAssign, request: Request):
+    """Move one of your claimed devices to one of your homes."""
+    user_info = get_current_user(request)
+    _require_own_home(user_info['user_id'], assign.home_id)
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1 FROM user_devices WHERE device_id = ? AND user_id = ?',
+                       (device_db_id, user_info['user_id']))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Device not found")
+        cursor.execute('UPDATE devices SET home_id = ? WHERE id = ?', (assign.home_id, device_db_id))
+        conn.commit()
+    return {"message": "Device moved", "home_id": assign.home_id}
 
 # --- Personal API tokens (Home Assistant & other integrations) ---------------
 # Managed from the dashboard (Authelia-protected /api/user path). The tokens

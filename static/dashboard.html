@@ -891,6 +891,9 @@
                     </div>
                 </div>
                     <form id="pebble-settings-form" style="display: grid; gap: 2px; text-align: left;">
+                    <label class="settings-row" id="ps-home-row" style="display: none;"><span>Home</span>
+                        <select id="ps-home" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;"></select>
+                    </label>
                     <label class="settings-row"><span>Energy contract</span>
                         <select id="ps-contract" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
                             <option value="dynamic">Dynamic prices</option>
@@ -944,6 +947,19 @@
                 </form>
 
                 <div style="border-top: 1px solid #e9ecef; margin-top: 25px; padding-top: 18px;">
+                    <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">Homes</h3>
+                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
+                        Devices and pebble settings belong to a home. Add one per address; pick the home to configure on the Pebble tab.
+                    </p>
+                    <div id="home-list" style="font-size: 0.9em; color: #495057; margin-bottom: 10px;"></div>
+                    <div style="display: flex; gap: 8px; margin-bottom: 22px;">
+                        <input type="text" id="home-name" placeholder="Name (e.g. Beach house)"
+                               style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                        <input type="text" id="home-address" placeholder="Address (optional)"
+                               style="flex: 2; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                        <button type="button" class="card-action" onclick="createHome()">Add home</button>
+                    </div>
+
                     <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">API tokens</h3>
                     <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
                         For integrations like Home Assistant. A token acts as you (never as admin) and is shown only once.
@@ -1339,7 +1355,7 @@
 
             // Load current user data and populate forms
             loadCurrentUserData();
-            loadPebbleSettings();
+            loadHomes().then(loadPebbleSettings);
             loadUserTokens();
             switchSettingsTab('pebble');
             
@@ -1498,7 +1514,64 @@
             }
         }
 
-        // --- Pebble settings (per-person signal & display) ---
+        // --- Homes ---
+        let currentHomeId = null;
+        let userHomes = [];
+
+        async function loadHomes() {
+            try {
+                const resp = await fetch('/api/user/homes');
+                if (!resp.ok) return;
+                userHomes = (await resp.json()).homes;
+                if (currentHomeId === null && userHomes.length) currentHomeId = userHomes[0].id;
+
+                const row = document.getElementById('ps-home-row');
+                const select = document.getElementById('ps-home');
+                row.style.display = userHomes.length > 1 ? 'flex' : 'none';
+                select.innerHTML = userHomes.map(h =>
+                    `<option value="${h.id}" ${h.id === currentHomeId ? 'selected' : ''}>${h.name}</option>`).join('');
+
+                const list = document.getElementById('home-list');
+                list.innerHTML = userHomes.map(h =>
+                    `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
+                        <span>${h.name}
+                            <small style="color:#adb5bd;">${h.address ? '· ' + h.address : ''} · ${h.device_count} device${h.device_count === 1 ? '' : 's'}</small>
+                        </span>
+                        ${userHomes.length > 1 && !h.device_count ? `<button type="button" onclick="deleteHome(${h.id})"
+                                style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">Delete</button>` : ''}
+                    </div>`).join('');
+            } catch (e) {
+                console.error('Error loading homes:', e);
+            }
+        }
+
+        async function createHome() {
+            const name = document.getElementById('home-name').value.trim();
+            if (!name) { alert('Give the home a name'); return; }
+            const address = document.getElementById('home-address').value.trim() || null;
+            const resp = await fetch('/api/user/homes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, address })
+            });
+            if (resp.ok) {
+                document.getElementById('home-name').value = '';
+                document.getElementById('home-address').value = '';
+                loadHomes();
+            } else {
+                alert('Could not add home');
+            }
+        }
+
+        async function deleteHome(id) {
+            if (!confirm('Delete this home?')) return;
+            const resp = await fetch('/api/user/homes/' + id, { method: 'DELETE' });
+            if (!resp.ok) alert((await resp.json()).detail || 'Could not delete home');
+            if (currentHomeId === id) currentHomeId = null;
+            loadHomes();
+        }
+
+        // --- Pebble settings (per-home signal & display) ---
         function pebbleFormToSettings() {
             return {
                 contract_type: document.getElementById('ps-contract').value,
@@ -1545,7 +1618,7 @@
 
         async function loadPebbleSettings() {
             try {
-                const response = await fetch('/api/user/settings');
+                const response = await fetch('/api/user/settings' + (currentHomeId ? '?home_id=' + currentHomeId : ''));
                 if (!response.ok) return;
                 const data = await response.json();
                 pebbleSettingsToForm(data.settings);
@@ -1560,7 +1633,7 @@
             e.preventDefault();
             const status = document.getElementById('ps-status');
             try {
-                const response = await fetch('/api/user/settings', {
+                const response = await fetch('/api/user/settings' + (currentHomeId ? '?home_id=' + currentHomeId : ''), {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(pebbleFormToSettings())
@@ -1581,6 +1654,11 @@
                 status.textContent = 'Error saving settings';
             }
             setTimeout(() => { status.textContent = ''; }, 5000);
+        });
+
+        document.getElementById('ps-home').addEventListener('change', e => {
+            currentHomeId = Number(e.target.value);
+            loadPebbleSettings();
         });
 
         ['ps-contract', 'ps-solar', 'ps-battery', 'ps-palette', 'ps-brightness',

@@ -34,7 +34,91 @@ def clean_settings():
         conn.execute("DELETE FROM user_devices")
         conn.execute("DELETE FROM devices")
         conn.execute("DELETE FROM api_tokens")
+        conn.execute("DELETE FROM home_settings")
+        conn.execute("DELETE FROM homes")
         conn.commit()
+
+
+def _headers(user):
+    return {"Remote-User": user}
+
+
+def test_default_home_created_on_first_use():
+    homes = client.get("/api/user/homes", headers=_headers("gina")).json()["homes"]
+    assert len(homes) == 1 and homes[0]["name"] == "Home"
+    # settings round-trip lands on that home
+    body = client.put("/api/test/user/settings?user=gina", json={"has_solar": True}).json()
+    assert main.get_home_settings(homes[0]["id"])["has_solar"] is True
+
+
+def test_homes_crud_and_per_home_settings():
+    h = _headers("henk")
+    first = client.get("/api/user/homes", headers=h).json()["homes"][0]
+    second = client.post("/api/user/homes", headers=h,
+                         json={"name": "Beach house", "address": "Zeedijk 1, Oostende"}).json()
+
+    # Each home holds its own settings
+    client.put(f"/api/user/settings?home_id={first['id']}", headers=h, json={"contract_type": "dynamic", "has_solar": True})
+    client.put(f"/api/user/settings?home_id={second['id']}", headers=h, json={"contract_type": "day_night"})
+    assert client.get(f"/api/user/settings?home_id={first['id']}", headers=h).json()["derived_signal"] == "solar"
+    assert client.get(f"/api/user/settings?home_id={second['id']}", headers=h).json()["derived_signal"] == "day_night"
+
+    # Rename + address update
+    assert client.put(f"/api/user/homes/{second['id']}", headers=h, json={"name": "Kust"}).status_code == 200
+    homes = client.get("/api/user/homes", headers=h).json()["homes"]
+    assert [x["name"] for x in homes] == ["Home", "Kust"]
+
+    # Other users can't touch it; can't delete the last home
+    assert client.get(f"/api/user/settings?home_id={second['id']}", headers=_headers("mallory")).status_code == 404
+    assert client.delete(f"/api/user/homes/{second['id']}", headers=h).status_code == 200
+    assert client.delete(f"/api/user/homes/{first['id']}", headers=h).status_code == 400
+
+
+def test_device_follows_its_home():
+    h = _headers("iris")
+    default_home = client.get("/api/user/homes", headers=h).json()["homes"][0]
+    second = client.post("/api/user/homes", headers=h, json={"name": "Flat"}).json()
+    client.put(f"/api/user/settings?home_id={default_home['id']}", headers=h, json={"has_solar": True})
+    client.put(f"/api/user/settings?home_id={second['id']}", headers=h, json={"contract_type": "day_night"})
+
+    with sqlite3.connect(main.DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO devices (client_ip, device_fingerprint, device_id, home_id) VALUES ('1.1.1.1','fp-h1','101112131415', ?)", (default_home["id"],))
+        dev_db_id = cursor.lastrowid
+        cursor.execute("INSERT INTO user_devices (user_id, device_id) VALUES ('iris', ?)", (dev_db_id,))
+        conn.commit()
+
+    _, settings = main.get_settings_for_device("101112131415")
+    assert main.derive_signal_source(settings) == "solar"
+
+    # Move the device to the second home -> it follows that home's signal
+    resp = client.put(f"/api/user/devices/{dev_db_id}/home", headers=h, json={"home_id": second["id"]})
+    assert resp.status_code == 200
+    _, settings = main.get_settings_for_device("101112131415")
+    assert main.derive_signal_source(settings) == "day_night"
+
+    # Cannot move it to someone else's home
+    other = client.post("/api/user/homes", headers=_headers("mallory"), json={"name": "Lair"}).json()
+    assert client.put(f"/api/user/devices/{dev_db_id}/home", headers=h, json={"home_id": other["id"]}).status_code == 404
+
+
+def test_migration_from_user_settings():
+    # Simulate a pre-homes install: user_settings row + claimed device, no home
+    with sqlite3.connect(main.DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO user_settings (user_id, contract_type, has_solar) VALUES ('joris', 'day_night', 1)")
+        cursor.execute("INSERT INTO devices (client_ip, device_fingerprint, device_id) VALUES ('2.2.2.2','fp-mig','161718192021')")
+        cursor.execute("INSERT INTO user_devices (user_id, device_id) VALUES ('joris', ?)", (cursor.lastrowid,))
+        conn.commit()
+
+    main.init_database()  # re-run migration
+
+    homes = main.get_user_homes("joris")
+    assert len(homes) == 1 and homes[0]["device_count"] == 1
+    settings = main.get_home_settings(homes[0]["id"])
+    assert settings["contract_type"] == "day_night" and settings["has_solar"] is True
+    _, resolved = main.get_settings_for_device("161718192021")
+    assert main.derive_signal_source(resolved) == "day_night"
 
 
 def test_user_token_flow_for_home_assistant():
