@@ -17,6 +17,12 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    environment:
+      # Ed25519 firmware-signing PUBLIC key (safe to commit). Turns on signature
+      # verification for /api/firmware/upload; without it the server stays in
+      # checksum-only fallback. Must match the key embedded in firmware and the
+      # esphome FIRMWARE_SIGNING_KEY private-key signing secret.
+      - FIRMWARE_SIGNING_PUBKEY=f4f071b29d6fd6f76213228b0faac5f9d0eec1d09411e8ef16300e3eae788e8a
     volumes:
       - ./data:/tmp
       - ./firmware:/home/cumulus/github/energy_pebble/firmware
