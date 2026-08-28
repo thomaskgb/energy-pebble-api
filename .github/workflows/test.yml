@@ -1,0 +1,23 @@
+name: tests
+
+# Runs on GitHub-hosted runners (not the cumulus deploy runner). Gates PRs into
+# main once branch protection requires the `signing-tests` check.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  signing-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Firmware signing unit tests
+        run: python tests/test_firmware_signing.py
+      - name: Firmware upload + OTA signing integration tests
+        run: python tests/test_firmware_upload_signing.py
