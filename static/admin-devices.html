@@ -569,6 +569,7 @@
             }
         }
     </style>
+    <script src="/vendor/qrcode.min.js"></script>
 </head>
 <body>
     <!-- Top Navigation Bar -->
@@ -806,6 +807,10 @@
                                     <button class="edit-btn" onclick="editDevice(${JSON.stringify(device).replace(/"/g, '&quot;')})">
                                         ✏️ Edit
                                     </button>
+                                    ${device.device_id ? `
+                                    <button class="edit-btn" onclick="printSticker('${device.device_id}')" title="Mint a claim secret and print the setup QR sticker">
+                                        🏷️ QR
+                                    </button>` : ''}
                                 </td>
                             </tr>
                         `).join('')}
@@ -814,6 +819,51 @@
             `;
             
             container.innerHTML = table;
+        }
+
+        // Mint (or replace) the claim secret for a device and open a
+        // printable QR sticker. Re-minting invalidates any earlier sticker.
+        async function printSticker(deviceId) {
+            if (!confirm(`Generate a setup QR sticker for ${deviceId}?\n\n` +
+                         `This mints a NEW claim secret - any previously ` +
+                         `printed sticker for this device stops working.`)) {
+                return;
+            }
+            try {
+                const resp = await fetch(`/api/admin/devices/${deviceId}/secret`, { method: 'POST' });
+                if (!resp.ok) {
+                    alert(`Failed to mint secret (HTTP ${resp.status})`);
+                    return;
+                }
+                const data = await resp.json();
+                const qr = qrcode(0, 'M');
+                qr.addData(data.qr_url);
+                qr.make();
+                const svg = qr.createSvgTag({ cellSize: 4, margin: 4 });
+                const w = window.open('', '_blank');
+                w.document.write(`
+                    <html><head><title>Sticker ${deviceId}</title>
+                    <style>
+                        body { font-family: sans-serif; text-align: center; }
+                        .sticker { display: inline-block; border: 1px dashed #999;
+                                   padding: 14px 20px; border-radius: 8px; margin-top: 30px; }
+                        .sticker h2 { margin: 0 0 4px; font-size: 15px; }
+                        .id { font-family: monospace; font-size: 13px; margin-top: 4px; }
+                        .hint { font-size: 11px; color: #555; margin-top: 2px; }
+                        @media print { .noprint { display: none; } }
+                    </style></head><body>
+                    <div class="sticker">
+                        <h2>Energy Pebble &mdash; scan to set up</h2>
+                        ${svg}
+                        <div class="id">ID: ${data.device_id}</div>
+                        <div class="hint">Or go to energypebble.tdlx.nl/setup</div>
+                    </div>
+                    <p class="noprint"><button onclick="window.print()">🖨️ Print</button></p>
+                    </body></html>`);
+                w.document.close();
+            } catch (err) {
+                alert('Error generating sticker: ' + err);
+            }
         }
 
         // Helper functions
