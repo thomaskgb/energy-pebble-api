@@ -564,19 +564,6 @@
             }
         }
 
-        .settings-tab {
-            border: none; background: none; padding: 8px 16px; cursor: pointer;
-            font-size: 14px; color: #6c757d; border-bottom: 2px solid transparent;
-        }
-        .settings-tab.active { color: #27ae60; border-bottom-color: #27ae60; font-weight: 600; }
-
-        .settings-row {
-            display: flex; align-items: center; justify-content: space-between;
-            gap: 16px; padding: 9px 0; border-bottom: 1px solid #f1f3f4; cursor: pointer;
-        }
-        .settings-row small { color: #adb5bd; font-weight: 400; }
-        .settings-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: #27ae60; }
-
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -723,6 +710,7 @@
         }
     </style>
     <script src="pebble-sim.js"></script>
+    <script src="settings-modal.js"></script>
 </head>
 <body>
     <!-- Top Navigation Bar -->
@@ -869,117 +857,8 @@
         </div>
     </div>
 
-    <!-- User Settings Modal -->
-    <div id="userSettingsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">User Settings</h2>
-                <button class="close-btn" onclick="closeUserSettings()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="settings-tabs" style="display: flex; gap: 6px; border-bottom: 1px solid #e9ecef; margin-bottom: 20px;">
-                    <button type="button" id="tab-pebble" class="settings-tab active" onclick="switchSettingsTab('pebble')">Pebble</button>
-                    <button type="button" id="tab-homes" class="settings-tab" onclick="switchSettingsTab('homes')">Homes</button>
-                    <button type="button" id="tab-account" class="settings-tab" onclick="switchSettingsTab('account')">Account</button>
-                </div>
-                <div id="pane-pebble">
-                <div style="text-align: center; margin-bottom: 18px;">
-                    <pebble-sim id="settings-preview" src="/api/color-code"></pebble-sim>
-                    <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">
-                        Live preview &mdash; this is what your pebble will show once you save
-                    </div>
-                </div>
-                    <form id="pebble-settings-form" style="display: grid; gap: 2px; text-align: left;">
-                    <label class="settings-row" id="ps-home-row" style="display: none;"><span>Home</span>
-                        <select id="ps-home" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;"></select>
-                    </label>
-                    <label class="settings-row"><span>Energy contract</span>
-                        <select id="ps-contract" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                            <option value="dynamic">Dynamic prices</option>
-                            <option value="day_night">Day &amp; night tariff</option>
-                            <option value="fixed">Fixed price</option>
-                        </select>
-                    </label>
-                    <label class="settings-row"><span>Solar panels</span><input type="checkbox" id="ps-solar"></label>
-                    <label class="settings-row"><span>Home battery <small>bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
-                    <label class="settings-row"><span>Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
-                    <label class="settings-row"><span>Dim at night to 30%
-                        (<input type="time" id="ps-dim-start" value="22:00" style="border: 1px solid #dee2e6; border-radius: 4px;"> &ndash;
-                        <input type="time" id="ps-dim-end" value="07:00" style="border: 1px solid #dee2e6; border-radius: 4px;">)</span>
-                        <input type="checkbox" id="ps-night-dim"></label>
-                    <label class="settings-row"><span>Brightness <small><span id="ps-bri-val">100</span>%</small></span>
-                        <input type="range" id="ps-brightness" min="5" max="100" value="100" style="width: 160px;"></label>
-                    <div style="margin-top: 14px;">
-                        <button type="submit" class="card-action">Save Settings</button>
-                        <span id="ps-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
-                    </div>
-                </form>
-                </div>
-                <div id="pane-homes" style="display: none;">
-                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
-                        Devices and pebble settings belong to a home. Add one per address;
-                        pick which home to configure on the Pebble tab.
-                    </p>
-                    <div id="home-list" style="font-size: 0.9em; color: #495057; margin-bottom: 14px;"></div>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="home-name" placeholder="Name (e.g. Beach house)"
-                               style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                        <input type="text" id="home-address" placeholder="Address (optional)"
-                               style="flex: 2; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                        <button type="button" class="card-action" onclick="createHome()">Add home</button>
-                    </div>
-                </div>
-                <div id="pane-account" style="display: none;">
-                <form id="userSettingsForm">
-                    <div style="margin-bottom: 20px;">
-                        <label for="newUsername" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Username:</label>
-                        <input type="text" id="newUsername" name="username" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" placeholder="Enter new username">
-                        <small style="color: #6c757d; font-size: 12px;">Username must be unique and contain only letters, numbers, and underscores.</small>
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label for="currentPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Current Password:</label>
-                        <input type="password" id="currentPassword" name="currentPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" placeholder="Enter current password">
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label for="newPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">New Password:</label>
-                        <input type="password" id="newPassword" name="newPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" placeholder="Enter new password">
-                        <small style="color: #6c757d; font-size: 12px;">Leave blank to keep current password.</small>
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label for="confirmPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Confirm New Password:</label>
-                        <input type="password" id="confirmPassword" name="confirmPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" placeholder="Confirm new password">
-                    </div>
-                    
-                    <div style="text-align: right; margin-top: 25px;">
-                        <button type="button" onclick="closeUserSettings()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; margin-right: 10px; cursor: pointer;">Cancel</button>
-                        <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Save Changes</button>
-                    </div>
-                </form>
-
-                <div style="border-top: 1px solid #e9ecef; margin-top: 25px; padding-top: 18px;">
-                    <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">API tokens</h3>
-                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
-                        For integrations like Home Assistant. A token acts as you (never as admin) and is shown only once.
-                    </p>
-                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                        <input type="text" id="token-name" placeholder="Token name (e.g. Home Assistant)"
-                               style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                        <button type="button" class="card-action" onclick="createUserToken()">Create token</button>
-                    </div>
-                    <div id="new-token-box" style="display: none; background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                        <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;">Copy this token now — it won't be shown again:</div>
-                        <input type="text" id="new-token-value" readonly onclick="this.select()"
-                               style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px; font-family: monospace; font-size: 12px;">
-                    </div>
-                    <div id="token-list" style="font-size: 0.9em; color: #495057;"></div>
-                </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- User Settings Modal (shared component — see settings-modal.js) -->
+    <settings-modal id="settings-modal"></settings-modal>
 
     <script>
         // Load current energy color
@@ -1291,83 +1170,14 @@
             }
         });
 
-        // User settings functionality
+        // User settings functionality — the modal itself lives in the shared
+        // <settings-modal> component (settings-modal.js).
         let currentUserData = null;
-
-        function switchSettingsTab(tab) {
-            for (const name of ['pebble', 'homes', 'account']) {
-                document.getElementById('tab-' + name).classList.toggle('active', tab === name);
-                document.getElementById('pane-' + name).style.display = tab === name ? 'block' : 'none';
-            }
-        }
-
-        // --- Personal API tokens (Home Assistant) ---
-        async function loadUserTokens() {
-            try {
-                const resp = await fetch('/api/user/tokens');
-                if (!resp.ok) return;
-                const data = await resp.json();
-                const list = document.getElementById('token-list');
-                if (!data.tokens.length) {
-                    list.innerHTML = '<em style="color:#adb5bd;">No tokens yet.</em>';
-                    return;
-                }
-                list.innerHTML = data.tokens.map(t =>
-                    `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
-                        <span>${t.token_name}
-                            <small style="color:#adb5bd;">· created ${(t.created_at || '').slice(0, 10)}${t.last_used_at ? ' · last used ' + t.last_used_at.slice(0, 10) : ''}</small>
-                        </span>
-                        <button type="button" onclick="revokeUserToken(${t.id})"
-                                style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">Revoke</button>
-                    </div>`).join('');
-            } catch (e) {
-                console.error('Error loading tokens:', e);
-            }
-        }
-
-        async function createUserToken() {
-            const name = document.getElementById('token-name').value.trim() || 'Home Assistant';
-            try {
-                const resp = await fetch('/api/user/tokens', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token_name: name })
-                });
-                if (!resp.ok) { alert('Could not create token'); return; }
-                const data = await resp.json();
-                document.getElementById('new-token-box').style.display = 'block';
-                document.getElementById('new-token-value').value = data.token;
-                document.getElementById('token-name').value = '';
-                loadUserTokens();
-            } catch (e) {
-                alert('Could not create token');
-            }
-        }
-
-        async function revokeUserToken(id) {
-            if (!confirm('Revoke this token? Integrations using it will stop working.')) return;
-            await fetch('/api/user/tokens/' + id, { method: 'DELETE' });
-            loadUserTokens();
-        }
 
         function openUserSettings() {
             // Close user menu
             document.getElementById('userMenuDropdown').classList.remove('show');
-
-            // Load current user data and populate forms
-            loadCurrentUserData();
-            loadHomes().then(loadPebbleSettings);
-            loadUserTokens();
-            switchSettingsTab('pebble');
-            
-            // Show modal
-            document.getElementById('userSettingsModal').style.display = 'block';
-        }
-
-        function closeUserSettings() {
-            document.getElementById('userSettingsModal').style.display = 'none';
-            // Clear form
-            document.getElementById('userSettingsForm').reset();
+            document.getElementById('settings-modal').open();
         }
 
         async function loadCurrentUserData() {
@@ -1396,12 +1206,6 @@
                         }
                     }
                     
-                    // Update settings form when opened
-                    const usernameInput = document.getElementById('newUsername');
-                    if (usernameInput && currentUserData.user) {
-                        usernameInput.value = currentUserData.user.split('@')[0]; // Use username part before @
-                    }
-                    
                     // Update welcome greeting with personalized message
                     const greetingElement = document.getElementById('welcome-greeting');
                     if (greetingElement) {
@@ -1419,83 +1223,24 @@
             }
         }
 
-        // Handle user settings form submission
-        document.getElementById('userSettingsForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const newUsername = formData.get('username');
-            const currentPassword = formData.get('currentPassword');
-            const newPassword = formData.get('newPassword');
-            const confirmPassword = formData.get('confirmPassword');
-            
-            // Validation
-            if (!newUsername.trim()) {
-                alert('Username is required');
-                return;
+        // React to changes made inside the shared settings modal
+        const settingsModal = document.getElementById('settings-modal');
+
+        settingsModal.addEventListener('profile-updated', function(e) {
+            const newUsername = e.detail.username;
+            document.getElementById('current-username').textContent = newUsername;
+            const greetingElement = document.getElementById('welcome-greeting');
+            if (greetingElement) {
+                const capitalizedUsername = newUsername.charAt(0).toUpperCase() + newUsername.slice(1);
+                greetingElement.textContent = `Welcome back, ${capitalizedUsername}!`;
             }
-            
-            if (newPassword && newPassword !== confirmPassword) {
-                alert('New passwords do not match');
-                return;
-            }
-            
-            if (newPassword && newPassword.length < 6) {
-                alert('New password must be at least 6 characters long');
-                return;
-            }
-            
-            try {
-                const updateData = {
-                    username: newUsername.trim(),
-                    currentPassword: currentPassword
-                };
-                
-                if (newPassword) {
-                    updateData.newPassword = newPassword;
-                }
-                
-                let response = await fetch('/api/user/profile', {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(updateData)
-                });
-                
-                // Authentication required
-                if (!response.ok && response.status === 401) {
-                    window.location.href = 'https://auth.tdlx.nl/?rd=https://energypebble.tdlx.nl/dashboard';
-                    return;
-                }
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    alert('Settings updated successfully!');
-                    closeUserSettings();
-                    
-                    // Update displayed username in navigation
-                    document.getElementById('current-username').textContent = newUsername;
-                    
-                    // Update welcome greeting with new username
-                    const greetingElement = document.getElementById('welcome-greeting');
-                    if (greetingElement) {
-                        const capitalizedUsername = newUsername.charAt(0).toUpperCase() + newUsername.slice(1);
-                        greetingElement.textContent = `Welcome back, ${capitalizedUsername}!`;
-                    }
-                    
-                    // If username changed significantly, might need to refresh
-                    if (result.usernameChanged) {
-                        alert('Username changed. You may need to log in again.');
-                    }
-                } else {
-                    const error = await response.json();
-                    alert(`Failed to update settings: ${error.detail}`);
-                }
-            } catch (error) {
-                console.error('Error updating settings:', error);
-                alert('Failed to update settings. Please try again.');
-            }
+        });
+
+        settingsModal.addEventListener('homes-changed', () => renderHomePebbles());
+
+        // The card reflects the newly saved per-home profile
+        settingsModal.addEventListener('settings-saved', function(e) {
+            applySettingsToSim('home-pebble-' + e.detail.homeId, e.detail.settings);
         });
 
         // Check authentication before loading page content
@@ -1515,124 +1260,30 @@
             }
         }
 
-        // --- Homes ---
-        let currentHomeId = null;
-        let userHomes = [];
-
-        async function loadHomes() {
+        // --- My Pebble card: one pebble per home, each with its own signal ---
+        // (Homes CRUD and per-home settings editing live in <settings-modal>.)
+        async function renderHomePebbles() {
+            let homes = [];
             try {
                 const resp = await fetch('/api/user/homes');
                 if (!resp.ok) return;
-                userHomes = (await resp.json()).homes;
-                if (currentHomeId === null && userHomes.length) currentHomeId = userHomes[0].id;
-
-                const row = document.getElementById('ps-home-row');
-                const select = document.getElementById('ps-home');
-                row.style.display = userHomes.length > 1 ? 'flex' : 'none';
-                select.innerHTML = userHomes.map(h =>
-                    `<option value="${h.id}" ${h.id === currentHomeId ? 'selected' : ''}>${h.name}</option>`).join('');
-
-                const esc = v => (v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-                const list = document.getElementById('home-list');
-                list.innerHTML = userHomes.map(h =>
-                    `<div style="display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
-                        <input type="text" id="home-name-${h.id}" value="${esc(h.name)}"
-                               style="flex:1; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
-                        <input type="text" id="home-address-${h.id}" value="${esc(h.address)}" placeholder="Address"
-                               style="flex:2; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
-                        <small style="color:#adb5bd; white-space:nowrap;">${h.device_count} device${h.device_count === 1 ? '' : 's'}</small>
-                        <button type="button" onclick="saveHome(${h.id})"
-                                style="background:#27ae60; color:white; border:none; border-radius:6px; padding:5px 12px; cursor:pointer;">Save</button>
-                        ${userHomes.length > 1 && !h.device_count ? `<button type="button" onclick="deleteHome(${h.id})"
-                                style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:4px 10px; cursor:pointer;">Delete</button>` : ''}
-                    </div>`).join('');
+                homes = (await resp.json()).homes;
             } catch (e) {
                 console.error('Error loading homes:', e);
+                return;
             }
-        }
-
-        async function saveHome(id) {
-            const name = document.getElementById('home-name-' + id).value.trim();
-            if (!name) { alert('Home name cannot be empty'); return; }
-            const address = document.getElementById('home-address-' + id).value.trim();
-            const resp = await fetch('/api/user/homes/' + id, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, address })
-            });
-            if (resp.ok) { loadHomes(); renderHomePebbles(); }
-            else alert('Could not save home');
-        }
-
-        async function createHome() {
-            const name = document.getElementById('home-name').value.trim();
-            if (!name) { alert('Give the home a name'); return; }
-            const address = document.getElementById('home-address').value.trim() || null;
-            const resp = await fetch('/api/user/homes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, address })
-            });
-            if (resp.ok) {
-                document.getElementById('home-name').value = '';
-                document.getElementById('home-address').value = '';
-                loadHomes();
-                renderHomePebbles();
-            } else {
-                alert('Could not add home');
-            }
-        }
-
-        async function deleteHome(id) {
-            if (!confirm('Delete this home?')) return;
-            const resp = await fetch('/api/user/homes/' + id, { method: 'DELETE' });
-            if (!resp.ok) alert((await resp.json()).detail || 'Could not delete home');
-            if (currentHomeId === id) currentHomeId = null;
-            loadHomes();
-            renderHomePebbles();
-        }
-
-        // One pebble per home on the My Pebble card, each with its own signal
-        async function renderHomePebbles() {
-            if (!userHomes.length) await loadHomes();
             const container = document.getElementById('home-pebbles');
-            container.innerHTML = userHomes.map(h => `
+            container.innerHTML = homes.map(h => `
                 <div style="text-align: center;">
                     <pebble-sim id="home-pebble-${h.id}" src="/api/color-code"></pebble-sim>
-                    ${userHomes.length > 1 ? `<div style="font-weight: 600; color: #2c3e50; margin-top: 2px;">${h.name}</div>` : ''}
+                    ${homes.length > 1 ? `<div style="font-weight: 600; color: #2c3e50; margin-top: 2px;">${h.name}</div>` : ''}
                 </div>`).join('');
-            for (const h of userHomes) {
+            for (const h of homes) {
                 try {
                     const resp = await fetch('/api/user/settings?home_id=' + h.id);
                     if (resp.ok) applySettingsToSim('home-pebble-' + h.id, (await resp.json()).settings);
                 } catch (e) { /* keep defaults */ }
             }
-        }
-
-        // --- Pebble settings (per-home signal & display) ---
-        function pebbleFormToSettings() {
-            return {
-                contract_type: document.getElementById('ps-contract').value,
-                has_solar: document.getElementById('ps-solar').checked,
-                has_battery: document.getElementById('ps-battery').checked,
-                palette: document.getElementById('ps-palette').checked ? 'colorblind' : 'standard',
-                brightness: Number(document.getElementById('ps-brightness').value),
-                night_dim_enabled: document.getElementById('ps-night-dim').checked,
-                night_dim_start: document.getElementById('ps-dim-start').value || '22:00',
-                night_dim_end: document.getElementById('ps-dim-end').value || '07:00'
-            };
-        }
-
-        function pebbleSettingsToForm(settings) {
-            document.getElementById('ps-contract').value = settings.contract_type;
-            document.getElementById('ps-solar').checked = settings.has_solar;
-            document.getElementById('ps-battery').checked = settings.has_battery;
-            document.getElementById('ps-palette').checked = settings.palette === 'colorblind';
-            document.getElementById('ps-brightness').value = settings.brightness;
-            document.getElementById('ps-bri-val').textContent = settings.brightness;
-            document.getElementById('ps-night-dim').checked = settings.night_dim_enabled;
-            document.getElementById('ps-dim-start').value = settings.night_dim_start;
-            document.getElementById('ps-dim-end').value = settings.night_dim_end;
         }
 
         function applySettingsToSim(simId, s) {
@@ -1648,64 +1299,6 @@
                 night_dim_end: s.night_dim_end
             });
         }
-
-        // The modal preview follows the (unsaved) form; the card follows saved settings
-        function previewPebble() {
-            applySettingsToSim('settings-preview', pebbleFormToSettings());
-        }
-
-        async function loadPebbleSettings() {
-            try {
-                const response = await fetch('/api/user/settings' + (currentHomeId ? '?home_id=' + currentHomeId : ''));
-                if (!response.ok) return;
-                const data = await response.json();
-                pebbleSettingsToForm(data.settings);
-                applySettingsToSim('home-pebble-' + data.home_id, data.settings);
-                applySettingsToSim('settings-preview', data.settings);
-            } catch (error) {
-                console.error('Error loading pebble settings:', error);
-            }
-        }
-
-        document.getElementById('pebble-settings-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const status = document.getElementById('ps-status');
-            try {
-                const response = await fetch('/api/user/settings' + (currentHomeId ? '?home_id=' + currentHomeId : ''), {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(pebbleFormToSettings())
-                });
-                if (response.ok) {
-                    status.style.color = '#27ae60';
-                    status.textContent = '✓ Saved — devices update within 15 min';
-                    // The card now reflects the newly saved profile
-                    const result = await response.json();
-                    applySettingsToSim('home-pebble-' + result.home_id, result.settings);
-                } else {
-                    const error = await response.json();
-                    status.style.color = '#e74c3c';
-                    status.textContent = 'Error: ' + (error.detail || response.status);
-                }
-            } catch (error) {
-                status.style.color = '#e74c3c';
-                status.textContent = 'Error saving settings';
-            }
-            setTimeout(() => { status.textContent = ''; }, 5000);
-        });
-
-        document.getElementById('ps-home').addEventListener('change', e => {
-            currentHomeId = Number(e.target.value);
-            loadPebbleSettings();
-        });
-
-        ['ps-contract', 'ps-solar', 'ps-battery', 'ps-palette', 'ps-brightness',
-         'ps-night-dim', 'ps-dim-start', 'ps-dim-end'].forEach(id => {
-            document.getElementById(id).addEventListener('input', () => {
-                document.getElementById('ps-bri-val').textContent = document.getElementById('ps-brightness').value;
-                previewPebble();
-            });
-        });
 
         // Load page data
         document.addEventListener('DOMContentLoaded', async function() {
