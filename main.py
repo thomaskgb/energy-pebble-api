@@ -44,6 +44,11 @@ class DeviceNicknameUpdate(BaseModel):
 class DeviceClaimRequest(BaseModel):
     user: str
 
+class DeviceSelfClaimRequest(BaseModel):
+    device_id: str
+    secret: Optional[str] = None   # per-device secret from the QR sticker
+    nickname: Optional[str] = None
+
 # Pydantic models for API tokens
 class TokenCreate(BaseModel):
     token_name: str
@@ -575,7 +580,19 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ota_logs_device ON ota_logs (device_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ota_logs_timestamp ON ota_logs (check_timestamp)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_firmware_version ON firmware_versions (version)')
-        
+
+        # Per-device claim secrets: minted by an admin, printed in the QR
+        # sticker at manufacturing time, and presented by the setup page as
+        # proof of physical possession when claiming. Only the hash is stored.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS device_secrets (
+                device_id TEXT PRIMARY KEY,
+                secret_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by TEXT
+            )
+        ''')
+
         # Insert initial predefined devices if the table is empty
         cursor.execute('SELECT COUNT(*) FROM predefined_devices')
         count = cursor.fetchone()[0]
@@ -2160,6 +2177,160 @@ async def get_user_devices(request: Request):
         logger.error(f"Error fetching user devices: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching user devices: {str(e)}")
 
+@app.post("/api/user/devices/claim", tags=["user"])
+async def claim_own_device(claim: DeviceSelfClaimRequest, request: Request):
+    """
+    Self-service device claim from the setup page (setup/index.html).
+
+    Authentication: Requires valid Authelia session (route is behind the
+    /api/user forward-auth rule in Traefik).
+
+    Proof of possession, first match wins:
+    1. `secret` matches the device's minted QR-sticker secret, or
+    2. the device has recently phoned home from the same public IP as the
+       requester (same household network).
+
+    The device does not need to have contacted the API yet when a valid
+    secret is presented - a placeholder row is created and filled in when
+    the device first phones home.
+    """
+    user_info = get_current_user(request)
+    user_id = user_info['user_id']
+
+    device_id = (claim.device_id or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{12}", device_id):
+        raise HTTPException(status_code=400,
+                            detail="device_id must be 12 hex characters")
+    nickname = (claim.nickname or "").strip() or None
+    client_ip = get_real_client_ip(request)
+
+    try:
+        with db_lock:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    'SELECT id, client_ip, last_seen FROM devices WHERE device_id = ?',
+                    (device_id,))
+                device_row = cursor.fetchone()
+
+                # Proof of possession
+                proof = None
+                if claim.secret:
+                    cursor.execute(
+                        'SELECT secret_hash FROM device_secrets WHERE device_id = ?',
+                        (device_id,))
+                    secret_row = cursor.fetchone()
+                    if secret_row and verify_token(claim.secret, secret_row[0]):
+                        proof = "secret"
+                if proof is None and device_row:
+                    status, _ = calculate_device_status(device_row[2])
+                    if device_row[1] == client_ip and status in ("online", "recently_active"):
+                        proof = "same_network"
+                if proof is None:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Cannot verify you have this device: scan its QR "
+                               "sticker, or make sure it is online on the same "
+                               "network as you")
+
+                # Ensure a devices row exists so the claim has something to
+                # attach to. last_seen stays NULL until the device phones home
+                # (log_device_request fills it in), so it reports as offline.
+                if device_row:
+                    device_db_id = device_row[0]
+                else:
+                    placeholder_fp = hashlib.sha256(
+                        f"claim:{device_id}".encode()).hexdigest()[:16]
+                    cursor.execute('''
+                        INSERT INTO devices (client_ip, device_fingerprint,
+                                             first_seen, last_seen, user_agent,
+                                             device_id, mac_address)
+                        VALUES (?, ?, ?, NULL, ?, ?, ?)
+                    ''', (client_ip, placeholder_fp, datetime.now(pytz.UTC),
+                          "claimed-before-first-contact", device_id,
+                          generate_mac_from_device_id(device_id)))
+                    device_db_id = cursor.lastrowid
+
+                cursor.execute(
+                    'SELECT user_id FROM user_devices WHERE device_id = ?',
+                    (device_db_id,))
+                existing = cursor.fetchone()
+                if existing and existing[0] != user_id:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This device is already linked to another "
+                               "account. Contact support to transfer it.")
+                if existing:
+                    if nickname:
+                        cursor.execute(
+                            'UPDATE user_devices SET nickname = ? WHERE device_id = ?',
+                            (nickname, device_db_id))
+                    message = "Device was already linked to your account"
+                else:
+                    cursor.execute('''
+                        INSERT INTO user_devices (user_id, device_id, nickname)
+                        VALUES (?, ?, ?)
+                    ''', (user_id, device_db_id, nickname))
+                    message = "Device linked to your account"
+
+                conn.commit()
+
+        logger.info(f"User {user_id} claimed device {device_id} (proof: {proof})")
+        return {
+            "message": message,
+            "device_id": device_id,
+            "claimed_by": user_id,
+            "proof": proof,
+            "nickname": nickname,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in self-claim for device {device_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error claiming device")
+
+@app.get("/api/user/devices/{device_id}/status", tags=["user"])
+async def get_own_device_status(device_id: str, request: Request):
+    """
+    Lightweight online/offline poll for the setup page while it waits for a
+    freshly provisioned device to phone home.
+
+    Authentication: Requires valid Authelia session.
+    """
+    user_info = get_current_user(request)
+    user_id = user_info['user_id']
+
+    device_id = (device_id or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{12}", device_id):
+        raise HTTPException(status_code=400,
+                            detail="device_id must be 12 hex characters")
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT d.last_seen, ud.user_id
+                FROM devices d
+                LEFT JOIN user_devices ud ON ud.device_id = d.id
+                WHERE d.device_id = ?
+            ''', (device_id,))
+            row = cursor.fetchone()
+
+        if not row:
+            return {"device_id": device_id, "online": False,
+                    "status": "never_seen", "claimed_by_you": False}
+        status, minutes_ago = calculate_device_status(row[0])
+        return {
+            "device_id": device_id,
+            "online": status == "online",
+            "status": status,
+            "minutes_since_last_seen": minutes_ago if row[0] else None,
+            "claimed_by_you": row[1] == user_id,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching status for device {device_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching device status")
+
 @app.get("/api/user/profile", tags=["user"])
 async def get_user_profile(request: Request):
     """Get current user profile information."""
@@ -3636,6 +3807,49 @@ async def claim_device_for_user(device_id: int, claim_data: DeviceClaimRequest, 
     except Exception as e:
         logger.error(f"Error claiming device {device_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error claiming device: {str(e)}")
+
+@app.post("/api/admin/devices/{device_id}/secret", tags=["admin"])
+async def mint_device_secret(device_id: str, request: Request):
+    """
+    Mint (or replace) the claim secret for a device and return the QR-sticker
+    payload. Admin only; used at manufacturing/sticker-printing time.
+
+    The plaintext secret is returned ONCE - only its hash is stored. Minting
+    again invalidates the previous sticker.
+    """
+    admin_info = get_current_user(request)
+    if not admin_info['is_admin']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    device_id = (device_id or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{12}", device_id):
+        raise HTTPException(status_code=400,
+                            detail="device_id must be 12 hex characters")
+
+    secret = secrets.token_urlsafe(9)  # 12 chars, fits a small QR + sticker
+    try:
+        with db_lock:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO device_secrets (device_id, secret_hash, created_by)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(device_id) DO UPDATE SET
+                        secret_hash = excluded.secret_hash,
+                        created_at = CURRENT_TIMESTAMP,
+                        created_by = excluded.created_by
+                ''', (device_id, hash_token(secret), admin_info['user_id']))
+                conn.commit()
+
+        logger.info(f"Admin {admin_info['user_id']} minted claim secret for device {device_id}")
+        return {
+            "device_id": device_id,
+            "secret": secret,
+            "qr_url": f"https://energypebble.tdlx.nl/setup/?d={device_id}&s={secret}",
+        }
+    except Exception as e:
+        logger.error(f"Error minting secret for device {device_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error minting device secret")
 
 @app.get("/api/admin/users/management", tags=["admin"])
 async def get_user_management_data(request: Request):
