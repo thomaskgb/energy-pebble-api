@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pebble Simulator - Energy Pebble</title>
+    <!-- Situation-focused simulator: pick a typical day, scrub the time of
+         day, then toggle what the household has (contract, solar, battery)
+         to see what the pebble would show. -->
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
+            margin: 0; padding: 40px 20px; color: #2c3e50;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card {
+            background: rgba(255, 255, 255, 0.95); border-radius: 12px;
+            padding: 30px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+        }
+        h1 { margin-top: 0; }
+        .hint { color: #6c757d; font-size: 0.9em; }
+
+        .scenarios { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 20px; }
+        .scenarios button {
+            padding: 8px 16px; border-radius: 20px; border: 1px solid #dee2e6;
+            background: white; cursor: pointer; font-size: 14px;
+        }
+        .scenarios button.active { background: #27ae60; color: white; border-color: #27ae60; }
+
+        .timebar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .timebar input[type=range] { flex: 1; accent-color: #27ae60; }
+        .timebar .clock { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 110px; }
+
+        /* 24h price strip */
+        .strip { display: flex; align-items: flex-end; gap: 2px; height: 74px; margin: 6px 0 2px; }
+        .strip .bar {
+            flex: 1; position: relative; height: 100%; cursor: pointer;
+            display: flex; flex-direction: column; justify-content: flex-end;
+        }
+        .strip .fill { border-radius: 2px 2px 0 0; opacity: 0.35; }
+        .strip .bar.window .fill { opacity: 1; }
+        .strip .bar.now .fill { outline: 2px solid #2c3e50; }
+        .strip .bar.negative .fill { border: 1px dashed #2980b9; box-sizing: border-box; }
+        .strip-labels { display: flex; gap: 2px; font-size: 10px; color: #adb5bd; }
+        .strip-labels span { flex: 1; text-align: center; }
+        .legend { font-size: 0.8em; color: #6c757d; margin-top: 6px; }
+
+        .sim-row { display: flex; justify-content: center; margin-top: 10px; }
+        .scenario-note {
+            background: #eafaf1; border-radius: 8px; padding: 10px 14px;
+            font-size: 0.9em; color: #2c3e50; margin-top: 14px;
+        }
+    </style>
+    <script src="pebble-sim.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🎛️ Pebble Simulator</h1>
+            <p class="hint">Pick a typical day, drag the clock through it, and toggle what the household
+            has. The bar strip is the wholesale market; the pebble is what that household would see.</p>
+
+            <div class="scenarios" id="scenarios"></div>
+
+            <div class="timebar">
+                <span class="clock" id="clock">Time: 12:00</span>
+                <input type="range" id="hour" min="0" max="23" value="12">
+            </div>
+            <div class="strip" id="strip"></div>
+            <div class="strip-labels" id="strip-labels"></div>
+            <div class="legend">Bar height = wholesale price · bar color = what this household's pebble shows ·
+                bright bars = the 9 hours on the pebble ·
+                dashed <span style="color:#2980b9">blue outline</span> = negative price (you get paid to consume)</div>
+
+            <div class="sim-row">
+                <pebble-sim id="sim" controls></pebble-sim>
+            </div>
+            <div class="scenario-note" id="note"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Typical days (prices in €/MWh; sun = hours with real solar production) ---
+        const SCENARIOS = {
+            sunny: {
+                label: '☀️ Sunny summer day',
+                note: 'Lots of solar pushes midday prices negative. With solar panels the pebble turns green even earlier — with a fixed contract, midday self-consumption is still the play.',
+                prices: [95, 88, 82, 78, 75, 74, 78, 70, 45, 15, -5, -20, -30, -28, -15, 5, 30, 65, 100, 125, 115, 100, 92, 88],
+                sun: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+                defaultHour: 11
+            },
+            winter: {
+                label: '☁️ Grey winter day',
+                note: 'Barely any sun, high demand: prices stay expensive all day with brutal evening peaks. Green is rare — the pebble mostly says "wait if you can".',
+                prices: [140, 135, 130, 128, 125, 128, 140, 165, 180, 175, 160, 150, 145, 140, 145, 155, 175, 200, 220, 210, 190, 170, 155, 145],
+                sun: [],
+                defaultHour: 18
+            },
+            windy: {
+                label: '🌬️ Windy day',
+                note: 'Wind makes the whole day cheap — the pebble is green most of the time. This is the day to run everything.',
+                prices: [20, 15, 10, 8, 5, 8, 15, 25, 35, 40, 42, 40, 38, 35, 30, 28, 30, 45, 60, 70, 65, 50, 35, 25],
+                sun: [10, 11, 12, 13, 14],
+                defaultHour: 9
+            },
+            spike: {
+                label: '🔥 Evening price spike',
+                note: 'A scarcity evening: prices explode after 18:00. The pebble goes hard red — shifting the dishwasher past the peak saves the most on days like this.',
+                prices: [90, 85, 80, 78, 80, 85, 100, 130, 140, 120, 100, 90, 85, 80, 85, 95, 120, 180, 320, 380, 290, 180, 130, 100],
+                sun: [10, 11, 12, 13, 14, 15],
+                defaultHour: 16
+            },
+            live: {
+                label: '📡 Live — today',
+                note: 'Live colors from the API, exactly what real pebbles receive right now. The clock and price strip apply to the typical days only.',
+                prices: null, sun: [], defaultHour: null
+            }
+        };
+
+        const PALETTE = { G: '#3ddc78', Y: '#f5a623', R: '#f0426b' };
+        let currentScenario = 'sunny';
+        let nowHour = 12;
+
+        // Mirrors main.py determine_color_codes: thirds of the day's price range
+        function priceColors(prices) {
+            const min = Math.min(...prices), max = Math.max(...prices), range = max - min;
+            return prices.map(p => {
+                if (range === 0) return 'G';
+                if (p <= min + range / 3) return 'G';
+                if (p <= max - range / 3) return 'Y';
+                return 'R';
+            });
+        }
+
+        function hourKey(h) {
+            const d = new Date();
+            d.setDate(d.getDate() + (h >= 24 ? 1 : 0));
+            d.setHours(h % 24, 0, 0, 0);
+            return d.toISOString();
+        }
+
+        function applyScenario() {
+            const sc = SCENARIOS[currentScenario];
+            const sim = document.getElementById('sim');
+            const isLive = currentScenario === 'live';
+
+            document.getElementById('note').textContent = sc.note;
+            document.getElementById('hour').disabled = isLive;
+            document.getElementById('strip').style.opacity = isLive ? 0.25 : 1;
+
+            if (isLive) {
+                document.getElementById('clock').textContent = 'Time: now';
+                sim.setSolarBoost(null);
+                sim.setAttribute('src', '/api/color-code');
+                sim.refresh();
+                renderStrip([], [], -1);
+                return;
+            }
+
+            const colors = priceColors(sc.prices);
+            // Solar production hours across the whole horizon (today + the
+            // spill-over into tomorrow), so the battery "charged today" check
+            // and boosts work for any scrubbed time.
+            const boost = [];
+            for (let h = 0; h < 33; h++) {
+                if (sc.sun.includes(h % 24)) boost.push(hourKey(h));
+            }
+            sim.setSolarBoost(boost);
+            // Pebble window: current hour + next 8, wrapping into "tomorrow
+            // looks like today" beyond midnight
+            const entries = [];
+            for (let i = 0; i < 9; i++) {
+                const h = nowHour + i;
+                entries.push({ hour: hourKey(h), color_code: colors[h % 24] });
+            }
+            document.getElementById('clock').textContent =
+                'Time: ' + String(nowHour).padStart(2, '0') + ':00';
+            sim.removeAttribute('src');
+            sim.setEntries(entries);
+            // The strip shares the pebble's signal: bar heights are the
+            // market, bar colors are what this household's pebble shows.
+            const dayEntries = sc.prices.map((p, h) => ({ hour: hourKey(h), color_code: colors[h] }));
+            const stripColors = sim.transform(dayEntries).map(e => e.color_code);
+            renderStrip(sc.prices, stripColors, nowHour);
+        }
+
+        function renderStrip(prices, colors, now) {
+            const strip = document.getElementById('strip');
+            const labels = document.getElementById('strip-labels');
+            strip.innerHTML = ''; labels.innerHTML = '';
+            if (!prices.length) return;
+            const maxAbs = Math.max(...prices.map(Math.abs));
+            prices.forEach((p, h) => {
+                const bar = document.createElement('div');
+                const inWindow = (h - now + 24) % 24 < 9;
+                bar.className = 'bar' + (inWindow ? ' window' : '') +
+                                (h === now ? ' now' : '') + (p < 0 ? ' negative' : '');
+                const fill = document.createElement('div');
+                fill.className = 'fill';
+                fill.style.height = Math.max(8, Math.round(Math.abs(p) / maxAbs * 62)) + 'px';
+                fill.style.background = PALETTE[colors[h]];
+                bar.title = String(h).padStart(2, '0') + ':00 — ' + p + ' €/MWh';
+                bar.appendChild(fill);
+                bar.addEventListener('click', () => {
+                    nowHour = h;
+                    document.getElementById('hour').value = h;
+                    applyScenario();
+                });
+                strip.appendChild(bar);
+                const lab = document.createElement('span');
+                lab.textContent = h % 6 === 0 ? String(h).padStart(2, '0') : '';
+                labels.appendChild(lab);
+            });
+        }
+
+        // Scenario chips
+        const chips = document.getElementById('scenarios');
+        Object.entries(SCENARIOS).forEach(([key, sc]) => {
+            const b = document.createElement('button');
+            b.textContent = sc.label;
+            b.id = 'sc-' + key;
+            b.addEventListener('click', () => {
+                currentScenario = key;
+                if (sc.defaultHour !== null) {
+                    nowHour = sc.defaultHour;
+                    document.getElementById('hour').value = nowHour;
+                }
+                document.querySelectorAll('.scenarios button').forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+                applyScenario();
+            });
+            chips.appendChild(b);
+        });
+
+        document.getElementById('hour').addEventListener('input', e => {
+            nowHour = Number(e.target.value);
+            applyScenario();
+        });
+
+        // Household toggles inside the pebble also re-color the price strip
+        document.getElementById('sim').addEventListener('settings-changed', () => {
+            if (currentScenario !== 'live') applyScenario();
+        });
+
+        // Start on the sunny day with solar panels on — the most telling situation
+        document.getElementById('sc-sunny').classList.add('active');
+        nowHour = SCENARIOS.sunny.defaultHour;
+        document.getElementById('hour').value = nowHour;
+        const sim = document.getElementById('sim');
+        customElements.whenDefined('pebble-sim').then(() => {
+            sim.setSettings({ has_solar: true });
+            applyScenario();
+        });
+    </script>
+</body>
+</html>
