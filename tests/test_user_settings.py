@@ -33,7 +33,55 @@ def clean_settings():
         conn.execute("DELETE FROM user_settings")
         conn.execute("DELETE FROM user_devices")
         conn.execute("DELETE FROM devices")
+        conn.execute("DELETE FROM api_tokens")
         conn.commit()
+
+
+def test_user_token_flow_for_home_assistant():
+    # Personal token authenticates as the user, without admin rights
+    token, token_id = main.create_user_api_token("erin", "Home Assistant")
+    info = main.validate_api_token(token)
+    assert info["user_id"] == "erin"
+    assert info["is_admin"] is False
+
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/ha/me", headers=headers).json()["user_id"] == "erin"
+
+    # Device picker lists only erin's claimed devices
+    with sqlite3.connect(main.DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO devices (client_ip, device_fingerprint, device_id) VALUES ('1.2.3.4','fp-ha','ddeeff001122')")
+        cursor.execute("INSERT INTO user_devices (user_id, device_id, nickname) VALUES ('erin', ?, 'living room')", (cursor.lastrowid,))
+        conn.commit()
+    devices = client.get("/api/ha/devices", headers=headers).json()["devices"]
+    assert devices == [{"device_id": "ddeeff001122", "nickname": "living room",
+                        "last_seen": devices[0]["last_seen"]}]
+
+    # Tokens cannot mint tokens; invalid and legacy-system tokens are rejected on /api/ha
+    assert client.post("/api/user/tokens", json={}, headers=headers).status_code == 403
+    assert client.get("/api/ha/me", headers={"Authorization": "Bearer nonsense"}).status_code in (401, 403)
+    system_token, _ = main.create_api_token("ci-token", "admin")
+    assert main.validate_api_token(system_token)["is_admin"] is True
+    assert client.get("/api/ha/me", headers={"Authorization": f"Bearer {system_token}"}).status_code == 403
+
+
+def test_user_token_management_endpoints():
+    # Via the (dev-shim / Authelia) authenticated dashboard path
+    headers = {"Remote-User": "frank"}
+    created = client.post("/api/user/tokens", json={"token_name": "HA"}, headers=headers)
+    assert created.status_code == 200
+    body = created.json()
+    assert body["token_name"] == "HA" and body["token"]
+
+    listed = client.get("/api/user/tokens", headers=headers).json()["tokens"]
+    assert [t["token_name"] for t in listed] == ["HA"]
+
+    # Revoke: gone from the list, token no longer valid
+    assert client.delete(f"/api/user/tokens/{body['id']}", headers=headers).status_code == 200
+    assert client.get("/api/user/tokens", headers=headers).json()["tokens"] == []
+    assert main.validate_api_token(body["token"]) is None
+    # Cannot revoke someone else's token
+    assert client.delete(f"/api/user/tokens/{body['id']}", headers={"Remote-User": "mallory"}).status_code == 404
 
 
 def test_defaults_for_unknown_user():

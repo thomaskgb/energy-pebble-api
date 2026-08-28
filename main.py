@@ -49,6 +49,10 @@ class TokenCreate(BaseModel):
     token_name: str
     expires_days: Optional[int] = None  # None = no expiration
 
+class UserTokenCreate(BaseModel):
+    token_name: str = "Home Assistant"
+    expires_days: Optional[int] = None  # None = no expiration
+
 class TokenResponse(BaseModel):
     id: int
     token_name: str
@@ -160,8 +164,10 @@ def get_current_user(request: Request):
             # Validate API token
             token_info = validate_api_token(token)
             if token_info:
+                # User-bound tokens (Home Assistant etc.) authenticate as the
+                # user; legacy 'system' tokens stay system-wide admin.
                 return {
-                    'user_id': 'system',  # API tokens are system-wide
+                    'user_id': token_info.get('user_id') or 'system',
                     'auth_method': 'bearer_token',
                     'is_admin': token_info['is_admin'],
                     'token_name': token_info['token_name']
@@ -796,39 +802,67 @@ def create_api_token(token_name: str, created_by: str, expires_days: Optional[in
             
     return token, token_id
 
+def create_user_api_token(user_id: str, token_name: str, expires_days: Optional[int] = None) -> tuple[str, int]:
+    """Create a token bound to a user (e.g. for Home Assistant); returns (token, token_id).
+
+    Unlike the legacy 'system' tokens (CI/admin), user tokens authenticate as
+    the user and carry no admin rights.
+    """
+    token = generate_api_token()
+    token_hash = hash_token(token)
+
+    expires_at = None
+    if expires_days:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
+
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO api_tokens (token_hash, token_name, user_id, expires_at, created_by)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (token_hash, token_name, user_id, expires_at, user_id))
+            token_id = cursor.lastrowid
+            conn.commit()
+
+    return token, token_id
+
 def validate_api_token(token: str) -> Optional[Dict[str, Any]]:
     """Validate an API token and return token info if valid"""
     with db_lock:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, token_hash, token_name, expires_at, is_active
-                FROM api_tokens 
+                SELECT id, token_hash, token_name, expires_at, is_active, user_id
+                FROM api_tokens
                 WHERE is_active = TRUE
             ''')
-            
+
             for row in cursor.fetchall():
-                token_id, token_hash, token_name, expires_at, is_active = row
-                
+                token_id, token_hash, token_name, expires_at, is_active, user_id = row
+
                 if verify_token(token, token_hash):
                     # Check if token is expired
                     if expires_at:
                         expires_datetime = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
                         if datetime.now(timezone.utc) > expires_datetime:
                             return None
-                    
+
                     # Update last_used_at
                     cursor.execute('''
                         UPDATE api_tokens SET last_used_at = ? WHERE id = ?
                     ''', (datetime.now(timezone.utc), token_id))
                     conn.commit()
-                    
+
                     return {
                         'id': token_id,
                         'token_name': token_name,
-                        'is_admin': True  # All tokens have admin access
+                        'user_id': user_id,
+                        # Legacy 'system' tokens (CI/firmware upload) keep admin
+                        # access; user-bound tokens are never admin.
+                        'is_admin': user_id == 'system'
                     }
-    
+
     return None
 
 def get_all_api_tokens() -> List[Dict[str, Any]]:
@@ -2205,6 +2239,104 @@ async def test_update_user_settings(updates: UserSettingsUpdate, user: str = Que
         "settings": settings,
         "derived_signal": derive_signal_source(settings)
     }
+
+# --- Personal API tokens (Home Assistant & other integrations) ---------------
+# Managed from the dashboard (Authelia-protected /api/user path). The tokens
+# themselves are used against the public /api/ha/* endpoints below, which the
+# edge does not gate — integrations cannot follow an Authelia login redirect.
+
+@app.get("/api/user/tokens", tags=["user"])
+async def list_user_tokens(request: Request):
+    """List the authenticated user's personal API tokens (no secrets)."""
+    user_info = get_current_user(request)
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, token_name, created_at, expires_at, last_used_at
+            FROM api_tokens
+            WHERE user_id = ? AND is_active = TRUE
+            ORDER BY created_at DESC
+        ''', (user_info['user_id'],))
+        tokens = [{
+            "id": row[0], "token_name": row[1], "created_at": row[2],
+            "expires_at": row[3], "last_used_at": row[4],
+        } for row in cursor.fetchall()]
+    return {"tokens": tokens}
+
+@app.post("/api/user/tokens", tags=["user"])
+async def create_user_token_endpoint(token_data: UserTokenCreate, request: Request):
+    """
+    Create a personal API token for integrations like Home Assistant.
+
+    The token is returned once and never stored in plain text. It
+    authenticates as you (never as admin) against /api/ha/* endpoints.
+    """
+    user_info = get_current_user(request)
+    if user_info['auth_method'] == 'bearer_token':
+        raise HTTPException(status_code=403, detail="Tokens cannot create other tokens")
+    name = token_data.token_name.strip() or "Home Assistant"
+    token, token_id = create_user_api_token(user_info['user_id'], name, token_data.expires_days)
+    logger.info(f"User {user_info['user_id']} created personal token '{name}'")
+    return {"id": token_id, "token_name": name, "token": token}
+
+@app.delete("/api/user/tokens/{token_id}", tags=["user"])
+async def revoke_user_token_endpoint(token_id: int, request: Request):
+    """Revoke one of the authenticated user's personal tokens."""
+    user_info = get_current_user(request)
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE api_tokens SET is_active = FALSE
+            WHERE id = ? AND user_id = ?
+        ''', (token_id, user_info['user_id']))
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Token not found")
+    return {"message": "Token revoked"}
+
+# --- Home Assistant endpoints (public path, bearer-token auth) ----------------
+
+def _require_token_user(request: Request) -> Dict[str, Any]:
+    """Authenticate a personal (user-bound) bearer token."""
+    user_info = get_current_user(request)
+    if user_info['user_id'] == 'system':
+        raise HTTPException(status_code=403, detail="A personal API token is required")
+    return user_info
+
+@app.get("/api/ha/me", tags=["user"])
+async def ha_me(request: Request):
+    """
+    Validate a personal API token (used by the Home Assistant config flow).
+
+    Authentication: Bearer token created via /api/user/tokens (dashboard).
+    """
+    user_info = _require_token_user(request)
+    return {"user_id": user_info['user_id']}
+
+@app.get("/api/ha/devices", tags=["user"])
+async def ha_devices(request: Request):
+    """
+    List the token owner's claimed pebbles (Home Assistant device picker).
+
+    Authentication: Bearer token created via /api/user/tokens (dashboard).
+    Poll colors via the public /api/color-code with the X-Device-ID header.
+    """
+    user_info = _require_token_user(request)
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT d.device_id, ud.nickname, d.last_seen
+            FROM devices d
+            JOIN user_devices ud ON d.id = ud.device_id
+            WHERE ud.user_id = ? AND d.device_id IS NOT NULL
+            ORDER BY d.last_seen DESC
+        ''', (user_info['user_id'],))
+        devices = [{
+            "device_id": row[0],
+            "nickname": row[1] or row[0],
+            "last_seen": row[2],
+        } for row in cursor.fetchall()]
+    return {"user_id": user_info['user_id'], "devices": devices}
 
 @app.get("/api/diagnostic", tags=["public"])
 async def get_diagnostic(date: Optional[str] = None):

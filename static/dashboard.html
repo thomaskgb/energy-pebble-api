@@ -942,6 +942,24 @@
                         <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Save Changes</button>
                     </div>
                 </form>
+
+                <div style="border-top: 1px solid #e9ecef; margin-top: 25px; padding-top: 18px;">
+                    <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">API tokens</h3>
+                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
+                        For integrations like Home Assistant. A token acts as you (never as admin) and is shown only once.
+                    </p>
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                        <input type="text" id="token-name" placeholder="Token name (e.g. Home Assistant)"
+                               style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                        <button type="button" class="card-action" onclick="createUserToken()">Create token</button>
+                    </div>
+                    <div id="new-token-box" style="display: none; background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;">Copy this token now — it won't be shown again:</div>
+                        <input type="text" id="new-token-value" readonly onclick="this.select()"
+                               style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px; font-family: monospace; font-size: 12px;">
+                    </div>
+                    <div id="token-list" style="font-size: 0.9em; color: #495057;"></div>
+                </div>
                 </div>
             </div>
         </div>
@@ -1266,13 +1284,63 @@
             document.getElementById('pane-account').style.display = tab === 'account' ? 'block' : 'none';
         }
 
+        // --- Personal API tokens (Home Assistant) ---
+        async function loadUserTokens() {
+            try {
+                const resp = await fetch('/api/user/tokens');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const list = document.getElementById('token-list');
+                if (!data.tokens.length) {
+                    list.innerHTML = '<em style="color:#adb5bd;">No tokens yet.</em>';
+                    return;
+                }
+                list.innerHTML = data.tokens.map(t =>
+                    `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
+                        <span>${t.token_name}
+                            <small style="color:#adb5bd;">· created ${(t.created_at || '').slice(0, 10)}${t.last_used_at ? ' · last used ' + t.last_used_at.slice(0, 10) : ''}</small>
+                        </span>
+                        <button type="button" onclick="revokeUserToken(${t.id})"
+                                style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">Revoke</button>
+                    </div>`).join('');
+            } catch (e) {
+                console.error('Error loading tokens:', e);
+            }
+        }
+
+        async function createUserToken() {
+            const name = document.getElementById('token-name').value.trim() || 'Home Assistant';
+            try {
+                const resp = await fetch('/api/user/tokens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token_name: name })
+                });
+                if (!resp.ok) { alert('Could not create token'); return; }
+                const data = await resp.json();
+                document.getElementById('new-token-box').style.display = 'block';
+                document.getElementById('new-token-value').value = data.token;
+                document.getElementById('token-name').value = '';
+                loadUserTokens();
+            } catch (e) {
+                alert('Could not create token');
+            }
+        }
+
+        async function revokeUserToken(id) {
+            if (!confirm('Revoke this token? Integrations using it will stop working.')) return;
+            await fetch('/api/user/tokens/' + id, { method: 'DELETE' });
+            loadUserTokens();
+        }
+
         function openUserSettings() {
             // Close user menu
             document.getElementById('userMenuDropdown').classList.remove('show');
-            
+
             // Load current user data and populate forms
             loadCurrentUserData();
             loadPebbleSettings();
+            loadUserTokens();
             switchSettingsTab('pebble');
             
             // Show modal
