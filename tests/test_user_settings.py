@@ -45,8 +45,37 @@ def test_defaults_for_unknown_user():
 def test_derive_signal_source():
     base = dict(main.DEFAULT_USER_SETTINGS)
     assert main.derive_signal_source({**base, "contract_type": "day_night", "has_solar": True}) == "day_night"
-    assert main.derive_signal_source({**base, "contract_type": "fixed", "has_solar": True}) == "solar"
-    assert main.derive_signal_source({**base, "contract_type": "fixed"}) == "price"
+    assert main.derive_signal_source({**base, "contract_type": "fixed", "has_solar": True}) == "fixed"
+    assert main.derive_signal_source({**base, "contract_type": "fixed"}) == "fixed"
+
+
+def test_fixed_contract_is_neutral_except_solar():
+    codes = _codes([
+        ("2026-08-26T10:00:00Z", "R"),   # sunny hour
+        ("2026-08-26T17:00:00Z", "G"),   # evening, no sun
+    ])
+    fixed = {**main.DEFAULT_USER_SETTINGS, "contract_type": "fixed"}
+    boost = {"2026-08-26T10:00:00Z"}
+
+    # No solar: nothing varies for a fixed household -> all neutral
+    result = [e["color_code"] for e in main.apply_signal_source(codes, fixed, boost)]
+    assert result == ["Y", "Y"]
+
+    # With solar: production hours green, rest neutral
+    result = [e["color_code"] for e in main.apply_signal_source(
+        codes, {**fixed, "has_solar": True}, boost)]
+    assert result == ["G", "Y"]
+
+
+def test_day_night_battery_extends_solar_into_evening():
+    settings = {**main.DEFAULT_USER_SETTINGS, "contract_type": "day_night",
+                "has_solar": True, "has_battery": True}
+    # Wed 2026-08-26 17:00 UTC = 19:00 Brussels: day tariff (Y), in bridge window
+    codes = _codes([("2026-08-26T17:00:00Z", "R")])
+    charged = {"2026-08-26T09:00:00Z", "2026-08-26T10:00:00Z", "2026-08-26T11:00:00Z"}
+    assert main.apply_signal_source(codes, settings, charged)[0]["color_code"] == "G"
+    # Grey day: battery empty, day tariff stays
+    assert main.apply_signal_source(codes, settings, set())[0]["color_code"] == "Y"
 
 
 def test_settings_roundtrip_partial_update():

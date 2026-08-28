@@ -570,6 +570,13 @@
         }
         .settings-tab.active { color: #27ae60; border-bottom-color: #27ae60; font-weight: 600; }
 
+        .settings-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 16px; padding: 9px 0; border-bottom: 1px solid #f1f3f4; cursor: pointer;
+        }
+        .settings-row small { color: #adb5bd; font-weight: 400; }
+        .settings-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: #27ae60; }
+
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -883,38 +890,28 @@
                         Live preview &mdash; this is what your pebble will show once you save
                     </div>
                 </div>
-                    <form id="pebble-settings-form" style="display: grid; gap: 12px; min-width: 240px; flex: 1; text-align: left;">
-                        <label style="display: grid; gap: 4px;">
-                            <span style="font-size: 0.85em; color: #6c757d;">Energy contract</span>
-                            <select id="ps-contract" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                                <option value="dynamic">Dynamic prices</option>
-                                <option value="day_night">Day &amp; night tariff</option>
-                                <option value="fixed">Fixed price</option>
-                            </select>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="ps-solar"> Solar panels
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="ps-battery"> Home battery <span style="color: #adb5bd; font-size: 0.85em;">(bridges the evening peak on sunny days)</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="ps-palette"> Colorblind-friendly colors
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="ps-night-dim"> Dim at night
-                            (<input type="time" id="ps-dim-start" value="22:00" style="border: 1px solid #dee2e6; border-radius: 4px;"> –
-                            <input type="time" id="ps-dim-end" value="07:00" style="border: 1px solid #dee2e6; border-radius: 4px;">)
-                        </label>
-                        <label style="display: grid; gap: 4px;">
-                            <span style="font-size: 0.85em; color: #6c757d;">Brightness: <span id="ps-bri-val">100</span>%</span>
-                            <input type="range" id="ps-brightness" min="5" max="100" value="100">
-                        </label>
-                        <div>
-                            <button type="submit" class="card-action">Save Settings</button>
-                            <span id="ps-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
-                        </div>
-                    </form>
+                    <form id="pebble-settings-form" style="display: grid; gap: 2px; text-align: left;">
+                    <label class="settings-row"><span>Energy contract</span>
+                        <select id="ps-contract" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                            <option value="dynamic">Dynamic prices</option>
+                            <option value="day_night">Day &amp; night tariff</option>
+                            <option value="fixed">Fixed price</option>
+                        </select>
+                    </label>
+                    <label class="settings-row"><span>Solar panels</span><input type="checkbox" id="ps-solar"></label>
+                    <label class="settings-row"><span>Home battery <small>bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
+                    <label class="settings-row"><span>Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
+                    <label class="settings-row"><span>Dim at night to 30%
+                        (<input type="time" id="ps-dim-start" value="22:00" style="border: 1px solid #dee2e6; border-radius: 4px;"> &ndash;
+                        <input type="time" id="ps-dim-end" value="07:00" style="border: 1px solid #dee2e6; border-radius: 4px;">)</span>
+                        <input type="checkbox" id="ps-night-dim"></label>
+                    <label class="settings-row"><span>Brightness <small><span id="ps-bri-val">100</span>%</small></span>
+                        <input type="range" id="ps-brightness" min="5" max="100" value="100" style="width: 160px;"></label>
+                    <div style="margin-top: 14px;">
+                        <button type="submit" class="card-action">Save Settings</button>
+                        <span id="ps-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
+                    </div>
+                </form>
                 </div>
                 <div id="pane-account" style="display: none;">
                 <form id="userSettingsForm">

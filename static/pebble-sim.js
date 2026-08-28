@@ -62,6 +62,7 @@
     // Mirrors main.py derive_signal_source
     _signalSource() {
       if (this._settings.contract_type === 'day_night') return 'day_night';
+      if (this._settings.contract_type === 'fixed') return 'fixed';
       if (this._settings.has_solar) return 'solar';
       return 'price';
     }
@@ -143,26 +144,25 @@
         const d = e.hour ? new Date(e.hour) : new Date(Date.now() + i * 3600e3);
         const h = d.getHours(), wd = d.getDay();
         let color = e.color_code;
+        const solarHour = this._solarBoost
+          ? this._solarBoost.has(e.hour)
+          : (h >= SOLAR_WINDOW[0] && h < SOLAR_WINDOW[1]);
+        const inBridge = h >= 17 && h < 22;
+        const batteryCharged = this._settings.has_battery && this._settings.has_solar
+          && this._batteryCharged(d);
         if (source === 'day_night') {
           color = (h >= NIGHT_START || h < NIGHT_END || wd === 0 || wd === 6) ? 'G' : 'Y';
-          // Solar panels still beat the day tariff during production hours
-          if (this._settings.has_solar) {
-            const boosted = this._solarBoost
-              ? this._solarBoost.has(e.hour)
-              : (h >= SOLAR_WINDOW[0] && h < SOLAR_WINDOW[1]);
-            if (boosted) color = 'G';
-          }
+          // Solar panels still beat the day tariff during production hours,
+          // and a charged battery carries that into the evening
+          if (this._settings.has_solar && solarHour) color = 'G';
+          if (batteryCharged && inBridge && color === 'Y') color = 'G';
+        } else if (source === 'fixed') {
+          // Flat tariff: neutral, except own solar production
+          color = (this._settings.has_solar && solarHour) ? 'G' : 'Y';
         } else if (source === 'solar') {
-          const boosted = this._solarBoost
-            ? this._solarBoost.has(e.hour)
-            : (h >= SOLAR_WINDOW[0] && h < SOLAR_WINDOW[1]);
-          if (boosted) color = SOLAR_SHIFT[color];
-          // Battery evening bridge: a solar-charged battery covers the evening
-          // peak, but only on days it actually charged (mirrors main.py).
-          if (this._settings.has_battery && color === 'R' && h >= 17 && h < 22
-              && this._batteryCharged(d)) {
-            color = 'Y';
-          }
+          if (solarHour) color = SOLAR_SHIFT[color];
+          // Battery evening bridge: only on days the battery actually charged
+          if (batteryCharged && inBridge && color === 'R') color = 'Y';
         }
         return { hour: e.hour, color_code: color };
       });
@@ -274,9 +274,12 @@
           }
           .panel fieldset { border: 1px solid #e0dcd4; border-radius: 8px; padding: 8px 12px; margin: 0; }
           .panel legend { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #999; padding: 0 4px; }
-          .panel label { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 2px 0; }
-          .panel input[type=range] { width: 100%; accent-color: #27ae60; }
-          .panel select { padding: 4px 8px; border: 1px solid #e0dcd4; border-radius: 6px; font: inherit; margin-left: auto; }
+          /* Rows read name first, control at the end */
+          .panel label { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; padding: 4px 0; }
+          .panel label small { color: #999; font-weight: 400; }
+          .panel input[type=range] { width: 110px; accent-color: #27ae60; }
+          .panel input[type=radio], .panel input[type=checkbox] { accent-color: #27ae60; margin: 0; }
+          .panel select { padding: 4px 8px; border: 1px solid #e0dcd4; border-radius: 6px; font: inherit; }
           .panel input[type=radio], .panel input[type=checkbox] { accent-color: #27ae60; }
         </style>
         <div class="wrap">
@@ -293,21 +296,21 @@
           <div class="panel">
             <fieldset>
               <legend>Your household</legend>
-              <label>Contract
+              <label><span>Contract</span>
                 <select id="contract">
                   <option value="dynamic" selected>Dynamic prices</option>
                   <option value="day_night">Day &amp; night tariff</option>
                   <option value="fixed">Fixed price</option>
                 </select>
               </label>
-              <label><input type="checkbox" id="solar"> Solar panels</label>
-              <label><input type="checkbox" id="battery"> Home battery</label>
+              <label><span>Solar panels</span><input type="checkbox" id="solar"></label>
+              <label><span>Home battery</span><input type="checkbox" id="battery"></label>
             </fieldset>
             <fieldset>
               <legend>Display</legend>
-              <label><input type="checkbox" id="pal"> Colorblind-friendly colors</label>
-              <label><input type="checkbox" id="dim" checked> Night dimming (30% at 22:00&ndash;07:00)</label>
-              <label>Brightness <input type="range" id="bri" min="5" max="100" value="100"></label>
+              <label><span>Colorblind-friendly colors</span><input type="checkbox" id="pal"></label>
+              <label><span>Night dimming <small>30% &middot; 22:00&ndash;07:00</small></span><input type="checkbox" id="dim" checked></label>
+              <label><span>Brightness</span><input type="range" id="bri" min="5" max="100" value="100"></label>
             </fieldset>
           </div>` : ''}
         </div>`;

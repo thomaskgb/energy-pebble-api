@@ -69,7 +69,7 @@
             </div>
             <div class="strip" id="strip"></div>
             <div class="strip-labels" id="strip-labels"></div>
-            <div class="legend">Bar height = wholesale price · bar color = what this household's pebble shows ·
+            <div class="legend">Bar height = the price this household pays · bar color = what its pebble shows ·
                 bright bars = the 9 hours on the pebble ·
                 dashed <span style="color:#2980b9">blue outline</span> = negative price (you get paid to consume)</div>
 
@@ -178,11 +178,32 @@
                 'Time: ' + String(nowHour).padStart(2, '0') + ':00';
             sim.removeAttribute('src');
             sim.setEntries(entries);
-            // The strip shares the pebble's signal: bar heights are the
-            // market, bar colors are what this household's pebble shows.
+            // The strip shares the pebble's signal: bar heights are the price
+            // this household pays, bar colors are what its pebble shows.
             const dayEntries = sc.prices.map((p, h) => ({ hour: hourKey(h), color_code: colors[h] }));
             const stripColors = sim.transform(dayEntries).map(e => e.color_code);
-            renderStrip(sc.prices, stripColors, nowHour);
+            renderStrip(effectivePrices(sc), stripColors, nowHour);
+        }
+
+        // What this household actually pays per hour, shaped by its contract
+        // and hardware: fixed = flat, day/night = two levels, solar zeroes the
+        // production hours, a charged battery covers most of the evening.
+        function effectivePrices(sc) {
+            const st = sim._settings;
+            const wd = new Date().getDay();
+            const weekend = wd === 0 || wd === 6;
+            const charged = st.has_solar && st.has_battery && sc.sun.length >= 3;
+            return sc.prices.map((p, h) => {
+                let price = p;
+                if (st.contract_type === 'fixed') {
+                    price = 80;
+                } else if (st.contract_type === 'day_night') {
+                    price = (h >= 22 || h < 7 || weekend) ? 55 : 95;
+                }
+                if (st.has_solar && sc.sun.includes(h)) price = Math.min(price, 0);
+                if (charged && h >= 17 && h < 22) price = Math.min(price, 20);
+                return price;
+            });
         }
 
         function renderStrip(prices, colors, now) {
@@ -200,7 +221,8 @@
                 fill.className = 'fill';
                 fill.style.height = Math.max(8, Math.round(Math.abs(p) / maxAbs * 62)) + 'px';
                 fill.style.background = PALETTE[colors[h]];
-                bar.title = String(h).padStart(2, '0') + ':00 — ' + p + ' €/MWh';
+                bar.title = String(h).padStart(2, '0') + ':00 — ' + p +
+                            (sim._settings.contract_type === 'dynamic' ? ' €/MWh' : ' (tariff level)');
                 bar.appendChild(fill);
                 bar.addEventListener('click', () => {
                     nowHour = h;

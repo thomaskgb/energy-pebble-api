@@ -891,14 +891,17 @@ DEFAULT_USER_SETTINGS = {
 def derive_signal_source(settings: Dict[str, Any]) -> str:
     """Map household parameters to the color signal.
 
-    - day/night tariff contract -> two-state day/night colors
-    - solar panels -> price colors boosted by the solar (forecast) window
-      (with a fixed contract, solar self-consumption is the only price lever)
-    - otherwise -> pure day-ahead price colors (for 'fixed' contracts this is
-      a grid-state proxy until a greenness signal exists)
+    - day/night tariff contract -> two-state day/night colors (solar still
+      turns production hours green, battery extends that into the evening)
+    - fixed contract -> the price carries no signal: neutral, except solar
+      production hours (self-consumption is the only lever)
+    - dynamic + solar panels -> price colors boosted by the solar forecast
+    - otherwise -> pure day-ahead price colors
     """
     if settings["contract_type"] == "day_night":
         return "day_night"
+    if settings["contract_type"] == "fixed":
+        return "fixed"
     if settings["has_solar"]:
         return "solar"
     return "price"
@@ -1053,6 +1056,15 @@ def apply_signal_source(color_codes: List[Dict[str, Any]], settings: Dict[str, A
         entry = dict(entry)
         hour_utc = datetime.fromisoformat(entry["hour"].replace('Z', '+00:00'))
         local = hour_utc.astimezone(BRUSSELS_TZ)
+
+        if solar_boost is not None:
+            solar_hour = entry["hour"] in solar_boost
+        else:
+            solar_hour = SOLAR_WINDOW_HOURS[0] <= local.hour < SOLAR_WINDOW_HOURS[1]
+        in_bridge = BATTERY_BRIDGE_HOURS[0] <= local.hour < BATTERY_BRIDGE_HOURS[1]
+        battery_charged = (settings.get("has_battery") and settings.get("has_solar")
+                           and (charged_days is None or local.date() in charged_days))
+
         if source == "day_night":
             # Two-state display for day/night tariff contracts: night + weekend
             # is the cheap tariff, daytime on weekdays is not. Never red.
@@ -1060,29 +1072,24 @@ def apply_signal_source(color_codes: List[Dict[str, Any]], settings: Dict[str, A
             is_weekend = local.weekday() >= 5
             entry["color_code"] = "G" if (is_night or is_weekend) else "Y"
             # Solar panels still beat the day tariff: self-consuming during
-            # production hours is free energy, so those hours go green too.
-            if settings.get("has_solar"):
-                if solar_boost is not None:
-                    boosted = entry["hour"] in solar_boost
-                else:
-                    boosted = SOLAR_WINDOW_HOURS[0] <= local.hour < SOLAR_WINDOW_HOURS[1]
-                if boosted:
-                    entry["color_code"] = "G"
+            # production hours is free energy, so those hours go green too...
+            if settings.get("has_solar") and solar_hour:
+                entry["color_code"] = "G"
+            # ...and a battery charged on a sunny day carries that into the
+            # evening until the night tariff takes over.
+            if battery_charged and in_bridge and entry["color_code"] == "Y":
+                entry["color_code"] = "G"
+        elif source == "fixed":
+            # Flat tariff: the price carries no signal. Neutral, except own
+            # solar production, which is the one lever a fixed household has.
+            entry["color_code"] = "G" if (settings.get("has_solar") and solar_hour) else "Y"
         elif source == "solar":
             # Surplus solar makes consuming one step "greener" than price alone
             # says: forecast-driven when available, fixed midday window otherwise.
-            if solar_boost is not None:
-                boosted = entry["hour"] in solar_boost
-            else:
-                boosted = SOLAR_WINDOW_HOURS[0] <= local.hour < SOLAR_WINDOW_HOURS[1]
-            if boosted:
+            if solar_hour:
                 entry["color_code"] = {"R": "Y", "Y": "G", "G": "G"}[entry["color_code"]]
-
-            # Battery evening bridge
-            if (settings.get("has_battery")
-                    and BATTERY_BRIDGE_HOURS[0] <= local.hour < BATTERY_BRIDGE_HOURS[1]
-                    and entry["color_code"] == "R"
-                    and (charged_days is None or local.date() in charged_days)):
+            # Battery evening bridge: soften the evening peak on charged days
+            if battery_charged and in_bridge and entry["color_code"] == "R":
                 entry["color_code"] = "Y"
         result.append(entry)
     return result
