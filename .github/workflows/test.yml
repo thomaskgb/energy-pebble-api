@@ -21,3 +21,31 @@ jobs:
         run: python tests/test_firmware_signing.py
       - name: Firmware upload + OTA signing integration tests
         run: python tests/test_firmware_upload_signing.py
+
+  # Builds the actual Docker image and boots it, so image-level breakage — a file
+  # main.py imports but the Dockerfile forgot to COPY, a missing dependency, an
+  # import error at startup — fails CI instead of reaching prod (where only the
+  # deploy health-check + rollback would catch it).
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t energy-pebble-api:ci .
+      - name: Run container
+        run: docker run -d --name ep-smoke -p 8000:8000 energy-pebble-api:ci
+      - name: Smoke test /api/sample
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 5 http://127.0.0.1:8000/api/sample >/dev/null; then
+              echo "container healthy"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::container never served /api/sample"
+          docker logs ep-smoke
+          exit 1
+      - name: Cleanup
+        if: always()
+        run: docker rm -f ep-smoke || true
