@@ -6,6 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
+COPY firmware_signing.py .
 COPY sample_data.json .
 
 # Expose the port the app runs on
