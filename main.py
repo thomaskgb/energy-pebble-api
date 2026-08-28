@@ -2035,12 +2035,13 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
+                SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen,
                        d.user_agent, d.request_count, d.device_id, d.client_ip,
                        d.mac_address, d.software_version, d.last_ota_check,
-                       ud.nickname, ud.created_at
+                       ud.nickname, ud.created_at, d.home_id, h.name
                 FROM devices d
                 JOIN user_devices ud ON d.id = ud.device_id
+                LEFT JOIN homes h ON h.id = d.home_id
                 WHERE ud.user_id = ?
                 ORDER BY d.last_seen DESC
             ''', (user_id,))
@@ -2069,6 +2070,8 @@ async def test_user_devices(request: Request, user: str = Query("thomas", descri
                     "last_ota_check": row[10],
                     "nickname": row[11],
                     "claimed_at": row[12],
+                    "home_id": row[13],
+                    "home_name": row[14],
                     "status": status,
                     "minutes_since_last_seen": minutes_ago
                 }
@@ -2103,12 +2106,13 @@ async def get_user_devices(request: Request):
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen, 
+                SELECT d.id, d.device_fingerprint, d.first_seen, d.last_seen,
                        d.user_agent, d.request_count, d.device_id, d.client_ip,
                        d.mac_address, d.software_version, d.last_ota_check,
-                       ud.nickname, ud.created_at
+                       ud.nickname, ud.created_at, d.home_id, h.name
                 FROM devices d
                 JOIN user_devices ud ON d.id = ud.device_id
+                LEFT JOIN homes h ON h.id = d.home_id
                 WHERE ud.user_id = ?
                 ORDER BY d.last_seen DESC
             ''', (user_id,))
@@ -2137,6 +2141,8 @@ async def get_user_devices(request: Request):
                     "last_ota_check": row[10],
                     "nickname": row[11],
                     "claimed_at": row[12],
+                    "home_id": row[13],
+                    "home_name": row[14],
                     "status": status,
                     "minutes_since_last_seen": minutes_ago
                 }

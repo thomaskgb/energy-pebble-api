@@ -785,9 +785,7 @@
                     What your pebble shows right now, based on your household profile.
                     Adjust it under <strong>Settings</strong> in your user menu &mdash; devices pick up changes within 15 minutes.
                 </p>
-                <div style="display: flex; justify-content: center; margin-top: 10px;">
-                    <pebble-sim id="my-pebble" src="/api/color-code"></pebble-sim>
-                </div>
+                <div id="home-pebbles" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 30px; margin-top: 10px;"></div>
             </div>
 
             <div class="dashboard-card">
@@ -881,6 +879,7 @@
             <div class="modal-body">
                 <div class="settings-tabs" style="display: flex; gap: 6px; border-bottom: 1px solid #e9ecef; margin-bottom: 20px;">
                     <button type="button" id="tab-pebble" class="settings-tab active" onclick="switchSettingsTab('pebble')">Pebble</button>
+                    <button type="button" id="tab-homes" class="settings-tab" onclick="switchSettingsTab('homes')">Homes</button>
                     <button type="button" id="tab-account" class="settings-tab" onclick="switchSettingsTab('account')">Account</button>
                 </div>
                 <div id="pane-pebble">
@@ -916,6 +915,20 @@
                     </div>
                 </form>
                 </div>
+                <div id="pane-homes" style="display: none;">
+                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
+                        Devices and pebble settings belong to a home. Add one per address;
+                        pick which home to configure on the Pebble tab.
+                    </p>
+                    <div id="home-list" style="font-size: 0.9em; color: #495057; margin-bottom: 14px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="home-name" placeholder="Name (e.g. Beach house)"
+                               style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                        <input type="text" id="home-address" placeholder="Address (optional)"
+                               style="flex: 2; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+                        <button type="button" class="card-action" onclick="createHome()">Add home</button>
+                    </div>
+                </div>
                 <div id="pane-account" style="display: none;">
                 <form id="userSettingsForm">
                     <div style="margin-bottom: 20px;">
@@ -947,19 +960,6 @@
                 </form>
 
                 <div style="border-top: 1px solid #e9ecef; margin-top: 25px; padding-top: 18px;">
-                    <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">Homes</h3>
-                    <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
-                        Devices and pebble settings belong to a home. Add one per address; pick the home to configure on the Pebble tab.
-                    </p>
-                    <div id="home-list" style="font-size: 0.9em; color: #495057; margin-bottom: 10px;"></div>
-                    <div style="display: flex; gap: 8px; margin-bottom: 22px;">
-                        <input type="text" id="home-name" placeholder="Name (e.g. Beach house)"
-                               style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                        <input type="text" id="home-address" placeholder="Address (optional)"
-                               style="flex: 2; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                        <button type="button" class="card-action" onclick="createHome()">Add home</button>
-                    </div>
-
                     <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">API tokens</h3>
                     <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
                         For integrations like Home Assistant. A token acts as you (never as admin) and is shown only once.
@@ -1127,7 +1127,8 @@
             container.innerHTML = deviceData.claimed.map(device => `
                 <div class="device-item" onclick="showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})">
                     <div class="device-info">
-                        <div class="device-nickname">${device.nickname || 'Energy Dot'}</div>
+                        <div class="device-nickname">${device.nickname || 'Energy Dot'}
+                            ${device.home_name ? `<span style="font-weight: 400; font-size: 0.8em; background: #eef2e9; color: #2c3e50; border-radius: 10px; padding: 2px 8px; margin-left: 6px;">${device.home_name}</span>` : ''}</div>
                         <div class="device-details">
                             <span class="device-status ${device.status}">${device.status}</span>
                             Last seen: ${formatDeviceTime(device.last_seen)}<br>
@@ -1294,10 +1295,10 @@
         let currentUserData = null;
 
         function switchSettingsTab(tab) {
-            document.getElementById('tab-pebble').classList.toggle('active', tab === 'pebble');
-            document.getElementById('tab-account').classList.toggle('active', tab === 'account');
-            document.getElementById('pane-pebble').style.display = tab === 'pebble' ? 'block' : 'none';
-            document.getElementById('pane-account').style.display = tab === 'account' ? 'block' : 'none';
+            for (const name of ['pebble', 'homes', 'account']) {
+                document.getElementById('tab-' + name).classList.toggle('active', tab === name);
+                document.getElementById('pane-' + name).style.display = tab === name ? 'block' : 'none';
+            }
         }
 
         // --- Personal API tokens (Home Assistant) ---
@@ -1531,18 +1532,36 @@
                 select.innerHTML = userHomes.map(h =>
                     `<option value="${h.id}" ${h.id === currentHomeId ? 'selected' : ''}>${h.name}</option>`).join('');
 
+                const esc = v => (v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
                 const list = document.getElementById('home-list');
                 list.innerHTML = userHomes.map(h =>
-                    `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
-                        <span>${h.name}
-                            <small style="color:#adb5bd;">${h.address ? '· ' + h.address : ''} · ${h.device_count} device${h.device_count === 1 ? '' : 's'}</small>
-                        </span>
+                    `<div style="display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
+                        <input type="text" id="home-name-${h.id}" value="${esc(h.name)}"
+                               style="flex:1; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
+                        <input type="text" id="home-address-${h.id}" value="${esc(h.address)}" placeholder="Address"
+                               style="flex:2; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
+                        <small style="color:#adb5bd; white-space:nowrap;">${h.device_count} device${h.device_count === 1 ? '' : 's'}</small>
+                        <button type="button" onclick="saveHome(${h.id})"
+                                style="background:#27ae60; color:white; border:none; border-radius:6px; padding:5px 12px; cursor:pointer;">Save</button>
                         ${userHomes.length > 1 && !h.device_count ? `<button type="button" onclick="deleteHome(${h.id})"
-                                style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">Delete</button>` : ''}
+                                style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:4px 10px; cursor:pointer;">Delete</button>` : ''}
                     </div>`).join('');
             } catch (e) {
                 console.error('Error loading homes:', e);
             }
+        }
+
+        async function saveHome(id) {
+            const name = document.getElementById('home-name-' + id).value.trim();
+            if (!name) { alert('Home name cannot be empty'); return; }
+            const address = document.getElementById('home-address-' + id).value.trim();
+            const resp = await fetch('/api/user/homes/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, address })
+            });
+            if (resp.ok) { loadHomes(); renderHomePebbles(); }
+            else alert('Could not save home');
         }
 
         async function createHome() {
@@ -1558,6 +1577,7 @@
                 document.getElementById('home-name').value = '';
                 document.getElementById('home-address').value = '';
                 loadHomes();
+                renderHomePebbles();
             } else {
                 alert('Could not add home');
             }
@@ -1569,6 +1589,24 @@
             if (!resp.ok) alert((await resp.json()).detail || 'Could not delete home');
             if (currentHomeId === id) currentHomeId = null;
             loadHomes();
+            renderHomePebbles();
+        }
+
+        // One pebble per home on the My Pebble card, each with its own signal
+        async function renderHomePebbles() {
+            if (!userHomes.length) await loadHomes();
+            const container = document.getElementById('home-pebbles');
+            container.innerHTML = userHomes.map(h => `
+                <div style="text-align: center;">
+                    <pebble-sim id="home-pebble-${h.id}" src="/api/color-code"></pebble-sim>
+                    ${userHomes.length > 1 ? `<div style="font-weight: 600; color: #2c3e50; margin-top: 2px;">${h.name}</div>` : ''}
+                </div>`).join('');
+            for (const h of userHomes) {
+                try {
+                    const resp = await fetch('/api/user/settings?home_id=' + h.id);
+                    if (resp.ok) applySettingsToSim('home-pebble-' + h.id, (await resp.json()).settings);
+                } catch (e) { /* keep defaults */ }
+            }
         }
 
         // --- Pebble settings (per-home signal & display) ---
@@ -1622,7 +1660,7 @@
                 if (!response.ok) return;
                 const data = await response.json();
                 pebbleSettingsToForm(data.settings);
-                applySettingsToSim('my-pebble', data.settings);
+                applySettingsToSim('home-pebble-' + data.home_id, data.settings);
                 applySettingsToSim('settings-preview', data.settings);
             } catch (error) {
                 console.error('Error loading pebble settings:', error);
@@ -1643,7 +1681,7 @@
                     status.textContent = '✓ Saved — devices update within 15 min';
                     // The card now reflects the newly saved profile
                     const result = await response.json();
-                    applySettingsToSim('my-pebble', result.settings);
+                    applySettingsToSim('home-pebble-' + result.home_id, result.settings);
                 } else {
                     const error = await response.json();
                     status.style.color = '#e74c3c';
@@ -1676,7 +1714,7 @@
                 loadCurrentColor();
                 loadDeviceStats();
                 loadCurrentUserData(); // Load user info for display
-                loadPebbleSettings();
+                renderHomePebbles();
             }
         });
     </script>
