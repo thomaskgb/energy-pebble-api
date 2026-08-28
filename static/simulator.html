@@ -113,8 +113,8 @@
             },
             live: {
                 label: '📡 Live — today',
-                note: 'Live colors from the API, exactly what real pebbles receive right now. The clock and price strip apply to the typical days only.',
-                prices: null, sun: [], defaultHour: null
+                note: "Today's real day-ahead prices and live colors from the API — exactly what real pebbles receive right now. The clock follows the actual time.",
+                prices: null, sun: [10, 11, 12, 13, 14, 15], defaultHour: null
             }
         };
 
@@ -140,21 +140,59 @@
             return d.toISOString();
         }
 
-        function applyScenario() {
+        let livePrices = null;  // today's day-ahead prices, fetched once
+
+        async function loadLivePrices() {
+            if (livePrices) return livePrices;
+            try {
+                const resp = await fetch('/api/json');
+                const data = await resp.json();
+                const today = new Date().getDate();
+                const buckets = {};
+                (data.data || []).forEach(e => {
+                    const d = new Date(e.dateTime);
+                    if (d.getDate() !== today) return;
+                    const h = d.getHours();
+                    (buckets[h] = buckets[h] || []).push(e.price);
+                });
+                livePrices = [];
+                for (let h = 0; h < 24; h++) {
+                    const v = buckets[h];
+                    livePrices.push(v ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : 0);
+                }
+            } catch (e) {
+                console.error('[simulator] live prices failed:', e);
+            }
+            return livePrices;
+        }
+
+        async function applyScenario() {
             const sc = SCENARIOS[currentScenario];
             const sim = document.getElementById('sim');
             const isLive = currentScenario === 'live';
 
             document.getElementById('note').textContent = sc.note;
             document.getElementById('hour').disabled = isLive;
-            document.getElementById('strip').style.opacity = isLive ? 0.25 : 1;
 
             if (isLive) {
+                nowHour = new Date().getHours();
+                document.getElementById('hour').value = nowHour;
                 document.getElementById('clock').textContent = 'Time: now';
                 sim.setSolarBoost(null);
                 sim.setAttribute('src', '/api/color-code');
-                sim.refresh();
-                renderStrip([], [], -1);
+                await sim.refresh();
+                const prices = await loadLivePrices();
+                if (!prices) { renderStrip([], [], -1); return; }
+                sc.prices = prices;
+                // Base colors from today's prices, aligned with the server's
+                // committed colors for the 9 hours the pebble actually shows
+                const colors = priceColors(prices);
+                (sim._entries || []).forEach(e => {
+                    if (e.hour) colors[new Date(e.hour).getHours()] = e.color_code;
+                });
+                const dayEntries = prices.map((p, h) => ({ hour: hourKey(h), color_code: colors[h] }));
+                const stripColors = sim.transform(dayEntries).map(e => e.color_code);
+                renderStrip(effectivePrices(sc), stripColors, nowHour);
                 return;
             }
 
@@ -260,9 +298,9 @@
             applyScenario();
         });
 
-        // Household toggles inside the pebble also re-color the price strip
+        // Household toggles inside the pebble also re-shape the price strip
         document.getElementById('sim').addEventListener('settings-changed', () => {
-            if (currentScenario !== 'live') applyScenario();
+            applyScenario();
         });
 
         // Start on the sunny day with solar panels on — the most telling situation

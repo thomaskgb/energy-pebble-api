@@ -80,7 +80,7 @@
 
     refresh() {
       const src = this.getAttribute('src');
-      if (src) this._fetch(src);
+      return src ? this._fetch(src) : Promise.resolve();
     }
 
     // Drive the pebble from scenario data instead of the API:
