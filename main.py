@@ -20,6 +20,7 @@ import shutil
 import yaml
 import secrets
 import bcrypt
+import firmware_signing
 
 # Pydantic models for OTA requests
 class OTAStatusReport(BaseModel):
@@ -531,7 +532,19 @@ def init_database():
             logger.info("Added md5_checksum column to firmware_versions table")
         except sqlite3.OperationalError:
             pass  # Column already exists
-        
+
+        # Migration: Ed25519 firmware signature (base64) + algorithm tag
+        try:
+            cursor.execute('ALTER TABLE firmware_versions ADD COLUMN signature TEXT')
+            logger.info("Added signature column to firmware_versions table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            cursor.execute('ALTER TABLE firmware_versions ADD COLUMN signature_alg TEXT')
+            logger.info("Added signature_alg column to firmware_versions table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Migration: Remove CHECK constraint from ota_logs.status column
         try:
             # Check if constraint exists by trying to insert an invalid status
@@ -763,19 +776,19 @@ def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict
         
         # Get latest stable firmware that's newer than current version
         cursor.execute('''
-            SELECT version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum
-            FROM firmware_versions 
-            WHERE is_stable = TRUE 
+            SELECT version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum, signature, signature_alg
+            FROM firmware_versions
+            WHERE is_stable = TRUE
             AND (target_devices IS NULL OR target_devices LIKE ? OR target_devices = '[]')
             ORDER BY release_date DESC
             LIMIT 1
         ''', (f'%{device_id}%',))
-        
+
         result = cursor.fetchone()
         if not result:
             return None
-            
-        version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum = result
+
+        version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum, signature, signature_alg = result
         
         # Check if this version is newer than current
         if not version_is_newer(version, current_version):
@@ -793,7 +806,9 @@ def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict
             'file_size': file_size,
             'force_update': bool(force_update),
             'rollback_version': rollback_version,
-            'release_notes': release_notes
+            'release_notes': release_notes,
+            'signature': signature,
+            'signature_alg': signature_alg
         }
 
 def log_ota_check(device_id: str, current_version: str, offered_version: str = None, ip_address: str = None, user_agent: str = None):
@@ -2790,8 +2805,9 @@ async def upload_firmware(
     rollback_version: str = Form(None),
     release_notes: str = Form(None),
     target_devices: str = Form(None),
-    sha256_checksum: str = Form(...),
-    md5_checksum: str = Form(...)
+    sha256_checksum: str = Form(None),
+    md5_checksum: str = Form(None),
+    signature: str = Form(None)
 ):
     """
     Upload a new firmware binary file.
@@ -2808,10 +2824,17 @@ async def upload_firmware(
     - rollback_version: Version to rollback to if update fails in same format as version (optional)
     - release_notes: Release notes for this version (optional)
     - target_devices: JSON array of target ESP32 eFuse MAC addresses (optional, e.g., '["904fb0453ab4"]')
-    - sha256_checksum: Pre-calculated SHA256 checksum (required)
-    - md5_checksum: Pre-calculated MD5 checksum (required)
-    
-    Both checksums are trusted from the compilation process and stored directly.
+    - sha256_checksum: Optional expected SHA256 (verified against the server-computed
+      value; upload is rejected on mismatch). The stored checksum is ALWAYS the one
+      the server computes from the received bytes, never the supplied value.
+    - md5_checksum: Optional expected MD5 (verified the same way).
+    - signature: Base64 Ed25519 signature over the firmware bytes, produced offline
+      with the release signing key (see firmware_signing.py). Required when the
+      server has a public key configured (FIRMWARE_SIGNING_PUBKEY); verified before
+      the upload is accepted so a compromised admin cannot publish unsigned firmware.
+
+    Integrity is established server-side: checksums are recomputed from the stored
+    file and (when a key is configured) the signature is cryptographically verified.
     """
     try:
         # Check authentication and admin privileges
@@ -2863,23 +2886,84 @@ async def upload_firmware(
         # Write file
         with open(firmware_path, "wb") as buffer:
             shutil.copyfileobj(firmware_file.file, buffer)
-        
-        # Use provided checksums (trusted from compilation process)
-        checksum = sha256_checksum
-        logger.info(f"Using provided checksums - SHA256: {sha256_checksum}, MD5: {md5_checksum} (trusted)")
-            
+
+        # Compute checksums server-side from the bytes we actually stored. Never
+        # trust an uploader-supplied hash — that provides no integrity against an
+        # attacker who controls the upload (security finding C3).
+        checksum, computed_md5 = calculate_file_checksums(firmware_path)
+
+        # If the uploader supplied expected values, they are treated as an
+        # integrity assertion to verify, not as the source of truth.
+        if sha256_checksum and sha256_checksum.strip():
+            expected = sha256_checksum.strip()
+            if not expected.startswith("sha256:"):
+                expected = f"sha256:{expected}"
+            if expected.lower() != checksum.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "SHA256 mismatch: uploaded file does not match the supplied "
+                        f"checksum (supplied {expected}, computed {checksum})"
+                    ),
+                )
+        if md5_checksum and md5_checksum.strip():
+            if md5_checksum.strip().lower() != computed_md5.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail="MD5 mismatch: uploaded file does not match the supplied checksum",
+                )
+        md5_checksum = computed_md5
+
+        # Verify the offline signature over the stored bytes. When a public key is
+        # configured this is mandatory: it is the control that survives an admin
+        # compromise, since a valid signature requires the offline private key.
+        server_pubkey = firmware_signing.load_server_public_key()
+        signature_alg = None
+        if server_pubkey is not None:
+            if not signature or not signature.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Firmware signature is required (server has signing enabled)",
+                )
+            if not firmware_signing.verify_file(server_pubkey, firmware_path, signature.strip()):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid firmware signature — rejected",
+                )
+            signature = signature.strip()
+            signature_alg = firmware_signing.SIGNATURE_ALG
+            logger.info(f"Verified Ed25519 signature for {version}")
+        else:
+            if signature and signature.strip():
+                signature = signature.strip()
+                signature_alg = firmware_signing.SIGNATURE_ALG
+                logger.warning(
+                    "Storing firmware signature but no %s configured — signature is "
+                    "NOT verified. Configure the public key to enforce signing.",
+                    firmware_signing.PUBKEY_ENV,
+                )
+            else:
+                signature = None
+                logger.warning(
+                    "Firmware %s uploaded WITHOUT a signature and no %s is configured. "
+                    "Firmware signing is not enforced on this deployment.",
+                    version, firmware_signing.PUBKEY_ENV,
+                )
+
         file_size = firmware_path.stat().st_size
         
         # Insert into database
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO firmware_versions 
-                (version, filename, checksum, md5_checksum, file_size, is_stable, force_update, 
-                 min_version, rollback_version, release_notes, target_devices, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO firmware_versions
+                (version, filename, checksum, md5_checksum, file_size, is_stable, force_update,
+                 min_version, rollback_version, release_notes, target_devices, created_by,
+                 signature, signature_alg)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (version, filename, checksum, md5_checksum, file_size, is_stable, force_update,
-                  min_version, rollback_version, release_notes, target_devices, user_id))
+                  min_version, rollback_version, release_notes, target_devices, user_id,
+                  signature, signature_alg))
             
             firmware_id = cursor.lastrowid
             conn.commit()
@@ -2893,6 +2977,8 @@ async def upload_firmware(
             "checksum": checksum,
             "md5_checksum": md5_checksum,
             "file_size": file_size,
+            "signed": signature is not None,
+            "signature_verified": signature_alg is not None and server_pubkey is not None,
             "message": f"Firmware {version} uploaded successfully"
         }
         
@@ -3143,6 +3229,8 @@ async def check_ota_updates(request: Request):
                 "download_url": f"https://energypebble.tdlx.nl/firmware/{latest_firmware['filename']}",
                 "checksum": latest_firmware['checksum'],
                 "md5_checksum": latest_firmware['md5_checksum'],
+                "signature": latest_firmware['signature'],
+                "signature_alg": latest_firmware['signature_alg'],
                 "size_bytes": latest_firmware['file_size'],
                 "force_update": latest_firmware['force_update'],
                 "rollback_version": latest_firmware['rollback_version'],
