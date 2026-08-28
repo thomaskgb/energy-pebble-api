@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Energy Pebble – Wi-Fi Setup</title>
+  <!--
+    Companion setup page for the Energy Pebble.
+    CANONICAL SOURCE: energy-pebble-esphome repo, setup/. A verbatim copy is
+    deployed as static/setup/ in the energy-pebble-api repo (served by Caddy
+    at https://energypebble.tdlx.nl/setup/) - edit here, then re-sync.
+    Web Bluetooth only works on HTTPS or localhost. The Improv SDK and jsQR
+    are vendored (self-hosted); no third-party requests are made.
+  -->
+  <style>
+    :root {
+      --green: #2ecc40;
+      --yellow: #f1c40f;
+      --red: #e74c3c;
+      --blue: #3498db;
+      --ink: #223;
+      --paper: #f7f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.55;
+    }
+    main { max-width: 34rem; margin: 0 auto; padding: 1.25rem 1.25rem 3rem; }
+    header { text-align: center; padding: 2rem 0 0.5rem; }
+    .pebble {
+      width: 72px; height: 72px; border-radius: 50%;
+      margin: 0 auto 0.75rem;
+      background: radial-gradient(circle at 50% 45%, var(--green) 0 22%, #fff 26% 55%, var(--yellow) 58% 100%);
+      box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+    .sub { color: #667; margin: 0 0 1.5rem; text-align: center; }
+    .card {
+      background: #fff; border-radius: 12px; padding: 1.25rem 1.25rem 1.4rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1.1rem; margin: 0 0 0.6rem; }
+    ol { margin: 0.5rem 0 0; padding-left: 1.3rem; }
+    ol li { margin-bottom: 0.55rem; }
+    .hidden { display: none; }
+    .bigbtn {
+      display: inline-block; font-size: 1rem; padding: 0.7rem 1.6rem;
+      border: none; border-radius: 8px; cursor: pointer;
+      background: var(--blue); color: #fff; font-weight: 600;
+    }
+    .bigbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .note { font-size: 0.85rem; color: #667; margin-top: 0.75rem; }
+    .led-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .led-table td { padding: 0.4rem 0.5rem; border-top: 1px solid #eef; }
+    .dot {
+      display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 50%;
+      vertical-align: -0.1rem; margin-right: 0.35rem;
+    }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .pulse, .spinner { animation: none; } }
+    @keyframes pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+    .ble-action { text-align: center; margin: 0.75rem 0 0.25rem; }
+    .device-chip {
+      text-align: center; margin: -0.75rem 0 1.25rem;
+    }
+    .device-chip strong {
+      background: #e3f0fb; color: #1b5e93; padding: 0.25rem 0.7rem;
+      border-radius: 999px; font-family: ui-monospace, Menlo, monospace;
+    }
+    .warn {
+      background: #fdf3e7; border-left: 4px solid #e67e22;
+      padding: 0.6rem 0.8rem; border-radius: 6px; font-size: 0.9rem;
+    }
+    .scanner { margin-top: 0.75rem; text-align: center; }
+    .scanner video {
+      width: 100%; max-height: 60vh; border-radius: 10px; background: #000;
+    }
+    .identify-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .identify-row input {
+      flex: 1; min-width: 0; font-size: 1rem; padding: 0.6rem 0.8rem;
+      border: 1px solid #ccd5e0; border-radius: 8px;
+      font-family: ui-monospace, Menlo, monospace;
+    }
+    .identify-row input:focus { outline: 2px solid var(--blue); border-color: transparent; }
+    .spinner {
+      display: inline-block; width: 1.4rem; height: 1.4rem;
+      border: 3px solid #d6e6f5; border-top-color: var(--blue);
+      border-radius: 50%; vertical-align: middle;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    code { background: #eef1f5; padding: 0.1rem 0.35rem; border-radius: 4px; }
+    a { color: var(--blue); }
+    footer { text-align: center; font-size: 0.8rem; color: #99a; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="pebble" aria-hidden="true"></div>
+    <h1>Energy Pebble setup</h1>
+  </header>
+  <p class="sub">Plug in your Energy Pebble. When the middle light slowly
+  pulses <strong style="color:var(--blue)">blue</strong>, it is ready to be
+  connected to your Wi-Fi.</p>
+
+  <!-- Shown when the page was opened from a device's QR sticker -->
+  <p class="device-chip hidden" id="device-chip">
+    Setting up Pebble <strong id="device-chip-id"></strong>
+  </p>
+
+  <!-- Login gate - only shown when ACCOUNT_API is configured and there is
+       no session. Devices are then added to the signed-in account. -->
+  <section class="card hidden" id="login-card">
+    <h2>Sign in first</h2>
+    <p>Sign in to your Energy Pebble account, so this Pebble is added to
+    your account automatically once it connects.</p>
+    <div class="ble-action">
+      <a class="bigbtn" id="login-link" href="#">Sign in</a>
+    </div>
+  </section>
+
+  <!-- Success banner once the backend reports the device online -->
+  <p class="warn hidden" id="linked-note" style="border-left-color:#2ecc40;background:#eafaf0">
+    ✅ Your Pebble is online<span id="linked-account-part"> and linked to
+    your account</span>. It will start showing energy prices shortly.
+  </p>
+
+  <!-- Identity fallback when the page wasn't opened via the QR sticker -->
+  <section class="card" id="identify-card">
+    <h2>Which Pebble is this?</h2>
+    <p>Scan the <strong>QR code on the sticker</strong>, or type the device
+    ID printed next to it:</p>
+    <div class="ble-action">
+      <button id="scan-btn" class="bigbtn">📷 Scan QR code</button>
+    </div>
+    <div class="scanner hidden" id="scanner">
+      <video id="scanner-video" playsinline muted></video>
+      <p class="note">Point the camera at the sticker on the back of your
+      Pebble. <a href="#" id="scanner-close">Cancel</a></p>
+    </div>
+    <p class="note hidden" id="scanner-error">Camera not available or
+    blocked — type the ID instead:</p>
+    <form id="identify-form" class="identify-row">
+      <input id="device-id-input" inputmode="text" autocomplete="off"
+             spellcheck="false" placeholder="e.g. a1b2c3d4e5f6"
+             aria-label="Device ID">
+      <button type="submit" class="bigbtn">Use&nbsp;ID</button>
+    </form>
+    <p class="note hidden" id="device-id-error">That doesn't look like a
+    Pebble ID — it's 12 letters/numbers (or the last 6). You can also skip
+    this and just connect below.</p>
+    <p class="note">No sticker at hand? Skip this — you can still connect
+    your Pebble below.</p>
+  </section>
+
+  <!-- Path 1: Web Bluetooth (Chrome / Edge on Android & desktop) -->
+  <section class="card hidden" id="ble-card">
+    <h2>Connect with one tap</h2>
+    <p>Your browser talks to the Pebble directly. Tap the button, confirm
+    your Pebble in the window that opens, then choose your Wi-Fi network
+    and enter its password.</p>
+    <div class="ble-action">
+      <button id="connect-btn" class="bigbtn" disabled>Connect Energy Pebble</button>
+    </div>
+    <p class="note hidden" id="ble-status" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      Scanning… a window will show your Pebble. Make sure it is
+      <strong>plugged in, close by, and slowly pulsing blue</strong>, then
+      select it and tap <em>Pair</em>. If it doesn't appear or you closed
+      the window, unplug the Pebble, plug it back in, and tap the button
+      again — or use the manual steps below.
+    </p>
+    <p class="note">Doesn't work? Use the manual steps below — they work on
+    every phone.</p>
+  </section>
+
+  <!-- Path 2: captive portal (works everywhere, incl. iPhone) -->
+  <section class="card" id="portal-card">
+    <h2 id="portal-title">Connect via the setup network</h2>
+    <ol>
+      <li>On your phone, open <strong>Settings → Wi-Fi</strong>.</li>
+      <li>Join the network called <strong>Energy Pebble</strong> (no password).</li>
+      <li>A setup page opens by itself. If it doesn't, open your browser and
+          go to <code>192.168.4.1</code>.</li>
+      <li>Pick your home Wi-Fi network, type its password, and press
+          <strong>Save</strong>.</li>
+      <li>Your phone will drop off the setup network — that's normal. The
+          Pebble is now joining your Wi-Fi.</li>
+    </ol>
+  </section>
+
+  <!-- What the light means -->
+  <section class="card">
+    <h2>What the middle light means</h2>
+    <table class="led-table">
+      <tr><td><span class="dot pulse" style="background:var(--blue)"></span>Blue, slow pulse</td>
+          <td>Waiting for setup — follow the steps above</td></tr>
+      <tr><td><span class="dot pulse" style="background:var(--yellow)"></span>Yellow, slow pulse</td>
+          <td>Connecting to your Wi-Fi</td></tr>
+      <tr><td><span class="dot pulse" style="background:var(--red)"></span>Red, slow blink</td>
+          <td>Couldn't connect — password may be wrong. Redo the steps above</td></tr>
+      <tr><td><span class="dot" style="background:var(--green)"></span>Steady colors</td>
+          <td>Done! The Pebble is showing energy prices</td></tr>
+    </table>
+  </section>
+
+  <footer>
+    <p>Once connected, prices update automatically.
+    Dashboard: <a href="https://energypebble.tdlx.nl">energypebble.tdlx.nl</a></p>
+  </footer>
+</main>
+
+<script type="module">
+  // QR deep-link: each Pebble's sticker encodes this page's URL with its
+  // identity, e.g. /setup/?d=a1b2c3d4e5f6&s=<per-device-secret>. Scanning
+  // with the phone camera lands here with the device pre-identified.
+  // ===== Account gate configuration =====
+  // The page is served from energypebble.tdlx.nl (same origin as the API,
+  // energy-pebble-api repo), behind Authelia. Endpoints used:
+  //   GET  /api/verify                        200 when signed in, 401 if not
+  //   https://auth.tdlx.nl/?rd=<url>          Authelia portal, returns to url
+  //   POST /api/user/devices/claim            {device_id, secret?, nickname?}
+  //   GET  /api/user/devices/<id>/status      {"online": true|false, ...}
+  // The gate is skipped on localhost so the page can be developed standalone.
+  const ACCOUNT_GATE = !["localhost", "127.0.0.1"].includes(location.hostname);
+  const AUTH_PORTAL = "https://auth.tdlx.nl";
+
+  const params = new URLSearchParams(location.search);
+  let claimSecret = params.get("s") || "";
+  let deviceId = "";
+  let qrSuffix = "";
+  let loggedIn = false;
+  const bleSupported = !!(navigator.bluetooth && window.isSecureContext);
+
+  const show = (id, visible) =>
+    document.getElementById(id).classList.toggle("hidden", !visible);
+
+  // Single source of truth for which step is visible.
+  const render = () => {
+    const needLogin = ACCOUNT_GATE && !loggedIn;
+    show("login-card", needLogin);
+    show("device-chip", !needLogin && !!deviceId);
+    show("identify-card", !needLogin && !deviceId);
+    show("ble-card", !needLogin && bleSupported && !!deviceId);
+    show("portal-card", !needLogin);
+    document.getElementById("connect-btn").disabled = !deviceId;
+  };
+
+  // Accepts a full 12-hex device ID or its last-6 suffix; tolerates colons,
+  // dashes, spaces and uppercase as people copy MACs in many formats.
+  const setDeviceId = (raw) => {
+    const clean = (raw || "").toLowerCase().replace(/[^0-9a-f]/g, "");
+    if (clean.length !== 12 && clean.length !== 6) return false;
+    deviceId = clean;
+    qrSuffix = clean.slice(-6);
+    document.getElementById("device-chip-id").textContent = qrSuffix;
+    // Keep the ID across a reload / share of the URL.
+    const url = new URL(location);
+    url.searchParams.set("d", clean);
+    history.replaceState(null, "", url);
+    render();
+    claimAndWatch();
+    return true;
+  };
+
+  // ===== Account linking =====
+  const checkLogin = async () => {
+    if (!ACCOUNT_GATE) return;
+    try {
+      const r = await fetch("/api/verify", { credentials: "include" });
+      loggedIn = r.ok;
+    } catch { loggedIn = false; }
+    document.getElementById("login-link").href =
+      `${AUTH_PORTAL}/?rd=${encodeURIComponent(location.href)}`;
+    render();
+  };
+
+  // Claim the device for the signed-in account (needs the QR secret), then
+  // poll until the backend has seen it online - works for both the BLE and
+  // the captive-portal path, since the device phones home either way.
+  let watchTimer = null;
+  let claimed = false;
+  // The backend accepts the QR secret as proof of possession, or - when no
+  // secret is present - the device being online on the same network as the
+  // user. The latter can only succeed after the device phones home, so the
+  // claim is retried from the status poll below.
+  const tryClaim = async () => {
+    if (claimed || deviceId.length !== 12) return;
+    try {
+      const r = await fetch("/api/user/devices/claim", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId, secret: claimSecret || null }),
+      });
+      claimed = r.ok;
+    } catch (err) { console.error("Claim failed", err); }
+  };
+  const claimAndWatch = async () => {
+    // Polling needs the full 12-hex ID; a typed last-6 suffix is only used
+    // to filter the Bluetooth picker.
+    if (!ACCOUNT_GATE || !loggedIn || deviceId.length !== 12) return;
+    await tryClaim();
+    clearInterval(watchTimer);
+    const deadline = Date.now() + 10 * 60 * 1000;
+    watchTimer = setInterval(async () => {
+      if (Date.now() > deadline) return clearInterval(watchTimer);
+      try {
+        const r = await fetch(`/api/user/devices/${deviceId}/status`,
+                              { credentials: "include" });
+        if (!r.ok) return;
+        const st = await r.json();
+        if (st.online) {
+          await tryClaim();  // same-network proof works once it phones home
+          clearInterval(watchTimer);
+          show("linked-account-part", claimed || st.claimed_by_you);
+          show("linked-note", true);
+        }
+      } catch {}
+    }, 5000);
+  };
+
+  await checkLogin();
+  setDeviceId(params.get("d"));
+  render();
+
+  // Manual fallback for users who opened the page without scanning the QR.
+  document.getElementById("identify-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const ok = setDeviceId(document.getElementById("device-id-input").value);
+    document.getElementById("device-id-error").classList.toggle("hidden", ok);
+  });
+
+  // In-page QR scanner, for users who reached the page before scanning the
+  // sticker. Decoding is done locally with the vendored jsQR (loaded lazily,
+  // only when the user taps Scan); the camera image never leaves the page.
+  {
+    const scannerBox = document.getElementById("scanner");
+    const video = document.getElementById("scanner-video");
+    const scanErr = document.getElementById("scanner-error");
+    let stream = null;
+    let scanTimer = null;
+
+    const stopScanner = () => {
+      clearInterval(scanTimer);
+      scanTimer = null;
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      video.srcObject = null;
+      scannerBox.classList.add("hidden");
+    };
+
+    const loadJsQR = () => new Promise((resolve, reject) => {
+      if (window.jsQR) return resolve();
+      const s = document.createElement("script");
+      s.src = "./vendor/jsQR.js";
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+
+    // The sticker QR is this page's URL with ?d= and ?s=; accept a bare
+    // device ID too (e.g. a QR that predates the URL format).
+    const handleScan = (text) => {
+      try {
+        const url = new URL(text);
+        const d = url.searchParams.get("d");
+        if (d) {
+          claimSecret = url.searchParams.get("s") || claimSecret;
+          return setDeviceId(d);
+        }
+      } catch {}
+      return setDeviceId(text);
+    };
+
+    document.getElementById("scan-btn").addEventListener("click", async () => {
+      scanErr.classList.add("hidden");
+      try {
+        await loadJsQR();
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+      } catch (err) {
+        console.error("Camera unavailable", err);
+        scanErr.classList.remove("hidden");
+        return;
+      }
+      scannerBox.classList.remove("hidden");
+      video.srcObject = stream;
+      await video.play();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      scanTimer = setInterval(() => {
+        if (!video.videoWidth) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = window.jsQR(img.data, img.width, img.height);
+        if (code?.data && handleScan(code.data)) stopScanner();
+      }, 300);
+    });
+
+    document.getElementById("scanner-close").addEventListener("click", (ev) => {
+      ev.preventDefault();
+      stopScanner();
+    });
+  }
+
+  // Wire the one-tap Bluetooth path only where Web Bluetooth exists
+  // (Chrome/Edge on Android & desktop). iOS Safari and Firefox fall
+  // through to the captive portal steps. The card itself is revealed by
+  // render() only after login (when gated) and device identification;
+  // the requestDevice call below filters on the exact advertised name
+  // "energy-pebble-<suffix>" (name_add_mac_suffix in firmware), so the
+  // browser's picker never offers neighboring Pebbles or arbitrary
+  // Improv/ESP32 devices.
+  if (bleSupported) {
+    document.getElementById("portal-title").textContent =
+      "Or connect via the setup network";
+
+    const btn = document.getElementById("connect-btn");
+    const status = document.getElementById("ble-status");
+    const spinner = status.querySelector(".spinner");
+
+    // Improv BLE service UUID (same one the vendored SDK filters on).
+    const IMPROV_SERVICE = "00467768-6228-2272-4663-277478268000";
+    let scanTimeout;
+    btn.addEventListener("click", async () => {
+      status.classList.remove("hidden");
+      spinner.classList.remove("hidden");
+      clearTimeout(scanTimeout);
+      // If nothing gets picked, stop implying progress after a while.
+      scanTimeout = setTimeout(() => spinner.classList.add("hidden"), 25000);
+      // Load the vendored SDK's provisioning dialog, then drive it with a
+      // device from our own filtered request (the stock launch button
+      // offers every Improv device, which the gate exists to prevent).
+      await import("./vendor/improv-wifi-sdk/provision-dialog-336721cc.js");
+      let device = null;
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{
+            services: [IMPROV_SERVICE],
+            name: `energy-pebble-${qrSuffix}`,
+          }],
+        });
+      } catch (err) {
+        console.error("No device selected", err);
+      }
+      clearTimeout(scanTimeout);
+      spinner.classList.add("hidden");
+      if (!device) return;  // cancelled or not found; the advice text stays
+      status.classList.add("hidden");
+      const dialog = document.createElement("improv-wifi-provision-dialog");
+      dialog.device = device;
+      dialog.stateUpdateCallback = (state) =>
+        btn.dispatchEvent(new CustomEvent("state-changed", { detail: state }));
+      document.body.appendChild(dialog);
+    });
+  }
+</script>
+</body>
+</html>
