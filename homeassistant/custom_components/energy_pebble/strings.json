@@ -18,9 +18,9 @@
       }
     },
     "error": {
-      "invalid_auth": "That token was not accepted — check it on your dashboard.",
+      "invalid_auth": "That token was not accepted; check it on your dashboard.",
       "cannot_connect": "Could not reach the Energy Pebble server.",
-      "no_devices": "No pebbles are claimed by this account yet — claim your device on the dashboard first."
+      "no_devices": "No pebbles are claimed by this account yet; claim your device on the dashboard first."
     },
     "abort": {
       "already_configured": "This pebble is already configured."

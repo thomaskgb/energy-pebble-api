@@ -1,5 +1,5 @@
 /**
- * i18n.js — the translation runtime for the Energy Pebble web UI.
+ * i18n.js: the translation runtime for the Energy Pebble web UI.
  *
  * Language is an account setting (Settings → Account → Language) so it follows
  * the person across devices. Logged-out visitors get their browser's language
@@ -8,12 +8,12 @@
  * setting wins.
  *
  * Usage:
- *   <script src="/i18n-strings.js"></script>   (the catalogs — load first)
+ *   <script src="/i18n-strings.js"></script>   (the catalogs, load first)
  *   <script src="/i18n.js"></script>
  *   ... markup carrying data-i18n attributes ...
  *   <script>I18n.start();</script>             (once, at the end of <body>)
  *
- * Markup binding — put the key in an attribute, no JS needed:
+ * Markup binding: put the key in an attribute, no JS needed:
  *   data-i18n="nav.login"                textContent
  *   data-i18n-html="home.intro"          innerHTML (for strings with markup)
  *   data-i18n-placeholder="home.name"    any attribute, via data-i18n-<attr>
@@ -82,7 +82,7 @@
 
   /**
    * Look a key up in the active catalog, falling back to English and finally to
-   * the key itself — a missing translation shows the English text, never a blank.
+   * the key itself; a missing translation shows the English text, never a blank.
    */
   function lookup(key) {
     var value = catalog(current)[key];
@@ -189,8 +189,8 @@
 
   /**
    * Persist to the account. A logged-out visitor gets a 401 here, which is the
-   * normal case on the public pages — their choice lives in localStorage only,
-   * so we swallow it rather than logging a scary error.
+   * normal case on the public pages, where their choice lives in localStorage
+   * only. We swallow that rather than logging a scary error.
    */
   function saveToAccount(code) {
     return fetch('/api/user/preferences', {

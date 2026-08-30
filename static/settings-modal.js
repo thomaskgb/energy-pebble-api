@@ -1,11 +1,11 @@
 /**
- * <settings-modal> — the shared User Settings modal (Pebble / Homes / Account).
+ * <settings-modal>: the shared User Settings modal (Pebble / Homes / Account).
  *
  * The single source of truth for the logged-in settings UI: index.html and
  * dashboard.html both mount this element instead of carrying their own copy,
  * so the two pages can no longer drift apart. Follows the <pebble-sim>
  * pattern: a self-contained web component with its styles in the shadow DOM
- * (no dependency on page CSS — the host pages style .modal differently).
+ * (no dependency on page CSS; the host pages style .modal differently).
  *
  * Usage:
  *   <script src="/pebble-sim.js"></script>      (the preview needs it)
@@ -47,7 +47,7 @@
   const STYLE = `
     /* The modal lives in a shadow root, so it cannot use base.css directly.
        Custom properties do cross the boundary, so the tokens below are the
-       host page's — with standalone fallbacks for anything that loads this
+       host page's, with standalone fallbacks for anything that loads this
        component without the design system. */
     :host {
       font-family: var(--font-sans, system-ui, sans-serif);
@@ -237,7 +237,7 @@
             <div class="preview">
               <pebble-sim id="settings-preview" src="/api/color-code"></pebble-sim>
               <div class="caption" data-i18n="settings.pebble.previewCaption">
-                Live preview &mdash; this is what your pebble will show once you save
+                Live preview: this is what your pebble will show once you save
               </div>
             </div>
             <form id="pebble-settings-form">
@@ -327,7 +327,7 @@
                 <button type="button" class="btn btn--primary" id="create-token" data-i18n="settings.tokens.create">Create token</button>
               </div>
               <div id="new-token-box" class="token-box">
-                <div data-i18n="settings.tokens.copyOnce">Copy this token now — it won't be shown again:</div>
+                <div data-i18n="settings.tokens.copyOnce">Copy this token now; it won't be shown again:</div>
                 <input type="text" id="new-token-value" class="input input--block input--mono" readonly>
               </div>
               <div id="token-list" class="list"></div>
@@ -347,7 +347,7 @@
       this._homeId = null;
       this._wire();
       // Shadow DOM is invisible to document.querySelectorAll, so the runtime
-      // needs the root handed to it explicitly — once here, then again on every
+      // needs the root handed to it explicitly: once here, then again on every
       // language change.
       window.I18n.register(this.shadowRoot);
       document.addEventListener('language-changed', () => this._retranslate());
@@ -460,7 +460,7 @@
         });
       });
 
-      // Homes tab (rows are rendered dynamically — delegate)
+      // Homes tab (rows are rendered dynamically, so delegate)
       this.$('#add-home').addEventListener('click', () => this._createHome());
       this.$('#home-list').addEventListener('click', e => {
         const btn = e.target.closest('button[data-action]');

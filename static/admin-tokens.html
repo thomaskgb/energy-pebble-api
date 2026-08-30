@@ -43,7 +43,7 @@
 
         .scope-tag { background: var(--info-soft); color: var(--info-ink); }
 
-        /* Shown once, then never again — make it obviously copyable */
+        /* Shown once, then never again, so make it obviously copyable */
         .token-display {
             padding: var(--space-4);
             margin: var(--space-4) 0;
@@ -244,7 +244,7 @@
 
     <script src="/icons.js?v=2026-08-30"></script>
     <script>
-        // Admin menu — same .menu / .is-open pattern as the customer pages
+        // Admin menu: same .menu / .is-open pattern as the customer pages
         function toggleAdminMenu() {
             const menu = document.getElementById('adminMenu');
             const open = !menu.classList.contains('is-open');

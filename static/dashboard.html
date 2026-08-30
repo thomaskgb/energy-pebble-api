@@ -11,7 +11,7 @@
     <title data-i18n="dashboard.pageTitle">Energy Pebble - Dashboard</title>
     <link rel="stylesheet" href="base.css?v=2026-08-30">
     <style>
-        /* Page-specific layout only — everything reusable lives in base.css. */
+        /* Page-specific layout only; everything reusable lives in base.css. */
 
         .page-head { margin-bottom: var(--space-8); }
         .page-head p { margin-top: var(--space-2); }
@@ -26,7 +26,7 @@
         .stat__value--yellow { color: var(--signal-yellow-ink); }
         .stat__value--red    { color: var(--signal-red-ink); }
 
-        /* My Pebble — the one card that gets the full width and real elevation */
+        /* My Pebble: the one card that gets the full width and real elevation */
         .pebble-card {
             margin-bottom: var(--space-6);
             box-shadow: var(--shadow-sm);
@@ -252,7 +252,7 @@
                 <div id="home-pebbles" class="home-pebbles"></div>
                 <p class="prose text-sm" data-i18n-html="dashboard.pebble.description">
                     What your pebble shows right now, based on your household profile.
-                    Adjust it under <strong>Settings</strong> in your user menu &mdash; devices pick up changes within 15 minutes.
+                    Adjust it under <strong>Settings</strong> in your user menu; devices pick up changes within 15 minutes.
                 </p>
             </div>
         </section>
@@ -372,7 +372,7 @@
         </div>
     </div>
 
-    <!-- User Settings Modal (shared component — see settings-modal.js) -->
+    <!-- User Settings Modal (shared component, see settings-modal.js) -->
     <settings-modal id="settings-modal"></settings-modal>
 
     <script src="i18n-strings.js?v=2026-08-30"></script>
@@ -713,7 +713,7 @@
             setMenuOpen('adminDropdown', 'adminMenuTrigger', false);
         });
 
-        // User settings functionality — the modal itself lives in the shared
+        // User settings functionality: the modal itself lives in the shared
         // <settings-modal> component (settings-modal.js).
         let currentUserData = null;
 

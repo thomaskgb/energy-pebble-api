@@ -1,7 +1,7 @@
 """Integration tests for signed firmware upload + OTA serving.
 
 Drives the real FastAPI handlers through TestClient with an isolated temp DB and
-firmware dir, and signing enforced. Offline — no network, no hardware.
+firmware dir, and signing enforced. Offline: no network, no hardware.
 
 Run: python tests/test_firmware_upload_signing.py   (or via pytest)
 """

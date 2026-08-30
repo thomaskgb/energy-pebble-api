@@ -33,7 +33,7 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /api/devices`: Get detected devices from client's IP address
 - `POST /api/devices/{id}/claim`: Claim a device and assign nickname (requires auth)
 - `GET /api/user/devices`: Get all devices claimed by authenticated user
-- `GET/PUT /api/user/preferences`: Account-level preferences — currently the interface `language` (requires auth)
+- `GET/PUT /api/user/preferences`: Account-level preferences, currently the interface `language` (requires auth)
 
 ## Web Routes
 - `GET /`: Public landing page with color codes and API information
@@ -84,7 +84,7 @@ energy_pebble/
 
 ## Design System
 `static/base.css` is the single stylesheet for the customer-facing UI. Pages
-link it and then carry only the CSS that is genuinely theirs — anything that
+link it and then carry only the CSS that is genuinely theirs; anything that
 appears on two pages belongs in `base.css`.
 
 - **Tokens first**: colour, type scale, spacing, radii, elevation and motion
@@ -97,12 +97,12 @@ appears on two pages belongs in `base.css`.
   primary buttons keep WCAG AA contrast.
 - **Colour discipline**: one neutral ramp carries the interface, one green
   accent carries the brand, and green/amber/red are reserved for the price
-  signal. Signal elements always spell out their state in words as well —
+  signal. Signal elements always spell out their state in words as well, so
   colour is never the only carrier of meaning.
 - **Icons**: `static/icons.js` renders an inline SVG for every
   `<i data-icon="name">` placeholder, or `Icons.svg(name, {size})` for markup
   built in JavaScript. Call `Icons.render(root)` after inserting HTML. Emoji
-  are not used as interface icons — they render differently per platform and
+  are not used as interface icons: they render differently per platform and
   ignore the surrounding text colour.
 - **Shadow DOM**: `pebble-sim.js` and `settings-modal.js` cannot link
   `base.css`, but custom properties cross the shadow boundary, so their styles
@@ -126,19 +126,19 @@ itself shows colors and needs no translation.
   `localStorage` until they sign in, after which the account setting wins.
 - **Runtime**: `static/i18n.js` (the small runtime) plus `static/i18n-strings.js`
   (all three catalogs). Load them in that order and **before** `icons.js`,
-  `pebble-sim.js` and `settings-modal.js` — the last two register their shadow
+  `pebble-sim.js` and `settings-modal.js`; the last two register their shadow
   roots with the runtime when they upgrade.
 - **No emoji in strings**: catalog values are text only. Icons belong in the
   markup (see the Design System section), so a translator never has to carry
   one and the same key works next to any icon.
-- **Markup**: put the key in an attribute — `data-i18n` (textContent),
+- **Markup**: put the key in an attribute: `data-i18n` (textContent),
   `data-i18n-html` (strings with inline markup), or `data-i18n-<attr>` for
   placeholders, titles and aria labels. Strings built in JavaScript use
   `I18n.t('key', {vars})`, counts use `I18n.plural('key', n)`.
 - **Adding a string**: add the key to all three catalogs. `tests/test_i18n.py`
   fails when `nl`/`fr` fall behind `en`, when a key is used but not translated,
   or when a catalog key is never referenced.
-- **Scope**: admin pages are deliberately untranslated — they are internal.
+- **Scope**: admin pages are deliberately untranslated; they are internal.
 
 ## Color Logic
 The system uses a commitment-based approach to ensure color stability:
@@ -161,7 +161,7 @@ docker compose up -d
 
 ### Static asset caching
 Our own HTML, CSS and JS carry no version in their filenames, so Caddy serves
-them with `Cache-Control: no-cache` — they revalidate against an ETag, which
+them with `Cache-Control: no-cache`; they revalidate against an ETag, which
 costs a 304 and no body. Only vendored libraries (pinned by filename) and
 images keep the year-long cache. Extensionless routes (`/`, `/setup/`,
 `/dashboard`, `/impact-circle`, `/login`, `/admin/*`) are named explicitly in

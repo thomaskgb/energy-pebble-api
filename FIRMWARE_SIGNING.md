@@ -1,19 +1,19 @@
 # Firmware signing
 
 Closes security finding **C3** (unsigned OTA / uploader-supplied checksums). Firmware
-integrity is now established **server-side**, and — once devices ship the verifying
-firmware — **end-to-end** with an offline signing key.
+integrity is now established **server-side**, and, once devices ship the verifying
+firmware, **end-to-end** with an offline signing key.
 
 ## Trust model
 
 | Key | Where it lives | Role |
 |-----|----------------|------|
 | Ed25519 **private** key | Offline: a release manager's machine, or a CI secret. **Never on the server.** | Signs each firmware binary at release time. |
-| Ed25519 **public** key | Server env `FIRMWARE_SIGNING_PUBKEY` **and** embedded in device firmware. | Verifies signatures. Public — safe to commit / bake into firmware. |
+| Ed25519 **public** key | Server env `FIRMWARE_SIGNING_PUBKEY` **and** embedded in device firmware. | Verifies signatures. Public, so it is safe to commit / bake into firmware. |
 
 Why it matters: an attacker who gains admin on the API (finding C1) still cannot ship
 malicious firmware, because a valid signature requires the offline private key. Signing
-is the control that **survives an admin compromise** — checksums alone do not.
+is the control that **survives an admin compromise**; checksums alone do not.
 
 ## What changed on the server
 
@@ -30,7 +30,7 @@ is the control that **survives an admin compromise** — checksums alone do not.
   warning and falls back to checksum-only (today's behaviour). This lets the code deploy
   before the key + CI signing are in place, without breaking the current release flow.
 
-New columns are added by the existing idempotent `ALTER TABLE` migration block — no
+New columns are added by the existing idempotent `ALTER TABLE` migration block, so no
 manual DB step.
 
 ## One-time setup
@@ -78,7 +78,7 @@ brick them. Two facts make this safe:
    field in `/api/ota/check` is additive; today's firmware ignores unknown JSON keys and
    keeps updating exactly as before. So step 1 (enable signing on the server + start
    signing releases) is zero-risk for the fleet.
-2. **The verifying firmware is delivered over the current (unverified) OTA path — once.**
+2. **The verifying firmware is delivered over the current (unverified) OTA path, once.**
    This is unavoidable chicken-and-egg: a device can only start checking signatures after
    it receives the firmware that knows how. That first hop is a **trust-on-first-update**;
    every update *after* it is cryptographically verified.
@@ -87,7 +87,7 @@ brick them. Two facts make this safe:
 
 Before **any** OTA push, resolve the ESP32-**S3** vs Lolin-**C3** ambiguity (the build
 dir contains both `energy-pebble` and `lolin-c3-led-ring` targets; finding in the device
-review). Pushing a wrong-architecture binary **bricks** the device — a far bigger risk
+review). Pushing a wrong-architecture binary **bricks** the device, a far bigger risk
 than the signing change. Add a board/variant field to `/api/ota/check` matching and only
 offer a binary built for the device's actual silicon.
 
@@ -108,12 +108,12 @@ offer a binary built for the device's actual silicon.
    is set) and dropping MD5 from the device path.
 6. **Later / hardware rev B:** for true anti-rollback and boot-level protection, enable
    ESP32 **Secure Boot v2 + flash encryption**. This is a one-way efuse operation done at
-   manufacture — out of scope for the existing fleet, plan it for new production units.
+   manufacture, out of scope for the existing fleet, plan it for new production units.
 
 ### Rollback / safety net
 
 - Devices that never check in for the new version stay on old firmware and keep working
-  (degraded trust, but functional) — no forced brick.
+  (degraded trust, but functional); no forced brick.
 - Because the first update rides the old path, a device that is offline during the
   campaign simply picks it up whenever it next checks `/api/ota/check`.
 - Pair this migration with the **stale-data indicator** fix (device review P0) so a device
@@ -121,8 +121,8 @@ offer a binary built for the device's actual silicon.
 
 ## Tests
 
-- `tests/test_firmware_signing.py` — unit tests for the sign/verify/keys module (offline).
-- `tests/test_firmware_upload_signing.py` — integration tests: upload rejects unsigned /
+- `tests/test_firmware_signing.py`: unit tests for the sign/verify/keys module (offline).
+- `tests/test_firmware_upload_signing.py`: integration tests: upload rejects unsigned /
   bad-signature / mismatched-checksum, stores the server-computed checksum, and
   `/api/ota/check` serves a signature that verifies against the served binary.
 

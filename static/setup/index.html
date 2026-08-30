@@ -17,7 +17,7 @@
   -->
   <link rel="stylesheet" href="../base.css?v=2026-08-30">
   <style>
-    /* Page-specific layout only — tokens and primitives come from base.css.
+    /* Page-specific layout only; tokens and primitives come from base.css.
        Class names are kept as-is: the setup script toggles them by name. */
 
     main { max-width: 34rem; margin: 0 auto; padding: var(--space-5) var(--space-5) var(--space-12); }
@@ -150,7 +150,7 @@
 
   <!-- Success banner once the backend reports the device online -->
   <p class="warn warn--ok hidden" id="linked-note">
-    <span data-i18n="setup.linked.online">✅ Your Pebble is online</span><span id="linked-account-part" data-i18n="setup.linked.account"> and linked to
+    <span data-i18n="setup.linked.online">Your Pebble is online</span><span id="linked-account-part" data-i18n="setup.linked.account"> and linked to
     your account</span><span data-i18n="setup.linked.soon">. It will start showing energy prices shortly.</span>
   </p>
 
@@ -168,7 +168,7 @@
       Pebble.</span> <a href="#" id="scanner-close" data-i18n="common.cancel">Cancel</a></p>
     </div>
     <p class="note hidden" id="scanner-error" data-i18n="setup.scanner.error">Camera not available or
-    blocked — type the ID instead:</p>
+    blocked. Type the ID instead:</p>
     <form id="identify-form" class="identify-row">
       <input id="device-id-input" inputmode="text" autocomplete="off"
              spellcheck="false" placeholder="e.g. a1b2c3d4e5f6"
@@ -178,9 +178,9 @@
       <button type="submit" class="bigbtn" data-i18n="setup.identify.useId">Use&nbsp;ID</button>
     </form>
     <p class="note hidden" id="device-id-error" data-i18n="setup.identify.idError">That doesn't look like a
-    Pebble ID — it's 12 letters/numbers (or the last 6). You can also skip
+    Pebble ID; it's 12 letters/numbers (or the last 6). You can also skip
     this and just connect below.</p>
-    <p class="note" data-i18n="setup.identify.noSticker">No sticker at hand? Skip this — you can still connect
+    <p class="note" data-i18n="setup.identify.noSticker">No sticker at hand? Skip this; you can still connect
     your Pebble below.</p>
   </section>
 
@@ -199,9 +199,9 @@
       <strong>plugged in, close by, and slowly pulsing blue</strong>, then
       select it and tap <em>Pair</em>. If it doesn't appear or you closed
       the window, unplug the Pebble, plug it back in, and tap the button
-      again — or use the manual steps below.</span>
+      again, or use the manual steps below.</span>
     </p>
-    <p class="note" data-i18n="setup.ble.fallback">Doesn't work? Use the manual steps below — they work on
+    <p class="note" data-i18n="setup.ble.fallback">Doesn't work? Use the manual steps below; they work on
     every phone.</p>
   </section>
 
@@ -215,7 +215,7 @@
           go to <code>192.168.4.1</code>.</li>
       <li data-i18n-html="setup.portal.step4">Pick your home Wi-Fi network, type its password, and press
           <strong>Save</strong>.</li>
-      <li data-i18n-html="setup.portal.step5">Your phone will drop off the setup network — that's normal. The
+      <li data-i18n-html="setup.portal.step5">Your phone will drop off the setup network. That's normal. The
           Pebble is now joining your Wi-Fi.</li>
     </ol>
   </section>
@@ -225,11 +225,11 @@
     <h2 data-i18n="setup.led.title">What the middle light means</h2>
     <table class="led-table">
       <tr><td><span class="dot pulse" style="background:var(--info-500)"></span><span data-i18n="setup.led.blue">Blue, slow pulse</span></td>
-          <td data-i18n="setup.led.blueMeaning">Waiting for setup — follow the steps above</td></tr>
+          <td data-i18n="setup.led.blueMeaning">Waiting for setup; follow the steps above</td></tr>
       <tr><td><span class="dot pulse" style="background:var(--signal-yellow)"></span><span data-i18n="setup.led.yellow">Yellow, slow pulse</span></td>
           <td data-i18n="setup.led.yellowMeaning">Connecting to your Wi-Fi</td></tr>
       <tr><td><span class="dot pulse" style="background:var(--signal-red)"></span><span data-i18n="setup.led.red">Red, slow blink</span></td>
-          <td data-i18n="setup.led.redMeaning">Couldn't connect — password may be wrong. Redo the steps above</td></tr>
+          <td data-i18n="setup.led.redMeaning">Couldn't connect; password may be wrong. Redo the steps above</td></tr>
       <tr><td><span class="dot" style="background:var(--signal-green)"></span><span data-i18n="setup.led.green">Steady colors</span></td>
           <td data-i18n="setup.led.greenMeaning">Done! The Pebble is showing energy prices</td></tr>
     </table>

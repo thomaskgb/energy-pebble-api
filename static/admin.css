@@ -1,10 +1,10 @@
 /* =============================================================================
-   Energy Pebble — admin.css
+   Energy Pebble: admin.css
    The admin console's shared layer, sitting on top of base.css.
 
    Admin pages are internal, so they keep their own vocabulary (.section,
    .stat-card, .user-table, .status-badge) rather than the customer UI's
-   primitives — the markup and the JavaScript that generates rows already
+   primitives: the markup and the JavaScript that generates rows already
    speak it, and renaming both would be churn for no gain. What changes here
    is that the vocabulary is defined ONCE, in terms of base.css tokens, so
    admin inherits the same palette, type scale and dark theme as the rest.
@@ -463,7 +463,7 @@
     animation: spin 0.7s linear infinite;
 }
 
-/* Nothing to show is not the same as still loading — no spinner here */
+/* Nothing to show is not the same as still loading, so no spinner here */
 .empty {
     padding: var(--space-10);
     text-align: center;

@@ -15,6 +15,10 @@ This directory contains various test scripts for validating Energy Pebble functi
 - **`test_device_detection.py`** - Tests Energy Dot device detection and registration
 - **`test_firmware_docker.py`** - Tests firmware management in Docker environment
 - **`test_firmware_management.py`** - Tests firmware upload and management features
+- **`test_ota_check.py`** - Tests OTA update selection: highest installable version wins, and firmware a device would refuse (no md5, unsigned, missing binary) is never offered
+
+### Data & Caching Tests
+- **`test_elia_cache.py`** - Tests the Elia price cache: reuse, coalescing, expiry, restart and outage behaviour
 
 ### Documentation Tests
 - **`test_docs.py`** - Tests OpenAPI documentation generation and display

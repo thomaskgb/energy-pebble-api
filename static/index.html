@@ -12,7 +12,7 @@
     <title data-i18n="home.pageTitle">Energy Pebble - Electricity Price Color Codes</title>
     <link rel="stylesheet" href="base.css?v=2026-08-30">
     <style>
-        /* Page-specific layout only — everything reusable lives in base.css. */
+        /* Page-specific layout only; everything reusable lives in base.css. */
 
         /* Hero: the live signal sits beside the pitch, not below it. */
         .hero {
@@ -89,7 +89,7 @@
 
         .explainer__figure img { width: 100%; height: auto; }
 
-        /* Developer reference — present, but clearly secondary to the product. */
+        /* Developer reference: present, but clearly secondary to the product. */
         .developer {
             padding: var(--space-8) 0 0;
             border-top: 1px solid var(--border);
@@ -228,7 +228,7 @@
                 </div>
                 <div class="card__body pebble-panel__body">
                     <pebble-sim id="home-pebble" src="/api/color-code" controls></pebble-sim>
-                    <p class="pebble-panel__note" data-i18n="home.now.description">The center dot is the current hour; each ring segment is labeled with the hour it applies to. Try the settings — signed-in users can save them for their own pebble.</p>
+                    <p class="pebble-panel__note" data-i18n="home.now.description">The center dot is the current hour; each ring segment is labeled with the hour it applies to. Try the settings; signed-in users can save them for their own pebble.</p>
                     <a href="simulator.html" class="sim-link">
                         <span data-i18n="home.now.simulatorLink">Explore typical days in the full simulator</span>
                         <i data-icon="arrowRight" data-icon-size="15"></i>
@@ -242,7 +242,7 @@
             <div>
                 <h2 class="section-title" data-i18n="home.how.title">How It Works</h2>
                 <div class="prose" style="margin-top: var(--space-4);">
-                    <p data-i18n="home.how.intro">Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption. Signed-in users tune the signal to their household &mdash; energy contract, solar panels, home battery &mdash; and their pebble follows automatically:</p>
+                    <p data-i18n="home.how.intro">Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption. Signed-in users tune the signal to their household (energy contract, solar panels, home battery), and their pebble follows automatically:</p>
                 </div>
 
             </div>
@@ -276,7 +276,7 @@
                         </li>
                         <li>
                             <span class="endpoint">GET/PUT /api/user/settings</span>
-                            <span class="endpoint-desc" data-i18n="home.api.userSettings">Your household profile (contract, solar, battery, display) &mdash; sign-in required</span>
+                            <span class="endpoint-desc" data-i18n="home.api.userSettings">Your household profile (contract, solar, battery, display). Sign-in required</span>
                         </li>
                         <li>
                             <span class="endpoint"><a href="/docs" target="_blank" rel="noopener">GET /docs</a></span>
@@ -374,7 +374,7 @@
             wireUserMenu();
         }
 
-        /** Click to open, click outside or Escape to close — keyboard users included. */
+        /** Click to open, click outside or Escape to close; keyboard users included. */
         function wireUserMenu() {
             const menu = document.getElementById('user-menu');
             const trigger = document.getElementById('user-menu-trigger');
@@ -401,7 +401,7 @@
             window.location.href = 'https://auth.tdlx.nl/logout?rd=https://energypebble.tdlx.nl/';
         }
 
-        // User settings — the modal itself lives in the shared
+        // User settings: the modal itself lives in the shared
         // <settings-modal> component (settings-modal.js), same as the dashboard.
         function openUserSettings() {
             const menu = document.getElementById('user-menu');
@@ -434,7 +434,7 @@
         setInterval(fetchColorData, 15 * 60 * 1000);
     </script>
 
-    <!-- User Settings Modal (shared component — see settings-modal.js) -->
+    <!-- User Settings Modal (shared component, see settings-modal.js) -->
     <settings-modal id="settings-modal"></settings-modal>
 
 </body>

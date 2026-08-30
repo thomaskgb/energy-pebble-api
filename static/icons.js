@@ -1,12 +1,12 @@
 /**
- * icons.js — the interface icon set.
+ * icons.js: the interface icon set.
  *
  * Emoji used to stand in for icons across the UI. They render differently on
  * every platform, cannot take the surrounding text colour, and sit on the text
  * baseline in ways no amount of CSS fixes. These are inline SVGs instead: one
  * stroke weight, one 24-unit grid, always `currentColor`.
  *
- * Usage — put a placeholder in the markup and let it hydrate:
+ * Usage: put a placeholder in the markup and let it hydrate:
  *   <i data-icon="bolt"></i>
  *   <i data-icon="user" data-icon-size="16"></i>
  * or build one in JavaScript:
@@ -15,7 +15,7 @@
  * Call Icons.render(root) after inserting markup that contains placeholders;
  * the document is hydrated automatically on DOMContentLoaded.
  *
- * Icons are decorative here — every one sits next to a visible label — so they
+ * Icons are decorative here (every one sits next to a visible label), so they
  * carry aria-hidden and are skipped by screen readers.
  */
 (function (global) {

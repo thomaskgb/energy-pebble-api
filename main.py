@@ -16,10 +16,12 @@ from pathlib import Path
 import sqlite3
 import threading
 import time
+import asyncio
 import shutil
 import yaml
 import secrets
 import bcrypt
+from functools import cmp_to_key
 import firmware_signing
 
 # Pydantic models for OTA requests
@@ -157,7 +159,7 @@ security = HTTPBearer()
 LOCAL_DEV_USER = os.environ.get("LOCAL_DEV_USER")
 if LOCAL_DEV_USER:
     logging.getLogger(__name__).warning(
-        f"LOCAL_DEV_USER={LOCAL_DEV_USER}: authentication is BYPASSED — local development only"
+        f"LOCAL_DEV_USER={LOCAL_DEV_USER}: authentication is BYPASSED, local development only"
     )
 
 def get_current_user(request: Request):
@@ -350,7 +352,7 @@ def init_database():
         # Every column default reproduces the pure price-based behavior, so a
         # missing row means "default pebble".
         # Users describe their household (contract, solar, battery); the color
-        # signal is derived from that — see derive_signal_source().
+        # signal is derived from that; see derive_signal_source().
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_settings (
                 user_id TEXT PRIMARY KEY,
@@ -645,27 +647,11 @@ def init_database():
         else:
             logger.info(f"Predefined devices table already contains {count} devices")
         
-        # Insert initial firmware versions if the table is empty
-        cursor.execute('SELECT COUNT(*) FROM firmware_versions')
-        firmware_count = cursor.fetchone()[0]
-        
-        if firmware_count == 0:
-            logger.info("Initializing firmware versions table")
-            initial_firmwares = [
-                ("v1.0.0", "esp32_v1.0.0.bin", "sha256:0000000000000000000000000000000000000000000000000000000000000000", 1048576, True, False, None, None, "Initial release firmware", None, "system"),
-                ("v1.1.0", "esp32_v1.1.0.bin", "sha256:1111111111111111111111111111111111111111111111111111111111111111", 1072640, True, False, "v1.0.0", "v1.0.0", "Bug fixes and improvements", None, "system"),
-                ("v1.2.0", "esp32_v1.2.0.bin", "sha256:2222222222222222222222222222222222222222222222222222222222222222", 1098752, True, False, "v1.0.0", "v1.1.0", "New features and optimizations", None, "system"),
-            ]
-            
-            for version, filename, checksum, file_size, is_stable, force_update, min_version, rollback_version, release_notes, target_devices, created_by in initial_firmwares:
-                cursor.execute('''
-                    INSERT INTO firmware_versions (version, filename, checksum, file_size, is_stable, force_update, min_version, rollback_version, release_notes, target_devices, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (version, filename, checksum, file_size, is_stable, force_update, min_version, rollback_version, release_notes, target_devices, created_by))
-            
-            logger.info(f"Added {len(initial_firmwares)} initial firmware versions")
-        else:
-            logger.info(f"Firmware versions table already contains {firmware_count} versions")
+        # The firmware_versions table is intentionally NOT seeded. Every row here
+        # is an offer made to real devices, so it must come from
+        # /api/firmware/upload with a real binary, checksums and signature. The
+        # placeholder releases this block used to insert had none of those and
+        # were handed to the fleet as genuine updates.
         
         conn.commit()
         logger.info("Database initialized successfully")
@@ -780,36 +766,75 @@ def version_is_newer(new_version: str, current_version: str) -> bool:
     """Check if new_version is newer than current_version"""
     return compare_versions(new_version, current_version) > 0
 
+def firmware_install_blocker(filename: str, md5_checksum: str, signature: str,
+                             signature_alg: str, signing_enforced: bool) -> Optional[str]:
+    """Return why a device could not install this firmware, or None if it can.
+
+    Offering a release the device is bound to refuse is worse than offering
+    nothing: the device burns a download, blinks its signature-failure pattern
+    and reports a rejection, then finds the same release again 12 hours later.
+    """
+    if not md5_checksum:
+        # The device pins ota.http_request.flash to the MD5 and aborts without one.
+        return "no md5_checksum recorded"
+
+    if signing_enforced and not signature:
+        return "no Ed25519 signature recorded"
+
+    if signature and signature_alg != firmware_signing.SIGNATURE_ALG:
+        return f"unsupported signature algorithm '{signature_alg}'"
+
+    # Same resolution the /firmware/{filename} download uses, so an eligible
+    # row can never hand the device a URL that 404s.
+    if not (get_firmware_storage_path() / filename).exists():
+        return "binary missing from firmware storage"
+
+    return None
+
 def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict:
-    """Get the latest available firmware for a device"""
+    """Get the highest installable firmware version newer than the device's.
+
+    Every stable, device-eligible row is considered and the winner is chosen by
+    semantic version. Ordering by release_date and taking a single row first
+    (the previous behavior) told a device it was up to date whenever the most
+    recently released row happened to be older than, or equal to, what it was
+    already running -- including the very common case of several rows sharing
+    one release_date, where SQLite's tie-break decided the whole fleet's fate.
+    """
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        
-        # Get latest stable firmware that's newer than current version
         cursor.execute('''
             SELECT version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum, signature, signature_alg
             FROM firmware_versions
             WHERE is_stable = TRUE
             AND (target_devices IS NULL OR target_devices LIKE ? OR target_devices = '[]')
-            ORDER BY release_date DESC
-            LIMIT 1
         ''', (f'%{device_id}%',))
+        rows = cursor.fetchall()
 
-        result = cursor.fetchone()
-        if not result:
-            return None
+    # A server holding a verification key publishes signed firmware only, so an
+    # unsigned row is a packaging accident rather than a legacy release.
+    signing_enforced = firmware_signing.load_server_public_key() is not None
 
-        version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum, signature, signature_alg = result
-        
-        # Check if this version is newer than current
+    candidates = []
+    for (version, filename, checksum, file_size, force_update, rollback_version,
+         release_notes, min_version, md5_checksum, signature, signature_alg) in rows:
+
         if not version_is_newer(version, current_version):
-            return None
-            
-        # Check minimum version requirement
+            continue
+
         if min_version and compare_versions(current_version, min_version) < 0:
-            return None
-            
-        return {
+            continue
+
+        blocker = firmware_install_blocker(
+            filename, md5_checksum, signature, signature_alg, signing_enforced
+        )
+        if blocker:
+            logger.warning(
+                f"Firmware {version} not offered to {device_id}: {blocker}"
+            )
+            continue
+
+        candidates.append({
             'version': version,
             'filename': filename,
             'checksum': checksum,
@@ -820,7 +845,12 @@ def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict
             'release_notes': release_notes,
             'signature': signature,
             'signature_alg': signature_alg
-        }
+        })
+
+    if not candidates:
+        return None
+
+    return max(candidates, key=lambda fw: cmp_to_key(compare_versions)(fw['version']))
 
 def log_ota_check(device_id: str, current_version: str, offered_version: str = None, ip_address: str = None, user_agent: str = None):
     """Log an OTA check attempt"""
@@ -1025,8 +1055,8 @@ def revoke_api_token(token_id: int) -> bool:
 
 # --- Per-person settings (household parameters & display preferences) --------
 # The pebble stays dumb: all personalization is resolved server-side from the
-# claiming user's profile. Users describe their household — contract type,
-# solar, battery — and the color signal is derived from that. Defaults
+# claiming user's profile. Users describe their household (contract type,
+# solar, battery) and the color signal is derived from that. Defaults
 # reproduce the pure price-based behavior.
 
 CONTRACT_TYPES = ("dynamic", "day_night", "fixed")
@@ -1186,7 +1216,7 @@ def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, A
 
 # --- Account preferences ------------------------------------------------------
 # Settings that belong to the person rather than to a home or a device. The
-# interface language is the first of them: it drives the web UI only — the
+# interface language is the first of them: it drives the web UI only, and the
 # pebble itself shows colors, which need no translation.
 
 LANGUAGES = ("en", "nl", "fr")
@@ -1563,13 +1593,108 @@ if LOCAL_DEV_USER:
     @app.get("/favicon.ico", include_in_schema=False)
     async def _dev_favicon():
         return FileResponse(_static_dir / "favicon.ico")
+# --- Elia day-ahead price cache -------------------------------------------
+# Elia publishes a day's quarter-hourly prices once (around 12:45 CET for the
+# next day) and does not revise them afterwards, so a fetched day stays valid.
+# Without this cache every page load pulled three days straight from
+# griddata.elia.be. Cached days survive restarts via DATA_DIR.
+ELIA_CACHE_TTL_SECONDS = 6 * 3600      # a complete day: refresh only occasionally
+ELIA_CACHE_RETRY_SECONDS = 300         # a missing or partial day: retry soon
+ELIA_CACHE_MAX_DAYS = 16               # bound the cache; /api/json takes any date
+ELIA_QUARTERS_PER_DAY = 96             # 24h of quarter-hourly entries
+
+elia_cache: Dict[str, Dict[str, Any]] = {}
+elia_cache_file = DATA_DIR / "elia_prices.json"
+elia_cache_locks: Dict[str, asyncio.Lock] = {}
+
+
+def load_elia_cache():
+    """Load the persisted price cache so a restart does not refetch everything."""
+    global elia_cache
+    try:
+        if elia_cache_file.exists():
+            stored = json.loads(elia_cache_file.read_text())
+            elia_cache = {
+                date_str: entry for date_str, entry in stored.items()
+                if isinstance(entry, dict) and isinstance(entry.get("data"), list)
+            }
+            logger.info(f"Loaded {len(elia_cache)} cached Elia days from disk")
+    except Exception as e:
+        logger.warning(f"Could not load Elia price cache: {e}")
+        elia_cache = {}
+
+
+def save_elia_cache():
+    """Persist the price cache, keeping only the most recently fetched days."""
+    try:
+        trimmed = dict(sorted(
+            elia_cache.items(),
+            key=lambda item: item[1].get("fetched_at", 0),
+            reverse=True,
+        )[:ELIA_CACHE_MAX_DAYS])
+        elia_cache.clear()
+        elia_cache.update(trimmed)
+        elia_cache_file.write_text(json.dumps(trimmed))
+    except Exception as e:
+        logger.warning(f"Could not persist Elia price cache: {e}")
+
+
+def elia_cache_ttl(data: Any) -> int:
+    """A full day of prices is final; anything shorter is worth retrying."""
+    if isinstance(data, list) and len(data) >= ELIA_QUARTERS_PER_DAY:
+        return ELIA_CACHE_TTL_SECONDS
+    return ELIA_CACHE_RETRY_SECONDS
+
+
+def get_cached_elia_data(date_str: str, allow_stale: bool = False) -> Optional[List[Any]]:
+    """Return cached prices for a date, or None when absent or expired."""
+    entry = elia_cache.get(date_str)
+    if not entry:
+        return None
+    if allow_stale:
+        return entry["data"]
+    if time.time() - entry.get("fetched_at", 0) > elia_cache_ttl(entry["data"]):
+        return None
+    return entry["data"]
+
 
 async def fetch_data(date_str: Optional[str] = None):
-    """Fetch data from Elia's API for a given date."""
+    """Fetch a day of Elia prices, serving from cache when it is still valid."""
     if not date_str:
         # Use today's date if not specified
         date_str = datetime.now().strftime("%Y-%m-%d")
-    
+
+    cached = get_cached_elia_data(date_str)
+    if cached is not None:
+        logger.debug(f"Serving Elia data for {date_str} from cache")
+        return cached
+
+    # One fetch per date at a time: a burst of reloads must not stampede Elia.
+    lock = elia_cache_locks.setdefault(date_str, asyncio.Lock())
+    async with lock:
+        cached = get_cached_elia_data(date_str)
+        if cached is not None:
+            return cached
+
+        try:
+            data = await fetch_data_from_elia(date_str)
+        except Exception as e:
+            # Elia is unreachable: stale prices beat no prices at all.
+            stale = get_cached_elia_data(date_str, allow_stale=True)
+            if stale:
+                logger.warning(f"Elia fetch for {date_str} failed ({e}); serving stale cache")
+                return stale
+            raise
+
+        # Only the expected list-of-entries shape is worth caching.
+        if isinstance(data, list):
+            elia_cache[date_str] = {"fetched_at": time.time(), "data": data}
+            save_elia_cache()
+        return data
+
+
+async def fetch_data_from_elia(date_str: str):
+    """Fetch data from Elia's API for a given date."""
     url = f"https://griddata.elia.be/eliabecontrols.prod/interface/Interconnections/daily/auctionresultsqh/{date_str}"
     
     logger.info(f"Fetching data from URL: {url}")
@@ -1609,6 +1734,8 @@ async def fetch_data(date_str: Optional[str] = None):
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+load_elia_cache()
 
 def should_data_be_available(target_date: datetime) -> bool:
     """
@@ -2010,6 +2137,30 @@ async def get_color_code(request: Request, date: Optional[str] = None, device_id
             "personalized": settings is not None
         }
     }
+
+@app.get("/api/device/config-version", tags=["public"])
+async def get_device_config_version(request: Request, device_id: Optional[str] = None):
+    """
+    Tiny settings-change probe for devices.
+
+    Returns a short fingerprint of the effective settings for the device
+    (X-Device-ID header or device_id query parameter). The value changes
+    exactly when the household's saved settings change — or the device is
+    re-homed to a home with a different profile — so firmware can poll this
+    every 30 seconds and refetch /api/color-code only when it differs.
+    Unknown or unclaimed devices get the stable fingerprint of the defaults.
+
+    Cheap by design: one SQLite lookup, no price data, no writes.
+    """
+    final_device_id = device_id or request.headers.get("x-device-id")
+    settings = None
+    try:
+        _, settings = get_settings_for_device(final_device_id)
+    except Exception as e:
+        logger.warning(f"Settings resolution failed for config-version (falling back to defaults): {e}")
+    effective = settings or DEFAULT_USER_SETTINGS
+    version = hashlib.sha1(json.dumps(effective, sort_keys=True).encode()).hexdigest()[:12]
+    return {"version": version, "personalized": settings is not None}
 
 @app.get("/api/sample", tags=["public"])
 async def get_sample_data():
@@ -2619,11 +2770,12 @@ async def update_user_settings_endpoint(updates: UserSettingsUpdate, request: Re
 
     Optional home_id selects which home (default: your oldest home).
     Households are described, not configured: contract_type
-    ('dynamic' | 'day_night' | 'fixed'), has_solar, has_battery — the color
+    ('dynamic' | 'day_night' | 'fixed'), has_solar, has_battery. The color
     signal is derived from these. Display fields: palette
     ('standard' | 'colorblind'), brightness (5-100), night_dim_enabled,
     night_dim_start/night_dim_end ('HH:MM').
-    Devices pick the change up on their next /api/color-code poll.
+    Devices notice the change within ~30 seconds via their
+    /api/device/config-version poll and refetch /api/color-code.
     """
     try:
         user_info = get_current_user(request)
@@ -2819,7 +2971,7 @@ async def assign_device_home(device_db_id: int, assign: DeviceHomeAssign, reques
 # --- Personal API tokens (Home Assistant & other integrations) ---------------
 # Managed from the dashboard (Authelia-protected /api/user path). The tokens
 # themselves are used against the public /api/ha/* endpoints below, which the
-# edge does not gate — integrations cannot follow an Authelia login redirect.
+# edge does not gate: integrations cannot follow an Authelia login redirect.
 
 @app.get("/api/user/tokens", tags=["user"])
 async def list_user_tokens(request: Request):
@@ -3053,7 +3205,7 @@ async def upload_firmware(
             shutil.copyfileobj(firmware_file.file, buffer)
 
         # Compute checksums server-side from the bytes we actually stored. Never
-        # trust an uploader-supplied hash — that provides no integrity against an
+        # trust an uploader-supplied hash, which provides no integrity against an
         # attacker who controls the upload (security finding C3).
         checksum, computed_md5 = calculate_file_checksums(firmware_path)
 
@@ -3093,7 +3245,7 @@ async def upload_firmware(
             if not firmware_signing.verify_file(server_pubkey, firmware_path, signature.strip()):
                 raise HTTPException(
                     status_code=400,
-                    detail="Invalid firmware signature — rejected",
+                    detail="Invalid firmware signature, rejected",
                 )
             signature = signature.strip()
             signature_alg = firmware_signing.SIGNATURE_ALG
@@ -3103,7 +3255,7 @@ async def upload_firmware(
                 signature = signature.strip()
                 signature_alg = firmware_signing.SIGNATURE_ALG
                 logger.warning(
-                    "Storing firmware signature but no %s configured — signature is "
+                    "Storing firmware signature but no %s configured; signature is "
                     "NOT verified. Configure the public key to enforce signing.",
                     firmware_signing.PUBKEY_ENV,
                 )

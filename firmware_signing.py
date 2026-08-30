@@ -16,7 +16,7 @@ Signature scope
 ---------------
 The signature is computed over the raw firmware binary bytes. Verifiers must
 recompute over the exact bytes they will flash (or, on the server, the exact
-bytes written to disk) — never over an uploader-supplied hash.
+bytes written to disk), never over an uploader-supplied hash.
 
 CLI
 ---
@@ -53,7 +53,7 @@ SIGNATURE_ALG = "ed25519"
 
 # Env var holding the public key (64 hex chars = 32 raw bytes) used by the
 # server to verify uploads. When unset, the server falls back to checksum-only
-# integrity and logs a warning — this keeps existing deployments working until a
+# integrity and logs a warning; this keeps existing deployments working until a
 # key is provisioned and the release pipeline starts signing.
 PUBKEY_ENV = "FIRMWARE_SIGNING_PUBKEY"
 
@@ -129,7 +129,7 @@ def _cmd_keygen(args: argparse.Namespace) -> int:
     os.chmod(priv_path, 0o600)
 
     pub_hex = public_key_to_hex(private_key.public_key())
-    print(f"Private key written to: {priv_path}  (KEEP THIS OFFLINE — do not commit)")
+    print(f"Private key written to: {priv_path}  (KEEP THIS OFFLINE, do not commit)")
     print()
     print("Public key (32-byte hex). Set on the server and embed in firmware:")
     print(f"  {PUBKEY_ENV}={pub_hex}")
