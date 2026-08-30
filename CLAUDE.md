@@ -66,7 +66,7 @@ energy_pebble/
 │   ├── login.html        # Sign-in page
 │   ├── impact-circle.html # Energy secrets page
 │   ├── simulator.html    # Scenario simulator
-│   ├── setup/index.html  # Device Wi-Fi setup (synced with the esphome repo)
+│   ├── setup/index.html  # Device Wi-Fi setup (translated variant; see the file header)
 │   ├── pebble-sim.js     # <pebble-sim> web component
 │   ├── settings-modal.js # <settings-modal> web component
 │   └── energy-pebble-device.jpg  # Product photo
@@ -170,6 +170,13 @@ the Caddyfile because the `file` matcher cannot see them before the rewrite.
 Script and stylesheet tags carry a `?v=` marker. It exists to break caches
 populated under the previous year-long policy; with revalidation in place it
 does not need bumping on every deploy.
+
+Bump it when an asset's *content* changes in a way the HTML depends on. A
+browser still holding a year-long copy from before the revalidation policy
+will fetch the new HTML (it revalidates) but keep the old script, and the two
+disagree: the design-system rewrite hit exactly that, pairing new markup that
+draws its own chevron with an old catalog whose string still ended in a
+literal triangle.
 
 ## Domain Configuration
 - **Production**: `energypebble.tdlx.nl`

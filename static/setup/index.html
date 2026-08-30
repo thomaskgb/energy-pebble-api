@@ -8,14 +8,19 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <title data-i18n="setup.pageTitle">Energy Pebble – Wi-Fi Setup</title>
   <!--
-    Companion setup page for the Energy Pebble.
-    CANONICAL SOURCE: energy-pebble-esphome repo, setup/. A verbatim copy is
-    deployed as static/setup/ in the energy-pebble-api repo (served by Caddy
-    at https://energypebble.tdlx.nl/setup/) - edit here, then re-sync.
+    Companion setup page for the Energy Pebble, deployed at
+    https://energypebble.tdlx.nl/setup/.
+    This is the TRANSLATED variant: it loads the shared design system and the
+    i18n catalogs from the parent directory. The energy-pebble-esphome repo
+    carries a SEPARATE standalone variant at setup/, kept free of external
+    requests so it can be dropped on any static host (PROVISIONING.md there).
+    The two stopped being verbatim copies when this one gained i18n: keep the
+    markup and the wording in step by hand, and never overwrite one with the
+    other.
     Web Bluetooth only works on HTTPS or localhost. The Improv SDK and jsQR
     are vendored (self-hosted); no third-party requests are made.
   -->
-  <link rel="stylesheet" href="../base.css?v=2026-08-30">
+  <link rel="stylesheet" href="../base.css?v=2026-08-30-2">
   <style>
     /* Page-specific layout only; tokens and primitives come from base.css.
        Class names are kept as-is: the setup script toggles them by name. */
@@ -241,9 +246,9 @@
   </footer>
 </main>
 
-<script src="../i18n-strings.js?v=2026-08-30"></script>
-<script src="../i18n.js?v=2026-08-30"></script>
-<script src="../icons.js?v=2026-08-30"></script>
+<script src="../i18n-strings.js?v=2026-08-30-2"></script>
+<script src="../i18n.js?v=2026-08-30-2"></script>
+<script src="../icons.js?v=2026-08-30-2"></script>
 <script>I18n.start();</script>
 
 <script type="module">
