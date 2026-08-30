@@ -157,10 +157,12 @@
         settings.addEventListener('click', function () {
           if (self._setOpen) self._setOpen(false);
           // The settings modal is heavy, so only the pages that need it embed
-          // it. Everywhere else the item goes to the page that has it.
+          // it. Everywhere else the item goes to the page that has it AND asks
+          // it to open, rather than dropping the reader on a dashboard that
+          // shows nothing they clicked for.
           var modal = document.getElementById('settings-modal');
           if (modal && modal.open) modal.open();
-          else window.location.href = '/dashboard';
+          else window.location.href = '/dashboard#settings';
         });
       }
     }
