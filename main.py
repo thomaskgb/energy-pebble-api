@@ -21,6 +21,7 @@ import shutil
 import yaml
 import secrets
 import bcrypt
+from functools import cmp_to_key
 import firmware_signing
 
 # Pydantic models for OTA requests
@@ -646,27 +647,11 @@ def init_database():
         else:
             logger.info(f"Predefined devices table already contains {count} devices")
         
-        # Insert initial firmware versions if the table is empty
-        cursor.execute('SELECT COUNT(*) FROM firmware_versions')
-        firmware_count = cursor.fetchone()[0]
-        
-        if firmware_count == 0:
-            logger.info("Initializing firmware versions table")
-            initial_firmwares = [
-                ("v1.0.0", "esp32_v1.0.0.bin", "sha256:0000000000000000000000000000000000000000000000000000000000000000", 1048576, True, False, None, None, "Initial release firmware", None, "system"),
-                ("v1.1.0", "esp32_v1.1.0.bin", "sha256:1111111111111111111111111111111111111111111111111111111111111111", 1072640, True, False, "v1.0.0", "v1.0.0", "Bug fixes and improvements", None, "system"),
-                ("v1.2.0", "esp32_v1.2.0.bin", "sha256:2222222222222222222222222222222222222222222222222222222222222222", 1098752, True, False, "v1.0.0", "v1.1.0", "New features and optimizations", None, "system"),
-            ]
-            
-            for version, filename, checksum, file_size, is_stable, force_update, min_version, rollback_version, release_notes, target_devices, created_by in initial_firmwares:
-                cursor.execute('''
-                    INSERT INTO firmware_versions (version, filename, checksum, file_size, is_stable, force_update, min_version, rollback_version, release_notes, target_devices, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (version, filename, checksum, file_size, is_stable, force_update, min_version, rollback_version, release_notes, target_devices, created_by))
-            
-            logger.info(f"Added {len(initial_firmwares)} initial firmware versions")
-        else:
-            logger.info(f"Firmware versions table already contains {firmware_count} versions")
+        # The firmware_versions table is intentionally NOT seeded. Every row here
+        # is an offer made to real devices, so it must come from
+        # /api/firmware/upload with a real binary, checksums and signature. The
+        # placeholder releases this block used to insert had none of those and
+        # were handed to the fleet as genuine updates.
         
         conn.commit()
         logger.info("Database initialized successfully")
@@ -781,36 +766,75 @@ def version_is_newer(new_version: str, current_version: str) -> bool:
     """Check if new_version is newer than current_version"""
     return compare_versions(new_version, current_version) > 0
 
+def firmware_install_blocker(filename: str, md5_checksum: str, signature: str,
+                             signature_alg: str, signing_enforced: bool) -> Optional[str]:
+    """Return why a device could not install this firmware, or None if it can.
+
+    Offering a release the device is bound to refuse is worse than offering
+    nothing: the device burns a download, blinks its signature-failure pattern
+    and reports a rejection, then finds the same release again 12 hours later.
+    """
+    if not md5_checksum:
+        # The device pins ota.http_request.flash to the MD5 and aborts without one.
+        return "no md5_checksum recorded"
+
+    if signing_enforced and not signature:
+        return "no Ed25519 signature recorded"
+
+    if signature and signature_alg != firmware_signing.SIGNATURE_ALG:
+        return f"unsupported signature algorithm '{signature_alg}'"
+
+    # Same resolution the /firmware/{filename} download uses, so an eligible
+    # row can never hand the device a URL that 404s.
+    if not (get_firmware_storage_path() / filename).exists():
+        return "binary missing from firmware storage"
+
+    return None
+
 def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict:
-    """Get the latest available firmware for a device"""
+    """Get the highest installable firmware version newer than the device's.
+
+    Every stable, device-eligible row is considered and the winner is chosen by
+    semantic version. Ordering by release_date and taking a single row first
+    (the previous behavior) told a device it was up to date whenever the most
+    recently released row happened to be older than, or equal to, what it was
+    already running -- including the very common case of several rows sharing
+    one release_date, where SQLite's tie-break decided the whole fleet's fate.
+    """
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        
-        # Get latest stable firmware that's newer than current version
         cursor.execute('''
             SELECT version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum, signature, signature_alg
             FROM firmware_versions
             WHERE is_stable = TRUE
             AND (target_devices IS NULL OR target_devices LIKE ? OR target_devices = '[]')
-            ORDER BY release_date DESC
-            LIMIT 1
         ''', (f'%{device_id}%',))
+        rows = cursor.fetchall()
 
-        result = cursor.fetchone()
-        if not result:
-            return None
+    # A server holding a verification key publishes signed firmware only, so an
+    # unsigned row is a packaging accident rather than a legacy release.
+    signing_enforced = firmware_signing.load_server_public_key() is not None
 
-        version, filename, checksum, file_size, force_update, rollback_version, release_notes, min_version, md5_checksum, signature, signature_alg = result
-        
-        # Check if this version is newer than current
+    candidates = []
+    for (version, filename, checksum, file_size, force_update, rollback_version,
+         release_notes, min_version, md5_checksum, signature, signature_alg) in rows:
+
         if not version_is_newer(version, current_version):
-            return None
-            
-        # Check minimum version requirement
+            continue
+
         if min_version and compare_versions(current_version, min_version) < 0:
-            return None
-            
-        return {
+            continue
+
+        blocker = firmware_install_blocker(
+            filename, md5_checksum, signature, signature_alg, signing_enforced
+        )
+        if blocker:
+            logger.warning(
+                f"Firmware {version} not offered to {device_id}: {blocker}"
+            )
+            continue
+
+        candidates.append({
             'version': version,
             'filename': filename,
             'checksum': checksum,
@@ -821,7 +845,12 @@ def get_latest_firmware_for_device(device_id: str, current_version: str) -> dict
             'release_notes': release_notes,
             'signature': signature,
             'signature_alg': signature_alg
-        }
+        })
+
+    if not candidates:
+        return None
+
+    return max(candidates, key=lambda fw: cmp_to_key(compare_versions)(fw['version']))
 
 def log_ota_check(device_id: str, current_version: str, offered_version: str = None, ip_address: str = None, user_agent: str = None):
     """Log an OTA check attempt"""
