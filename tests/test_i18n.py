@@ -47,6 +47,16 @@ TRANSLATED_FILES = [
     STATIC / "setup" / "index.html",
     STATIC / "settings-modal.js",
     STATIC / "pebble-sim.js",
+    # The shared top bar builds its own markup, so its keys live here
+    # rather than in any page.
+    STATIC / "site-header.js",
+    # Admin page CONTENT is deliberately untranslated, but the chrome
+    # around it is the same header and section tabs as everywhere else.
+    STATIC / "admin-users.html",
+    STATIC / "admin-devices.html",
+    STATIC / "admin-firmware.html",
+    STATIC / "admin-tokens.html",
+    STATIC / "admin-waitlist.html",
 ]
 
 

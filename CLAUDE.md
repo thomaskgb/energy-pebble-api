@@ -120,6 +120,25 @@ appears on two pages belongs in `base.css`.
   (`/base.css`), because the browser URL is `/admin/users` and a relative href
   would resolve under `/admin/`.
 
+## Navigation
+Every page with a top bar renders the same `<site-header>` (`static/site-header.js`).
+There used to be nine hand-written copies and they had drifted: Logout sat in
+the user menu on the dashboard but inside the Admin menu on admin pages,
+Settings vanished on half the site, and the language switcher existed only on
+the public page.
+
+- **Persistent chrome**: the same items in the same order in the same place on
+  every page. What changes is state (which item is marked, what a role may
+  see), never position. Add `current="dashboard|insights|simulator|admin"` to
+  mark the page.
+- **One home per action**: Settings, Admin and Log out live in the account menu
+  and nowhere else. The wordmark is the link home, so there is no Home item.
+- **Sections carry their own nav**: the admin area's pages are tabs under the
+  page title (`.section-nav`), not five more entries in the top bar.
+- **Chrome is translated even where content is not**: admin pages load the i18n
+  runtime for the header and their section tabs; their own content stays
+  English by design.
+
 ## Internationalization
 The web UI ships in English (`en`), Dutch (`nl`) and French (`fr`). The pebble
 itself shows colors and needs no translation.
