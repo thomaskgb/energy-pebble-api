@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Energy Pebble - Impact Circle</title>
+    <title data-i18n="impact.pageTitle">Energy Pebble - Impact Circle</title>
     <style>
         * {
             margin: 0;
@@ -221,36 +221,36 @@
         <div class="secret-card">
             <div class="secret-header">
                 <span class="energy-icon">🔋</span>
-                <h1 class="secret-title">Welcome to the Impact Circle</h1>
-                <p class="secret-subtitle">You've unlocked the Energy Pebble secrets!</p>
+                <h1 class="secret-title" data-i18n="impact.title">Welcome to the Impact Circle</h1>
+                <p class="secret-subtitle" data-i18n="impact.subtitle">You've unlocked the Energy Pebble secrets!</p>
             </div>
             
             <div class="secret-story">
-                <p>
+                <p data-i18n-html="impact.intro">
                     <strong>🔐 Congratulations!</strong> You've discovered the secret that energy companies don't want you to know...
                 </p>
                 
-                <p>
+                <p data-i18n-html="impact.nightHours">
                     Every night between <span class="highlight">2 AM and 6 AM</span>, something magical happens to the electricity grid. 
                     Wind turbines keep spinning, solar panels have stored excess energy, and the demand is at its lowest. 
                     The grid practically <span class="highlight">pays you to use electricity</span> during these hidden green hours!
                 </p>
                 
-                <p>
+                <p data-i18n="impact.smartMoney">
                     While everyone else sleeps, the smart money (literally) shifts their energy consumption to these secret windows. 
                     Electric car owners charge their vehicles, smart home systems run their dishwashers and washing machines, 
                     and crypto miners fire up their operations.
                 </p>
                 
                 <div class="mission-box">
-                    <h3>🌍 Your Mission</h3>
-                    <p>
+                    <h3 data-i18n="impact.mission.title">🌍 Your Mission</h3>
+                    <p data-i18n="impact.mission.body">
                         Use this knowledge to slash your energy bills and help save the planet, one smart decision at a time. 
                         Set timers, use smart plugs, and become part of the energy revolution that's happening right under everyone's noses!
                     </p>
                 </div>
                 
-                <p>
+                <p data-i18n-html="impact.bestPart">
                     <strong>The best part?</strong> Every kWh you shift to green hours not only saves you money but also reduces the need for dirty 
                     peak-hour power plants. You're literally getting paid to help save the planet! 🌱⚡
                 </p>
@@ -259,24 +259,28 @@
             <div class="stats">
                 <div class="stat-item">
                     <div class="stat-number">70%</div>
-                    <div class="stat-label">Potential Savings</div>
+                    <div class="stat-label" data-i18n="impact.stat.savings">Potential Savings</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-number">2-6AM</div>
-                    <div class="stat-label">Sweet Spot</div>
+                    <div class="stat-label" data-i18n="impact.stat.sweetSpot">Sweet Spot</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-number">🌍</div>
-                    <div class="stat-label">Planet Helper</div>
+                    <div class="stat-label" data-i18n="impact.stat.planet">Planet Helper</div>
                 </div>
             </div>
             
             <div class="buttons">
-                <a href="/api/color-code" class="btn btn-primary">Check Current Prices</a>
-                <a href="/dashboard" class="btn btn-secondary">Back to Dashboard</a>
-                <a href="https://auth.tdlx.nl/logout" class="btn btn-logout">🚪 Logout</a>
+                <a href="/api/color-code" class="btn btn-primary" data-i18n="impact.action.prices">Check Current Prices</a>
+                <a href="/dashboard" class="btn btn-secondary" data-i18n="impact.action.dashboard">Back to Dashboard</a>
+                <a href="https://auth.tdlx.nl/logout" class="btn btn-logout" data-i18n="nav.logout">🚪 Logout</a>
             </div>
         </div>
     </div>
+
+    <script src="i18n-strings.js?v=2026-08-30"></script>
+    <script src="i18n.js?v=2026-08-30"></script>
+    <script>I18n.start();</script>
 </body>
 </html>

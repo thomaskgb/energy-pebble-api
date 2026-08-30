@@ -47,12 +47,36 @@
     # Enable file serving for all other routes
     file_server
     
-    # Set cache headers for static assets
-    @static {
+    # Cache headers.
+    #
+    # Our own HTML, CSS and JS have no version in their filenames, so a
+    # year-long max-age pinned returning visitors to whatever shipped last:
+    # they would keep running the old settings-modal.js against freshly
+    # deployed HTML. These files revalidate instead — file_server answers with
+    # an ETag, so an unchanged file costs a 304 and no body.
+    @app_assets {
         file
-        path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg
+        path *.html *.css *.js
+        not path /vendor/* /setup/vendor/*
     }
-    header @static Cache-Control "public, max-age=31536000"
+    header @app_assets Cache-Control "no-cache"
+
+    # The extensionless page routes above are rewritten to .html inside their
+    # handle blocks, which is too late for the matcher on @app_assets to see a
+    # file — they are named here so the pages people actually land on are not
+    # heuristically cached either.
+    # A directory request serves its index.html, but the request path carries no
+    # extension, so it needs naming here too — "/" is the landing page.
+    @page_routes path / /setup/ /dashboard /impact-circle /login /admin/*
+    header @page_routes Cache-Control "no-cache"
+
+    # Vendored libraries are pinned to a version and images never change under
+    # the same name, so those keep the long cache.
+    @immutable {
+        file
+        path /vendor/* /setup/vendor/* *.png *.jpg *.jpeg *.gif *.ico *.svg *.webp
+    }
+    header @immutable Cache-Control "public, max-age=31536000"
     
     # Security headers
     header {

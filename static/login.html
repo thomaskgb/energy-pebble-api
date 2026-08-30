@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Energy Pebble - Login</title>
+    <title data-i18n="login.pageTitle">Energy Pebble - Login</title>
     <style>
         * {
             margin: 0;
@@ -156,33 +156,40 @@
     <div class="login-container">
         <div class="logo">
             <h1>⚡ Energy Pebble</h1>
-            <p>Access the Impact Circle</p>
+            <p data-i18n="login.subtitle">Access the Impact Circle</p>
         </div>
 
         <div id="message" class="message" style="display: none;"></div>
 
         <form id="loginForm">
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="username" data-i18n="login.username">Username</label>
                 <input type="text" id="username" name="username" required>
             </div>
 
             <div class="form-group">
-                <label for="password">Password</label>
+                <label for="password" data-i18n="login.password">Password</label>
                 <input type="password" id="password" name="password" required>
             </div>
 
-            <button type="submit" class="login-btn">
+            <button type="submit" class="login-btn" data-i18n="login.submit">
                 🔐 Enter Impact Circle
             </button>
         </form>
 
         <div class="back-link">
-            <a href="/">← Back to Energy Pebble</a>
+            <a href="/" data-i18n="login.back">← Back to Energy Pebble</a>
         </div>
     </div>
 
+    <script src="i18n-strings.js?v=2026-08-30"></script>
+    <script src="i18n.js?v=2026-08-30"></script>
     <script>
+        // No account is signed in yet, so the account language cannot apply:
+        // the browser language or a previous choice decides.
+        I18n.start({ sync: false });
+        const t = (key, vars) => I18n.t(key, vars);
+
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -191,7 +198,7 @@
             const messageDiv = document.getElementById('message');
             
             if (!username || !password) {
-                showMessage('Please enter both username and password', 'error');
+                showMessage(t('login.error.missingFields'), 'error');
                 return;
             }
             
@@ -199,7 +206,7 @@
             const submitBtn = document.querySelector('.login-btn');
             const originalText = submitBtn.textContent;
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Logging in...';
+            submitBtn.textContent = t('login.pending');
             
             try {
                 // First, authenticate with Authelia
@@ -216,17 +223,17 @@
                 });
                 
                 if (response.ok) {
-                    showMessage('Login successful! Redirecting...', 'success');
+                    showMessage(t('login.success'), 'success');
                     // Redirect to dashboard after successful login
                     setTimeout(() => {
                         window.location.href = '/dashboard';
                     }, 1000);
                 } else {
                     const error = await response.json();
-                    showMessage(error.message || 'Invalid username or password', 'error');
+                    showMessage(error.message || t('login.error.invalid'), 'error');
                 }
             } catch (error) {
-                showMessage('Login failed. Please try again.', 'error');
+                showMessage(t('login.error.generic'), 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;

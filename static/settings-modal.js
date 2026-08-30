@@ -17,8 +17,14 @@
  *   settings-saved   {homeId, settings}   pebble settings saved for a home
  *   homes-changed    {homes}              home added / renamed / deleted
  *   profile-updated  {username, usernameChanged}   account profile saved
+ *   language-saved   {language}            interface language saved to the account
+ *
+ * The language switch itself is broadcast by i18n.js as `language-changed` on
+ * `document`, so pages that build markup in JavaScript can re-render.
  */
 (function () {
+  const t = (key, vars) => window.I18n.t(key, vars);
+
   function authRedirect() {
     window.location.href = 'https://auth.tdlx.nl/?rd=' + encodeURIComponent(window.location.href);
   }
@@ -94,99 +100,109 @@
     <div class="modal" id="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2 class="modal-title">User Settings</h2>
+          <h2 class="modal-title" data-i18n="settings.title">User Settings</h2>
           <button class="close-btn" id="close-x">&times;</button>
         </div>
         <div class="modal-body">
           <div class="settings-tabs" style="display: flex; gap: 6px; border-bottom: 1px solid #e9ecef; margin-bottom: 20px;">
-            <button type="button" id="tab-pebble" class="settings-tab active" data-tab="pebble">Pebble</button>
-            <button type="button" id="tab-homes" class="settings-tab" data-tab="homes">Homes</button>
-            <button type="button" id="tab-account" class="settings-tab" data-tab="account">Account</button>
+            <button type="button" id="tab-pebble" class="settings-tab active" data-tab="pebble" data-i18n="settings.tab.pebble">Pebble</button>
+            <button type="button" id="tab-homes" class="settings-tab" data-tab="homes" data-i18n="settings.tab.homes">Homes</button>
+            <button type="button" id="tab-account" class="settings-tab" data-tab="account" data-i18n="settings.tab.account">Account</button>
           </div>
           <div id="pane-pebble">
             <div style="text-align: center; margin-bottom: 18px;">
               <pebble-sim id="settings-preview" src="/api/color-code"></pebble-sim>
-              <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">
+              <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;" data-i18n="settings.pebble.previewCaption">
                 Live preview &mdash; this is what your pebble will show once you save
               </div>
             </div>
             <form id="pebble-settings-form" style="display: grid; gap: 2px; text-align: left;">
-              <label class="settings-row" id="ps-home-row" style="display: none;"><span>Home</span>
+              <label class="settings-row" id="ps-home-row" style="display: none;"><span data-i18n="settings.pebble.home">Home</span>
                 <select id="ps-home" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;"></select>
               </label>
-              <label class="settings-row"><span>Energy contract</span>
+              <label class="settings-row"><span data-i18n="settings.pebble.contract">Energy contract</span>
                 <select id="ps-contract" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                  <option value="dynamic">Dynamic prices</option>
-                  <option value="day_night">Day &amp; night tariff</option>
-                  <option value="fixed">Fixed price</option>
+                  <option value="dynamic" data-i18n="settings.contract.dynamic">Dynamic prices</option>
+                  <option value="day_night" data-i18n="settings.contract.dayNight">Day &amp; night tariff</option>
+                  <option value="fixed" data-i18n="settings.contract.fixed">Fixed price</option>
                 </select>
               </label>
-              <label class="settings-row"><span>Solar panels</span><input type="checkbox" id="ps-solar"></label>
-              <label class="settings-row"><span>Home battery <small>bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
-              <label class="settings-row"><span>Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
-              <label class="settings-row"><span>Dim at night to 30%
+              <label class="settings-row"><span data-i18n="settings.pebble.solar">Solar panels</span><input type="checkbox" id="ps-solar"></label>
+              <label class="settings-row"><span><span data-i18n="settings.pebble.battery">Home battery</span> <small data-i18n="settings.pebble.batteryHint">bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
+              <label class="settings-row"><span data-i18n="settings.pebble.colorblind">Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
+              <label class="settings-row"><span><span data-i18n="settings.pebble.nightDim">Dim at night to 30%</span>
                 (<input type="time" id="ps-dim-start" value="22:00" style="border: 1px solid #dee2e6; border-radius: 4px;"> &ndash;
                 <input type="time" id="ps-dim-end" value="07:00" style="border: 1px solid #dee2e6; border-radius: 4px;">)</span>
                 <input type="checkbox" id="ps-night-dim"></label>
-              <label class="settings-row"><span>Brightness <small><span id="ps-bri-val">100</span>%</small></span>
+              <label class="settings-row"><span><span data-i18n="settings.pebble.brightness">Brightness</span> <small><span id="ps-bri-val">100</span>%</small></span>
                 <input type="range" id="ps-brightness" min="5" max="100" value="100" style="width: 160px;"></label>
               <div style="margin-top: 14px;">
-                <button type="submit" class="btn-action">Save Settings</button>
+                <button type="submit" class="btn-action" data-i18n="settings.pebble.save">Save Settings</button>
                 <span id="ps-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
               </div>
             </form>
           </div>
           <div id="pane-homes" style="display: none;">
-            <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
+            <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;" data-i18n="settings.homes.intro">
               Devices and pebble settings belong to a home. Add one per address;
               pick which home to configure on the Pebble tab.
             </p>
             <div id="home-list" style="font-size: 0.9em; color: #495057; margin-bottom: 14px;"></div>
             <div style="display: flex; gap: 8px;">
-              <input type="text" id="home-name" placeholder="Name (e.g. Beach house)"
+              <input type="text" id="home-name" placeholder="Name (e.g. Beach house)" data-i18n-placeholder="settings.homes.namePlaceholder"
                      style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-              <input type="text" id="home-address" placeholder="Address (optional)"
+              <input type="text" id="home-address" placeholder="Address (optional)" data-i18n-placeholder="settings.homes.addressPlaceholder"
                      style="flex: 2; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-              <button type="button" class="btn-action" id="add-home">Add home</button>
+              <button type="button" class="btn-action" id="add-home" data-i18n="settings.homes.add">Add home</button>
             </div>
           </div>
           <div id="pane-account" style="display: none;">
+            <div style="margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #e9ecef;">
+              <label for="account-language" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.language">Language:</label>
+              <select id="account-language" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                <option value="en">English</option>
+                <option value="nl">Nederlands</option>
+                <option value="fr">Français</option>
+              </select>
+              <small style="color: #6c757d; font-size: 12px;" data-i18n="settings.account.languageHint">Applies to this website on every device you sign in on. Your pebble shows colors, so it is unaffected.</small>
+              <span id="lang-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
+            </div>
             <form id="account-form">
               <div style="margin-bottom: 20px;">
-                <label for="newUsername" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Username:</label>
-                <input type="text" id="newUsername" name="username" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new username">
-                <small style="color: #6c757d; font-size: 12px;">Username must be unique and contain only letters, numbers, and underscores.</small>
+                <label for="newUsername" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.username">Username:</label>
+                <input type="text" id="newUsername" name="username" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new username" data-i18n-placeholder="settings.account.usernamePlaceholder">
+                <small style="color: #6c757d; font-size: 12px;" data-i18n="settings.account.usernameHint">Username must be unique and contain only letters, numbers, and underscores.</small>
               </div>
               <div style="margin-bottom: 20px;">
-                <label for="currentPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Current Password:</label>
-                <input type="password" id="currentPassword" name="currentPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter current password">
+                <label for="currentPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.currentPassword">Current Password:</label>
+                <input type="password" id="currentPassword" name="currentPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter current password" data-i18n-placeholder="settings.account.currentPasswordPlaceholder">
               </div>
               <div style="margin-bottom: 20px;">
-                <label for="newPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">New Password:</label>
-                <input type="password" id="newPassword" name="newPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new password">
-                <small style="color: #6c757d; font-size: 12px;">Leave blank to keep current password.</small>
+                <label for="newPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.newPassword">New Password:</label>
+                <input type="password" id="newPassword" name="newPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new password" data-i18n-placeholder="settings.account.newPasswordPlaceholder">
+                <small style="color: #6c757d; font-size: 12px;" data-i18n="settings.account.newPasswordHint">Leave blank to keep current password.</small>
               </div>
               <div style="margin-bottom: 20px;">
-                <label for="confirmPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;">Confirm New Password:</label>
-                <input type="password" id="confirmPassword" name="confirmPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Confirm new password">
+                <label for="confirmPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.confirmPassword">Confirm New Password:</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Confirm new password" data-i18n-placeholder="settings.account.confirmPasswordPlaceholder">
               </div>
               <div style="text-align: right; margin-top: 25px;">
-                <button type="button" id="cancel-account" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; margin-right: 10px; cursor: pointer;">Cancel</button>
-                <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Save Changes</button>
+                <button type="button" id="cancel-account" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; margin-right: 10px; cursor: pointer;" data-i18n="common.cancel">Cancel</button>
+                <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;" data-i18n="common.saveChanges">Save Changes</button>
               </div>
             </form>
             <div style="border-top: 1px solid #e9ecef; margin-top: 25px; padding-top: 18px;">
-              <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;">API tokens</h3>
-              <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;">
+              <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;" data-i18n="settings.tokens.title">API tokens</h3>
+              <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;" data-i18n="settings.tokens.intro">
                 For integrations like Home Assistant. A token acts as you (never as admin) and is shown only once.
               </p>
               <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                <input type="text" id="token-name" placeholder="Token name (e.g. Home Assistant)"
+                <input type="text" id="token-name" placeholder="Token name (e.g. Home Assistant)" data-i18n-placeholder="settings.tokens.namePlaceholder"
                        style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                <button type="button" class="btn-action" id="create-token">Create token</button>
+                <button type="button" class="btn-action" id="create-token" data-i18n="settings.tokens.create">Create token</button>
               </div>
               <div id="new-token-box" style="display: none; background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;">Copy this token now — it won't be shown again:</div>
+                <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;" data-i18n="settings.tokens.copyOnce">Copy this token now — it won't be shown again:</div>
                 <input type="text" id="new-token-value" readonly
                        style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px; font-family: monospace; font-size: 12px; box-sizing: border-box;">
               </div>
@@ -206,6 +222,11 @@
       this._homes = [];
       this._homeId = null;
       this._wire();
+      // Shadow DOM is invisible to document.querySelectorAll, so the runtime
+      // needs the root handed to it explicitly — once here, then again on every
+      // language change.
+      window.I18n.register(this.shadowRoot);
+      document.addEventListener('language-changed', () => this._retranslate());
     }
 
     $(sel) { return this.shadowRoot.querySelector(sel); }
@@ -219,6 +240,7 @@
     open() {
       this._loadHomes().then(() => this._loadSettings());
       this._loadAccount();
+      this._loadLanguage();
       this._loadTokens();
       this._switchTab('pebble');
       this.$('#modal').classList.add('open');
@@ -262,6 +284,7 @@
       });
 
       // Account tab
+      this.$('#account-language').addEventListener('change', e => this._saveLanguage(e.target.value));
       this.$('#account-form').addEventListener('submit', e => this._saveAccount(e));
       this.$('#create-token').addEventListener('click', () => this._createToken());
       this.$('#new-token-value').addEventListener('click', e => e.target.select());
@@ -269,6 +292,17 @@
         const btn = e.target.closest('button[data-action="revoke-token"]');
         if (btn) this._revokeToken(Number(btn.dataset.id));
       });
+    }
+
+    /**
+     * Re-render the parts built in JavaScript. The static markup is handled by
+     * the runtime through the registered shadow root; these two lists are
+     * string-built, so they have to be rebuilt by hand.
+     */
+    _retranslate() {
+      this.$('#account-language').value = window.I18n.language;
+      this._loadHomes();
+      this._loadTokens();
     }
 
     _switchTab(tab) {
@@ -298,13 +332,13 @@
           `<div style="display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
               <input type="text" id="home-name-${h.id}" value="${esc(h.name)}"
                      style="flex:1; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
-              <input type="text" id="home-address-${h.id}" value="${esc(h.address)}" placeholder="Address"
+              <input type="text" id="home-address-${h.id}" value="${esc(h.address)}" placeholder="${esc(t('settings.homes.address'))}"
                      style="flex:2; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
-              <small style="color:#adb5bd; white-space:nowrap;">${h.device_count} device${h.device_count === 1 ? '' : 's'}</small>
+              <small style="color:#adb5bd; white-space:nowrap;">${esc(window.I18n.plural('settings.homes.deviceCount', h.device_count))}</small>
               <button type="button" data-action="save-home" data-id="${h.id}"
-                      style="background:#27ae60; color:white; border:none; border-radius:6px; padding:5px 12px; cursor:pointer;">Save</button>
+                      style="background:#27ae60; color:white; border:none; border-radius:6px; padding:5px 12px; cursor:pointer;">${esc(t('common.save'))}</button>
               ${this._homes.length > 1 && !h.device_count ? `<button type="button" data-action="delete-home" data-id="${h.id}"
-                      style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:4px 10px; cursor:pointer;">Delete</button>` : ''}
+                      style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:4px 10px; cursor:pointer;">${esc(t('common.delete'))}</button>` : ''}
           </div>`).join('');
       } catch (e) {
         console.error('Error loading homes:', e);
@@ -313,7 +347,7 @@
 
     async _createHome() {
       const name = this.$('#home-name').value.trim();
-      if (!name) { alert('Give the home a name'); return; }
+      if (!name) { alert(t('settings.homes.nameRequired')); return; }
       const address = this.$('#home-address').value.trim() || null;
       const resp = await fetch('/api/user/homes', {
         method: 'POST',
@@ -326,13 +360,13 @@
         await this._loadHomes();
         this._emit('homes-changed', { homes: this._homes });
       } else {
-        alert('Could not add home');
+        alert(t('settings.homes.addFailed'));
       }
     }
 
     async _saveHome(id) {
       const name = this.$('#home-name-' + id).value.trim();
-      if (!name) { alert('Home name cannot be empty'); return; }
+      if (!name) { alert(t('settings.homes.nameEmpty')); return; }
       const address = this.$('#home-address-' + id).value.trim();
       const resp = await fetch('/api/user/homes/' + id, {
         method: 'PUT',
@@ -343,14 +377,14 @@
         await this._loadHomes();
         this._emit('homes-changed', { homes: this._homes });
       } else {
-        alert('Could not save home');
+        alert(t('settings.homes.saveFailed'));
       }
     }
 
     async _deleteHome(id) {
-      if (!confirm('Delete this home?')) return;
+      if (!confirm(t('settings.homes.deleteConfirm'))) return;
       const resp = await fetch('/api/user/homes/' + id, { method: 'DELETE' });
-      if (!resp.ok) alert((await resp.json()).detail || 'Could not delete home');
+      if (!resp.ok) alert((await resp.json()).detail || t('settings.homes.deleteFailed'));
       if (this._homeId === id) this._homeId = null;
       await this._loadHomes();
       this._loadSettings();
@@ -414,18 +448,18 @@
         });
         if (response.ok) {
           status.style.color = '#27ae60';
-          status.textContent = '✓ Saved — devices update within 15 min';
+          status.textContent = t('settings.pebble.saved');
           const result = await response.json();
           this._homeId = result.home_id;
           this._emit('settings-saved', { homeId: result.home_id, settings: result.settings });
         } else {
           const error = await response.json();
           status.style.color = '#e74c3c';
-          status.textContent = 'Error: ' + (error.detail || response.status);
+          status.textContent = t('settings.pebble.saveError', { error: error.detail || response.status });
         }
       } catch (error) {
         status.style.color = '#e74c3c';
-        status.textContent = 'Error saving settings';
+        status.textContent = t('settings.pebble.saveErrorGeneric');
       }
       setTimeout(() => { status.textContent = ''; }, 5000);
     }
@@ -452,9 +486,9 @@
       const newPassword = formData.get('newPassword');
       const confirmPassword = formData.get('confirmPassword');
 
-      if (!newUsername.trim()) { alert('Username is required'); return; }
-      if (newPassword && newPassword !== confirmPassword) { alert('New passwords do not match'); return; }
-      if (newPassword && newPassword.length < 6) { alert('New password must be at least 6 characters long'); return; }
+      if (!newUsername.trim()) { alert(t('settings.account.usernameRequired')); return; }
+      if (newPassword && newPassword !== confirmPassword) { alert(t('settings.account.passwordMismatch')); return; }
+      if (newPassword && newPassword.length < 6) { alert(t('settings.account.passwordTooShort')); return; }
 
       try {
         const updateData = { username: newUsername.trim(), currentPassword };
@@ -468,23 +502,61 @@
         if (response.status === 401) { authRedirect(); return; }
         if (response.ok) {
           const result = await response.json();
-          alert('Settings updated successfully!');
+          alert(t('settings.account.updated'));
           this.close();
           this._emit('profile-updated', {
             username: newUsername.trim(),
             usernameChanged: !!result.usernameChanged
           });
           if (result.usernameChanged) {
-            alert('Username changed. You may need to log in again.');
+            alert(t('settings.account.usernameChanged'));
           }
         } else {
           const error = await response.json();
-          alert(`Failed to update settings: ${error.detail}`);
+          alert(t('settings.account.updateFailed', { error: error.detail }));
         }
       } catch (error) {
         console.error('Error updating settings:', error);
-        alert('Failed to update settings. Please try again.');
+        alert(t('settings.account.updateFailedGeneric'));
       }
+    }
+
+    // --- language -------------------------------------------------------------
+
+    /**
+     * Show the language stored on the account. The runtime has usually already
+     * switched to it on page load; this only makes the select agree with it.
+     */
+    async _loadLanguage() {
+      const select = this.$('#account-language');
+      select.value = window.I18n.language;
+      try {
+        const resp = await fetch('/api/user/preferences');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const language = data.preferences && data.preferences.language;
+        if (language) {
+          select.value = language;
+          window.I18n.setLanguage(language);
+        }
+      } catch (e) {
+        console.error('Error loading account preferences:', e);
+      }
+    }
+
+    /** Switch the interface immediately, then persist the choice to the account. */
+    async _saveLanguage(language) {
+      const status = this.$('#lang-status');
+      try {
+        await window.I18n.setLanguage(language, { save: true });
+        status.style.color = '#27ae60';
+        status.textContent = t('settings.account.languageSaved');
+        this._emit('language-saved', { language });
+      } catch (e) {
+        status.style.color = '#e74c3c';
+        status.textContent = t('settings.account.languageSaveFailed');
+      }
+      setTimeout(() => { status.textContent = ''; }, 5000);
     }
 
     async _loadTokens() {
@@ -494,16 +566,16 @@
         const data = await resp.json();
         const list = this.$('#token-list');
         if (!data.tokens.length) {
-          list.innerHTML = '<em style="color:#adb5bd;">No tokens yet.</em>';
+          list.innerHTML = `<em style="color:#adb5bd;">${esc(t('settings.tokens.empty'))}</em>`;
           return;
         }
-        list.innerHTML = data.tokens.map(t =>
+        list.innerHTML = data.tokens.map(token =>
           `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
-              <span>${esc(t.token_name)}
-                  <small style="color:#adb5bd;">· created ${(t.created_at || '').slice(0, 10)}${t.last_used_at ? ' · last used ' + t.last_used_at.slice(0, 10) : ''}</small>
+              <span>${esc(token.token_name)}
+                  <small style="color:#adb5bd;">· ${esc(t('settings.tokens.created', { date: (token.created_at || '').slice(0, 10) }))}${token.last_used_at ? ' · ' + esc(t('settings.tokens.lastUsed', { date: token.last_used_at.slice(0, 10) })) : ''}</small>
               </span>
-              <button type="button" data-action="revoke-token" data-id="${t.id}"
-                      style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">Revoke</button>
+              <button type="button" data-action="revoke-token" data-id="${token.id}"
+                      style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">${esc(t('settings.tokens.revoke'))}</button>
           </div>`).join('');
       } catch (e) {
         console.error('Error loading tokens:', e);
@@ -518,19 +590,19 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token_name: name })
         });
-        if (!resp.ok) { alert('Could not create token'); return; }
+        if (!resp.ok) { alert(t('settings.tokens.createFailed')); return; }
         const data = await resp.json();
         this.$('#new-token-box').style.display = 'block';
         this.$('#new-token-value').value = data.token;
         this.$('#token-name').value = '';
         this._loadTokens();
       } catch (e) {
-        alert('Could not create token');
+        alert(t('settings.tokens.createFailed'));
       }
     }
 
     async _revokeToken(id) {
-      if (!confirm('Revoke this token? Integrations using it will stop working.')) return;
+      if (!confirm(t('settings.tokens.revokeConfirm'))) return;
       await fetch('/api/user/tokens/' + id, { method: 'DELETE' });
       this._loadTokens();
     }

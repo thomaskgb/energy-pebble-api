@@ -18,6 +18,7 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - **User authentication**: Authelia-based authentication with protected user area
 - **Device management**: Automatic detection and pairing of Energy Dot hardware devices
 - **Energy secrets**: Fun, educational content for authenticated users
+- **Interface languages**: English, Dutch and French, chosen per account
 
 ## API Endpoints
 
@@ -32,6 +33,7 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /api/devices`: Get detected devices from client's IP address
 - `POST /api/devices/{id}/claim`: Claim a device and assign nickname (requires auth)
 - `GET /api/user/devices`: Get all devices claimed by authenticated user
+- `GET/PUT /api/user/preferences`: Account-level preferences — currently the interface `language` (requires auth)
 
 ## Web Routes
 - `GET /`: Public landing page with color codes and API information
@@ -71,6 +73,29 @@ energy_pebble/
 - **User Claiming**: Users can claim and name devices detected on their network
 - **SQLite Database**: Device data stored in `/tmp/energy_pebble.db`
 
+## Internationalization
+The web UI ships in English (`en`), Dutch (`nl`) and French (`fr`). The pebble
+itself shows colors and needs no translation.
+
+- **Per account**: the choice lives in the `user_preferences` table and is
+  edited under Settings → Account → Language, so it follows the person across
+  devices.
+- **Logged-out visitors**: resolved from the browser's language, overridable
+  with the EN/NL/FR switcher in the top nav; the choice is kept in
+  `localStorage` until they sign in, after which the account setting wins.
+- **Runtime**: `static/i18n.js` (the small runtime) plus `static/i18n-strings.js`
+  (all three catalogs). Load them in that order and **before** `pebble-sim.js`
+  and `settings-modal.js`, which register their shadow roots with the runtime
+  when they upgrade.
+- **Markup**: put the key in an attribute — `data-i18n` (textContent),
+  `data-i18n-html` (strings with inline markup), or `data-i18n-<attr>` for
+  placeholders, titles and aria labels. Strings built in JavaScript use
+  `I18n.t('key', {vars})`, counts use `I18n.plural('key', n)`.
+- **Adding a string**: add the key to all three catalogs. `tests/test_i18n.py`
+  fails when `nl`/`fr` fall behind `en`, when a key is used but not translated,
+  or when a catalog key is never referenced.
+- **Scope**: admin pages are deliberately untranslated — they are internal.
+
 ## Color Logic
 The system uses a commitment-based approach to ensure color stability:
 
@@ -90,6 +115,18 @@ The system uses a commitment-based approach to ensure color stability:
 docker compose up -d
 ```
 
+### Static asset caching
+Our own HTML, CSS and JS carry no version in their filenames, so Caddy serves
+them with `Cache-Control: no-cache` — they revalidate against an ETag, which
+costs a 304 and no body. Only vendored libraries (pinned by filename) and
+images keep the year-long cache. Extensionless routes (`/`, `/setup/`,
+`/dashboard`, `/impact-circle`, `/login`, `/admin/*`) are named explicitly in
+the Caddyfile because the `file` matcher cannot see them before the rewrite.
+
+Script and stylesheet tags carry a `?v=` marker. It exists to break caches
+populated under the previous year-long policy; with revalidation in place it
+does not need bumping on every deploy.
+
 ## Domain Configuration
 - **Production**: `energypebble.tdlx.nl`
 - **Routing**: 
@@ -102,6 +139,7 @@ docker compose up -d
 - Sample data includes realistic price patterns and edge cases
 - Web interface auto-refreshes every 15 minutes
 - Run `python3 test_device_detection.py` to test device detection functionality
+- Run `pytest tests/test_i18n.py` after touching any user-facing string
 
 ## Dependencies
 - FastAPI with CORS support
