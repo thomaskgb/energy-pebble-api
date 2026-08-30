@@ -2072,6 +2072,30 @@ async def get_color_code(request: Request, date: Optional[str] = None, device_id
         }
     }
 
+@app.get("/api/device/config-version", tags=["public"])
+async def get_device_config_version(request: Request, device_id: Optional[str] = None):
+    """
+    Tiny settings-change probe for devices.
+
+    Returns a short fingerprint of the effective settings for the device
+    (X-Device-ID header or device_id query parameter). The value changes
+    exactly when the household's saved settings change — or the device is
+    re-homed to a home with a different profile — so firmware can poll this
+    every 30 seconds and refetch /api/color-code only when it differs.
+    Unknown or unclaimed devices get the stable fingerprint of the defaults.
+
+    Cheap by design: one SQLite lookup, no price data, no writes.
+    """
+    final_device_id = device_id or request.headers.get("x-device-id")
+    settings = None
+    try:
+        _, settings = get_settings_for_device(final_device_id)
+    except Exception as e:
+        logger.warning(f"Settings resolution failed for config-version (falling back to defaults): {e}")
+    effective = settings or DEFAULT_USER_SETTINGS
+    version = hashlib.sha1(json.dumps(effective, sort_keys=True).encode()).hexdigest()[:12]
+    return {"version": version, "personalized": settings is not None}
+
 @app.get("/api/sample", tags=["public"])
 async def get_sample_data():
     """
@@ -2684,7 +2708,8 @@ async def update_user_settings_endpoint(updates: UserSettingsUpdate, request: Re
     signal is derived from these. Display fields: palette
     ('standard' | 'colorblind'), brightness (5-100), night_dim_enabled,
     night_dim_start/night_dim_end ('HH:MM').
-    Devices pick the change up on their next /api/color-code poll.
+    Devices notice the change within ~30 seconds via their
+    /api/device/config-version poll and refetch /api/color-code.
     """
     try:
         user_info = get_current_user(request)
