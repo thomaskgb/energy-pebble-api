@@ -1473,9 +1473,66 @@ async def get_solar_boost_hours() -> Optional[set]:
 
     return {hour for hour, boosted in committed.items() if boosted}
 
+# --- Retention ---------------------------------------------------------------
+# Device rows hold the only network-identifying data we keep: an IP address, a
+# user agent and a fingerprint derived from them. They exist to pair a pebble
+# to a household, so they are kept while a device is in use and dropped once it
+# plainly is not. The privacy page states this period out loud, so the number
+# here and the sentence there must not drift apart.
+
+DEVICE_RETENTION_DAYS = 365
+DEVICE_PRUNE_INTERVAL_SECONDS = 24 * 3600
+_last_device_prune = 0.0
+
+def prune_device_records(now: Optional[datetime] = None) -> int:
+    """Delete devices unseen for DEVICE_RETENTION_DAYS, and their claims.
+
+    A dormant device loses its pairing along with its record. That is the
+    trade-off of a fixed window rather than a sliding anonymisation, and the
+    owner re-pairs by scanning the sticker again.
+    """
+    cutoff = (now or datetime.now(pytz.UTC)) - timedelta(days=DEVICE_RETENTION_DAYS)
+    # last_seen is written both as an ISO timestamp and by CURRENT_TIMESTAMP;
+    # both share this prefix, so a lexicographic compare is safe here.
+    cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
+
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            stale = [row[0] for row in conn.execute(
+                "SELECT id FROM devices WHERE last_seen IS NOT NULL AND last_seen < ?",
+                (cutoff_str,),
+            ).fetchall()]
+            if not stale:
+                return 0
+            placeholders = ",".join("?" * len(stale))
+            conn.execute(f"DELETE FROM user_devices WHERE device_id IN ({placeholders})", stale)
+            conn.execute(f"DELETE FROM devices WHERE id IN ({placeholders})", stale)
+            conn.commit()
+
+    logger.info(f"Retention: removed {len(stale)} device records unseen for "
+                f"{DEVICE_RETENTION_DAYS} days")
+    return len(stale)
+
+def maybe_prune_device_records():
+    """Run the retention sweep at most once a day.
+
+    There is no scheduler in this app, so the sweep rides along with device
+    traffic rather than adding a background task and a new way to fail.
+    """
+    global _last_device_prune
+    if time.time() - _last_device_prune < DEVICE_PRUNE_INTERVAL_SECONDS:
+        return
+    _last_device_prune = time.time()
+    try:
+        prune_device_records()
+    except Exception as e:
+        logger.warning(f"Device retention sweep failed: {e}")
+
 def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str] = None):
     """Log a device request for tracking purposes. Only tracks devices with device_id."""
     try:
+        maybe_prune_device_records()
+
         # Only log devices that provide a device_id
         if not device_id:
             return
@@ -1570,6 +1627,10 @@ if LOCAL_DEV_USER:
     @app.get("/insights", include_in_schema=False)
     async def _dev_insights():
         return RedirectResponse("/static/insights.html")
+
+    @app.get("/privacy", include_in_schema=False)
+    async def _dev_privacy():
+        return RedirectResponse("/static/privacy.html")
 
     @app.get("/impact-circle", include_in_schema=False)
     async def _dev_impact_circle():
