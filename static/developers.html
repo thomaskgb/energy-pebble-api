@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Energy Pebble API, Home Assistant integration and API tokens.">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f1319" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>Developers - Energy Pebble</title>
+    <!-- Deliberately untranslated, like the admin pages: translating HTTP
+         endpoint descriptions into Dutch and French is cost with no reader.
+         tests/test_i18n.py lists the translated files explicitly, so a page
+         left off that list is legitimately English-only. -->
+    <link rel="stylesheet" href="/base.css?v=2026-08-30-5">
+    <style>
+        /* Page-specific layout only; everything reusable lives in base.css. */
+
+        .dev { max-width: 860px; }
+
+        .dev__head { padding-block: var(--space-10) var(--space-8); }
+        .dev__head p { margin-top: var(--space-3); max-width: 62ch; }
+
+        .dev section { margin-bottom: var(--space-10); }
+        .dev h2 {
+            font-size: var(--text-xl);
+            padding-bottom: var(--space-3);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: var(--space-5);
+        }
+        .dev h3 { font-size: var(--text-md); margin: var(--space-6) 0 var(--space-2); }
+
+        /* Endpoint list: the signature reads first, the sentence second */
+        .endpoints { list-style: none; padding: 0; margin: 0; }
+        .endpoints li {
+            display: grid;
+            grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+            gap: var(--space-1) var(--space-5);
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--border);
+            font-size: var(--text-sm);
+        }
+        .endpoints li:last-child { border-bottom: none; }
+        .endpoints .sig {
+            font-family: var(--font-mono);
+            font-size: var(--text-xs);
+            white-space: nowrap;
+            color: var(--text);
+        }
+        .endpoints .sig a { color: inherit; }
+        .endpoints .sig a:hover { color: var(--accent); }
+        .endpoints .desc { color: var(--text-secondary); }
+
+        .facts { list-style: none; padding: 0; margin: 0; }
+        .facts li {
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--border);
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+        }
+        .facts li:last-child { border-bottom: none; }
+        .facts strong { color: var(--text); font-weight: var(--weight-medium); }
+
+        .dl {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        .dl__note { font-size: var(--text-sm); color: var(--text-muted); }
+
+        .steps { padding-left: 1.2rem; color: var(--text-secondary); }
+        .steps li { margin-bottom: var(--space-3); }
+        .steps strong, .steps code { color: var(--text); }
+
+        pre {
+            margin: 0;
+            padding: var(--space-4);
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: var(--text-sm);
+            line-height: 1.5;
+            color: var(--text-secondary);
+            background: var(--surface-sunken);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+        }
+        pre code { background: none; border: none; padding: 0; }
+    </style>
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <site-header></site-header>
+
+    <main id="main" class="container dev page">
+        <div class="dev__head">
+            <h1>Developers</h1>
+            <p class="lead">The colour signal your pebble reads is a public JSON API. There is
+            also a Home Assistant integration, and personal API tokens for anything you build
+            yourself.</p>
+        </div>
+
+        <section>
+            <h2>API</h2>
+            <ul class="endpoints">
+                <li>
+                    <span class="sig"><a href="/api/color-code" target="_blank" rel="noopener">GET /api/color-code</a></span>
+                    <span class="desc">Current and upcoming color codes. Devices sending <code>X-Device-ID</code>
+                    get their household's personalized signal and display settings.</span>
+                </li>
+                <li>
+                    <span class="sig"><a href="/api/json" target="_blank" rel="noopener">GET /api/json</a></span>
+                    <span class="desc">Raw electricity price data.</span>
+                </li>
+                <li>
+                    <span class="sig"><a href="/api/sample" target="_blank" rel="noopener">GET /api/sample</a></span>
+                    <span class="desc">Sample data, for testing without hitting the live feed.</span>
+                </li>
+                <li>
+                    <span class="sig"><a href="/api/sample-color-code" target="_blank" rel="noopener">GET /api/sample-color-code</a></span>
+                    <span class="desc">Sample color codes.</span>
+                </li>
+                <li>
+                    <span class="sig">GET/PUT /api/user/settings</span>
+                    <span class="desc">Your household profile: contract, solar, battery, display. Sign-in required.</span>
+                </li>
+                <li>
+                    <span class="sig"><a href="/docs" target="_blank" rel="noopener">GET /docs</a></span>
+                    <span class="desc">Interactive API documentation, generated from the service itself.</span>
+                </li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>API tokens</h2>
+            <p class="prose">For anything that needs your own data rather than the public feed.
+            A token acts as you and never as an admin, whatever your account can do.</p>
+            <ol class="steps">
+                <li>Open your user menu on the <a href="/dashboard">dashboard</a>, then
+                    <strong>Settings &rarr; Account</strong>.</li>
+                <li>Name the token and create it. It is shown <strong>once</strong>; copy it then.</li>
+                <li>Send it as a bearer token:</li>
+            </ol>
+<pre><code>curl -H "Authorization: Bearer YOUR_TOKEN" \
+     https://energypebble.tdlx.nl/api/color-code</code></pre>
+            <p class="prose" style="margin-top: var(--space-4);">Tokens are listed under the same
+            settings tab, with when each was created and last used, and can be revoked there.</p>
+        </section>
+
+        <section>
+            <h2>Home Assistant</h2>
+            <p class="prose">A custom component exposes your pebble's signal as a sensor. It polls
+            the same endpoint the physical device does, so the value is personalized to your
+            household profile rather than the raw market price.</p>
+
+            <h3>Install</h3>
+            <p class="dl">
+                <a class="btn btn--primary" href="/downloads/energy-pebble-home-assistant.zip">
+                    <i data-icon="save" data-icon-size="16"></i>
+                    Download the component
+                </a>
+                <span class="dl__note">zip, built from the files running right now</span>
+            </p>
+            <ol class="steps">
+                <li>Unzip it into your Home Assistant configuration directory. It already
+                    contains <code>custom_components/energy_pebble/</code>, so unpacking it
+                    alongside your <code>configuration.yaml</code> puts the files where Home
+                    Assistant looks for them.</li>
+                <li>Restart Home Assistant.</li>
+                <li>Create a token here under <strong>Settings &rarr; Account</strong>, as above.
+                    It is shown once.</li>
+                <li>In Home Assistant: <strong>Settings &rarr; Devices &amp; services &rarr; Add
+                    integration &rarr; Energy Pebble</strong>. Paste the token, then pick which
+                    pebble to follow.</li>
+            </ol>
+
+            <h3>HACS</h3>
+            <div class="notice">
+                <i data-icon="info" data-icon-size="16"></i>
+                <div>
+                    <span class="notice__title">Not available through HACS yet.</span>
+                    <p style="margin-top: var(--space-1);">HACS looks for
+                    <code>custom_components/&lt;domain&gt;/</code> at the root of a repository.
+                    This one keeps the component under <code>homeassistant/</code>, alongside the
+                    API it talks to, so adding this repository as a HACS custom repository will
+                    not find it. Publishing needs the integration in a repository of its own,
+                    which is planned once it settles. Until then the download above is the
+                    supported route, and it is the same files.</p>
+                </div>
+            </div>
+
+            <h3>Entity</h3>
+            <p class="prose"><code>sensor.&lt;nickname&gt;_color</code> holds the current color
+            (<code>green</code>, <code>yellow</code> or <code>red</code>), with
+            <code>next_hours</code>, <code>signal_source</code>, <code>personalized</code> and the
+            <code>display</code> block as attributes.</p>
+
+            <h3>Example automation</h3>
+<pre><code>automation:
+  - alias: Start dishwasher when the pebble turns green
+    triggers:
+      - trigger: state
+        entity_id: sensor.kitchen_color
+        to: "green"
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.dishwasher</code></pre>
+        </section>
+
+        <section>
+            <h2>Technical details</h2>
+            <ul class="facts">
+                <li><strong>Data source:</strong> Elia Grid International, the Belgian TSO.</li>
+                <li><strong>Coverage:</strong> Belgian day-ahead electricity market prices.</li>
+                <li><strong>Update frequency:</strong> day-ahead prices publish around 12:45 CET;
+                    colors are committed for 8 hours so they cannot shift under you.</li>
+                <li><strong>Format:</strong> JSON, with CORS enabled.</li>
+                <li><strong>Caching:</strong> a fetched day is final, so days are cached and
+                    survive restarts.</li>
+            </ul>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <a href="/">Home</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/docs" target="_blank" rel="noopener">API documentation</a>
+        </div>
+    </footer>
+
+    <script src="/i18n-strings.js?v=2026-08-30-5"></script>
+    <script src="/i18n.js?v=2026-08-30-5"></script>
+    <script src="/icons.js?v=2026-08-30-5"></script>
+    <script src="/site-header.js?v=2026-08-30-5"></script>
+    <script>I18n.start();</script>
+</body>
+</html>

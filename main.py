@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Query, Depends, Security, File, UploadFile, Form
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from pydantic import BaseModel
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import httpx
@@ -88,7 +88,9 @@ class TokenResponse(BaseModel):
     created_by: str
 
 app = FastAPI(
-    title="Electricity Price API", 
+    title="Electricity Price API",
+    docs_url=None,  # replaced below, so the reference matches the site
+    
     description="API that provides electricity price data and color-coded indicators",
     openapi_tags=[
         {
@@ -1607,6 +1609,76 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+# --- Home Assistant component download -----------------------------------------
+# "Copy custom_components/energy_pebble/ into your config" asks the reader to
+# find a directory in a git repository first. This hands them the directory as
+# a zip instead, built on request from the files actually shipping, so it can
+# never be a stale artifact someone forgot to rebuild.
+_HA_COMPONENT_DIR = Path(__file__).parent / "homeassistant" / "custom_components" / "energy_pebble"
+
+
+@app.get("/downloads/energy-pebble-home-assistant.zip", include_in_schema=False)
+async def home_assistant_component_zip():
+    """The custom component, zipped so it can be dropped into config/."""
+    if not _HA_COMPONENT_DIR.is_dir():
+        raise HTTPException(status_code=404, detail="Component not found")
+
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(_HA_COMPONENT_DIR.rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts:
+                # Unpacking leaves custom_components/energy_pebble/ ready to move
+                archive.write(path, Path("custom_components/energy_pebble") /
+                              path.relative_to(_HA_COMPONENT_DIR))
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition":
+                 'attachment; filename="energy-pebble-home-assistant.zip"'},
+    )
+
+
+# --- API reference ------------------------------------------------------------
+# Swagger UI stays generated from the OpenAPI schema: a hand-written reference
+# drifts from the code. What it does not need to keep is FastAPI's favicon and
+# a stylesheet with no relation to the product, so the stock page is rendered
+# and then dressed: our icon, our title, our stylesheet after theirs, and a bar
+# that leads back to the rest of the site.
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse
+
+_DOCS_BAR = """
+<div class="ep-docs-bar"><div class="ep-docs-bar__inner">
+  <a class="brand" href="/">Energy Pebble</a>
+  <span class="ep-docs-bar__links">
+    <a href="/developers">Developer guide</a>
+    <a href="/openapi.json">OpenAPI schema</a>
+  </span>
+</div></div>
+"""
+
+
+@app.get("/docs", include_in_schema=False)
+async def api_reference():
+    """Swagger UI, skinned to match the site."""
+    page = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} reference",
+        swagger_favicon_url="/favicon.svg",
+    ).body.decode()
+    # Ours loads after Swagger's, so it only has to override, never reproduce.
+    page = page.replace(
+        "</head>",
+        '<link rel="stylesheet" href="/docs.css?v=2026-08-30-5">\n</head>',
+    )
+    page = page.replace("<body>", f"<body>{_DOCS_BAR}", 1)
+    return HTMLResponse(page)
+
+
 # Serve the static site under /static for local development (in production
 # Caddy serves these files at / and Traefik never routes /static here).
 _static_dir = Path(__file__).parent / "static"
@@ -1623,6 +1695,10 @@ if LOCAL_DEV_USER:
     @app.get("/dashboard", include_in_schema=False)
     async def _dev_dashboard():
         return RedirectResponse("/static/dashboard.html")
+
+    @app.get("/developers", include_in_schema=False)
+    async def _dev_developers():
+        return RedirectResponse("/static/developers.html")
 
     @app.get("/insights", include_in_schema=False)
     async def _dev_insights():

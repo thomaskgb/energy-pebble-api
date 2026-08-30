@@ -1,0 +1,157 @@
+/* =============================================================================
+   docs.css: dress Swagger UI in the product's clothes.
+
+   Loaded AFTER Swagger's own stylesheet, so this only has to override, never
+   reproduce. Swagger UI stays auto-generated from the OpenAPI schema, which is
+   the whole point of keeping it: a hand-written reference drifts from the code,
+   and we have spent enough of this project chasing copy that drifted.
+
+   Light only, deliberately. Swagger UI has no dark theme and a half-converted
+   one reads as broken; the page is a reference tool, not somewhere anyone
+   lingers at night.
+   ============================================================================= */
+
+@import url("/base.css");
+
+/* Swagger's own green bar carries Swagger's logo and a schema-URL box nobody
+   here needs. Ours replaces it. */
+.swagger-ui .topbar { display: none; }
+
+body { background: var(--bg); }
+
+.swagger-ui,
+.swagger-ui .info li,
+.swagger-ui .info p,
+.swagger-ui .info table,
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .opblock-tag small {
+    font-family: var(--font-sans);
+    color: var(--text-secondary);
+}
+
+.swagger-ui .info .title,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock .opblock-summary-path,
+.swagger-ui h1, .swagger-ui h2, .swagger-ui h3, .swagger-ui h4 {
+    font-family: var(--font-sans);
+    color: var(--text);
+    letter-spacing: -0.011em;
+}
+
+.swagger-ui .info .title { font-size: var(--text-3xl); font-weight: var(--weight-semibold); }
+.swagger-ui .info .title small { display: none; }
+
+.swagger-ui .scheme-container {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: none;
+    padding-block: var(--space-4);
+}
+
+/* Endpoint blocks read as cards, like everything else in the product */
+.swagger-ui .opblock {
+    margin-bottom: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+}
+
+.swagger-ui .opblock .opblock-summary { border-bottom: none; }
+.swagger-ui .opblock.is-open .opblock-summary { border-bottom: 1px solid var(--border); }
+
+.swagger-ui .opblock .opblock-summary-method {
+    min-width: 76px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.04em;
+    border-radius: var(--radius-sm);
+    text-shadow: none;
+    box-shadow: none;
+}
+
+/* One accent for reads, the danger tone for anything that writes */
+.swagger-ui .opblock.opblock-get    { border-color: var(--border); background: var(--surface); }
+.swagger-ui .opblock.opblock-get .opblock-summary-method { background: var(--accent); }
+.swagger-ui .opblock.opblock-post   .opblock-summary-method,
+.swagger-ui .opblock.opblock-put    .opblock-summary-method,
+.swagger-ui .opblock.opblock-patch  .opblock-summary-method { background: var(--info-500); }
+.swagger-ui .opblock.opblock-delete .opblock-summary-method { background: var(--danger-500); }
+
+.swagger-ui .opblock.opblock-post,
+.swagger-ui .opblock.opblock-put,
+.swagger-ui .opblock.opblock-patch,
+.swagger-ui .opblock.opblock-delete { background: var(--surface); }
+
+.swagger-ui .opblock-summary-path,
+.swagger-ui .parameter__name,
+.swagger-ui .prop-type,
+.swagger-ui table.model tr td { font-family: var(--font-mono); font-size: var(--text-sm); }
+
+.swagger-ui .opblock-tag {
+    font-size: var(--text-xl);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+}
+
+.swagger-ui .btn {
+    font-family: var(--font-sans);
+    font-weight: var(--weight-medium);
+    border-radius: var(--radius-md);
+    box-shadow: none;
+}
+
+.swagger-ui .btn.execute {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.swagger-ui .btn.authorize {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.swagger-ui .btn.authorize svg { fill: var(--accent); }
+
+.swagger-ui select,
+.swagger-ui input[type=text],
+.swagger-ui textarea {
+    font-family: var(--font-sans);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: none;
+}
+
+.swagger-ui .highlight-code > .microlight,
+.swagger-ui .model-example,
+.swagger-ui .responses-inner {
+    border-radius: var(--radius-md);
+}
+
+/* Our own bar, injected ahead of Swagger's content, so the reference does not
+   feel like a different website with no way back. */
+.ep-docs-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--border);
+}
+
+.ep-docs-bar__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    max-width: 1460px;
+    margin-inline: auto;
+    min-height: var(--header-height);
+    padding-inline: var(--space-5);
+}
+
+.ep-docs-bar a { font-size: var(--text-base); font-weight: var(--weight-medium); }
+.ep-docs-bar .brand { color: var(--text); }
+.ep-docs-bar__links { display: flex; gap: var(--space-5); align-items: center; }

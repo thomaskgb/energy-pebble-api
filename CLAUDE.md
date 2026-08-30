@@ -120,6 +120,26 @@ appears on two pages belongs in `base.css`.
   (`/base.css`), because the browser URL is `/admin/users` and a relative href
   would resolve under `/admin/`.
 
+## Developer surface
+Two pages, deliberately not merged:
+
+- **`/developers`** (`static/developers.html`) is the guide: what the API is,
+  the token flow, the Home Assistant component, an example automation. Prose,
+  for someone deciding whether to build on it. **Untranslated**, like the admin
+  pages; it is not in `TRANSLATED_FILES`.
+- **`/docs`** is the reference and console: every endpoint and schema, with
+  try-it-out. Served by `main.py` from `get_swagger_ui_html`, so it stays
+  **generated from the OpenAPI schema** and cannot drift from the code. The
+  stock page is then dressed: our favicon, our title, `static/docs.css` loaded
+  after Swagger's own stylesheet, and a bar back to the site.
+
+Do not hand-write the reference into `/developers`. A guide that links to a
+generated reference is the standard split precisely because the generated half
+cannot go stale.
+
+`docs.css` is light-only on purpose: Swagger UI has no dark theme and a
+half-converted one reads as broken.
+
 ## Navigation
 Every page with a top bar renders the same `<site-header>` (`static/site-header.js`).
 There used to be nine hand-written copies and they had drifted: Logout sat in
