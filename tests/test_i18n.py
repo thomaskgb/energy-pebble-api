@@ -214,18 +214,53 @@ def test_every_page_loads_the_runtime():
         assert "I18n.start(" in source, f"{path.name} never starts the runtime"
 
 
+def _script_position(source, filename):
+    """Where a script tag for `filename` appears, ignoring any ?v= marker."""
+    match = re.search(r'src="[^"]*%s(?:\?v=[^"]*)?"' % re.escape(filename), source)
+    return match.start() if match else None
+
+
 def test_runtime_loads_before_the_components_that_register_with_it():
     """pebble-sim and settings-modal register their shadow roots with I18n at
     upgrade time; if their script runs first, window.I18n does not exist yet
     and their contents stay untranslated."""
     for name in ("index.html", "dashboard.html", "simulator.html"):
         source = (STATIC / name).read_text(encoding="utf-8")
-        runtime = source.index('src="i18n.js"')
+        runtime = _script_position(source, "i18n.js")
+        assert runtime is not None, f"{name} does not load i18n.js"
         for component in ("pebble-sim.js", "settings-modal.js"):
-            marker = f'src="{component}"'
-            if marker in source:
-                assert runtime < source.index(marker), \
-                    f"{name} loads {component} before i18n.js"
+            position = _script_position(source, component)
+            if position is not None:
+                assert runtime < position, f"{name} loads {component} before i18n.js"
+
+
+def test_our_assets_are_cache_busted():
+    """Caddy no longer pins our files for a year, but visitors who cached them
+    under the old policy only re-fetch when the URL changes. Every reference to
+    a file we ship carries a version marker; vendored libraries are pinned by
+    their own filenames and are excluded."""
+    ours = re.compile(r'(?:src|href)="((?:\.\./)?(?!/vendor/|https?:)[A-Za-z0-9._/-]+\.(?:js|css))(\?v=[^"]*)?"')
+
+    pages = sorted(STATIC.glob("*.html")) + [STATIC / "setup" / "index.html"]
+    unversioned = []
+    for page in pages:
+        for path, version in ours.findall(page.read_text(encoding="utf-8")):
+            if not version:
+                unversioned.append(f"{page.name} -> {path}")
+    assert not unversioned, f"references without a ?v= marker: {unversioned}"
+
+
+def test_caddy_does_not_pin_our_assets_for_a_year():
+    """The policy that caused the problem: an immutable year-long cache on
+    files whose names never change."""
+    caddyfile = (STATIC.parent / "Caddyfile").read_text(encoding="utf-8")
+    assert 'header @app_assets Cache-Control "no-cache"' in caddyfile
+    # The long cache may only be granted to vendored code and images.
+    immutable = re.search(r"@immutable \{(.*?)\}", caddyfile, re.S)
+    assert immutable, "no @immutable matcher found"
+    assert "*.js" not in immutable.group(1)
+    assert "*.css" not in immutable.group(1)
+    assert "*.html" not in immutable.group(1)
 
 
 if __name__ == "__main__":

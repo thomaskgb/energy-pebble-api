@@ -115,6 +115,18 @@ The system uses a commitment-based approach to ensure color stability:
 docker compose up -d
 ```
 
+### Static asset caching
+Our own HTML, CSS and JS carry no version in their filenames, so Caddy serves
+them with `Cache-Control: no-cache` — they revalidate against an ETag, which
+costs a 304 and no body. Only vendored libraries (pinned by filename) and
+images keep the year-long cache. Extensionless routes (`/`, `/setup/`,
+`/dashboard`, `/impact-circle`, `/login`, `/admin/*`) are named explicitly in
+the Caddyfile because the `file` matcher cannot see them before the rewrite.
+
+Script and stylesheet tags carry a `?v=` marker. It exists to break caches
+populated under the previous year-long policy; with revalidation in place it
+does not need bumping on every deploy.
+
 ## Domain Configuration
 - **Production**: `energypebble.tdlx.nl`
 - **Routing**: 
