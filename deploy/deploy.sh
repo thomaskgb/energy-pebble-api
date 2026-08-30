@@ -75,13 +75,17 @@ fi
 # would deploy the file and silently never take effect. Validate the deployed
 # config, then hand it to the running Caddy.
 log "Reloading Caddy with the deployed Caddyfile"
-if ! $COMPOSE exec -T caddy caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+# The Caddy container is the `web` service in docker-compose.yml; `caddy` is
+# only the binary inside it. exec-ing a nonexistent `caddy` service fails and,
+# with the output swallowed, was misread as an invalid Caddyfile - rolling
+# back every deploy.
+if ! $COMPOSE exec -T web caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
   rollback "deployed Caddyfile is invalid"
 fi
-if ! $COMPOSE exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+if ! $COMPOSE exec -T web caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
   # A reload can fail on a Caddy too old for the API; a restart still applies it.
   log "caddy reload failed, restarting the container instead"
-  $COMPOSE restart caddy || rollback "could not reload Caddy"
+  $COMPOSE restart web || rollback "could not reload Caddy"
 fi
 
 log "Pruning dangling images"
