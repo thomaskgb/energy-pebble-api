@@ -2,7 +2,7 @@ name: Deploy to cumulus
 
 # Runs when a PR is merged (i.e. a push lands on main) or on manual dispatch.
 # Executes on the self-hosted runner installed on cumulus, which connects
-# outbound to GitHub — no inbound ports and no SSH key stored in GitHub.
+# outbound to GitHub, so no inbound ports and no SSH key stored in GitHub.
 on:
   push:
     branches: [main]
@@ -26,7 +26,7 @@ jobs:
       - name: Deploy
         env:
           # Absolute path to the LIVE production checkout on cumulus (the one the
-          # docker compose stack runs from — NOT this runner workspace).
+          # docker compose stack runs from, NOT this runner workspace).
           # Override in the repo under Settings → Secrets and variables →
           # Actions → Variables → DEPLOY_DIR if the path differs.
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/home/cumulus/github/energy-pebble-api' }}

@@ -158,7 +158,7 @@ security = HTTPBearer()
 LOCAL_DEV_USER = os.environ.get("LOCAL_DEV_USER")
 if LOCAL_DEV_USER:
     logging.getLogger(__name__).warning(
-        f"LOCAL_DEV_USER={LOCAL_DEV_USER}: authentication is BYPASSED — local development only"
+        f"LOCAL_DEV_USER={LOCAL_DEV_USER}: authentication is BYPASSED, local development only"
     )
 
 def get_current_user(request: Request):
@@ -351,7 +351,7 @@ def init_database():
         # Every column default reproduces the pure price-based behavior, so a
         # missing row means "default pebble".
         # Users describe their household (contract, solar, battery); the color
-        # signal is derived from that — see derive_signal_source().
+        # signal is derived from that; see derive_signal_source().
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_settings (
                 user_id TEXT PRIMARY KEY,
@@ -1026,8 +1026,8 @@ def revoke_api_token(token_id: int) -> bool:
 
 # --- Per-person settings (household parameters & display preferences) --------
 # The pebble stays dumb: all personalization is resolved server-side from the
-# claiming user's profile. Users describe their household — contract type,
-# solar, battery — and the color signal is derived from that. Defaults
+# claiming user's profile. Users describe their household (contract type,
+# solar, battery) and the color signal is derived from that. Defaults
 # reproduce the pure price-based behavior.
 
 CONTRACT_TYPES = ("dynamic", "day_night", "fixed")
@@ -1187,7 +1187,7 @@ def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, A
 
 # --- Account preferences ------------------------------------------------------
 # Settings that belong to the person rather than to a home or a device. The
-# interface language is the first of them: it drives the web UI only — the
+# interface language is the first of them: it drives the web UI only, and the
 # pebble itself shows colors, which need no translation.
 
 LANGUAGES = ("en", "nl", "fr")
@@ -2680,7 +2680,7 @@ async def update_user_settings_endpoint(updates: UserSettingsUpdate, request: Re
 
     Optional home_id selects which home (default: your oldest home).
     Households are described, not configured: contract_type
-    ('dynamic' | 'day_night' | 'fixed'), has_solar, has_battery — the color
+    ('dynamic' | 'day_night' | 'fixed'), has_solar, has_battery. The color
     signal is derived from these. Display fields: palette
     ('standard' | 'colorblind'), brightness (5-100), night_dim_enabled,
     night_dim_start/night_dim_end ('HH:MM').
@@ -2880,7 +2880,7 @@ async def assign_device_home(device_db_id: int, assign: DeviceHomeAssign, reques
 # --- Personal API tokens (Home Assistant & other integrations) ---------------
 # Managed from the dashboard (Authelia-protected /api/user path). The tokens
 # themselves are used against the public /api/ha/* endpoints below, which the
-# edge does not gate — integrations cannot follow an Authelia login redirect.
+# edge does not gate: integrations cannot follow an Authelia login redirect.
 
 @app.get("/api/user/tokens", tags=["user"])
 async def list_user_tokens(request: Request):
@@ -3114,7 +3114,7 @@ async def upload_firmware(
             shutil.copyfileobj(firmware_file.file, buffer)
 
         # Compute checksums server-side from the bytes we actually stored. Never
-        # trust an uploader-supplied hash — that provides no integrity against an
+        # trust an uploader-supplied hash, which provides no integrity against an
         # attacker who controls the upload (security finding C3).
         checksum, computed_md5 = calculate_file_checksums(firmware_path)
 
@@ -3154,7 +3154,7 @@ async def upload_firmware(
             if not firmware_signing.verify_file(server_pubkey, firmware_path, signature.strip()):
                 raise HTTPException(
                     status_code=400,
-                    detail="Invalid firmware signature — rejected",
+                    detail="Invalid firmware signature, rejected",
                 )
             signature = signature.strip()
             signature_alg = firmware_signing.SIGNATURE_ALG
@@ -3164,7 +3164,7 @@ async def upload_firmware(
                 signature = signature.strip()
                 signature_alg = firmware_signing.SIGNATURE_ALG
                 logger.warning(
-                    "Storing firmware signature but no %s configured — signature is "
+                    "Storing firmware signature but no %s configured; signature is "
                     "NOT verified. Configure the public key to enforce signing.",
                     firmware_signing.PUBKEY_ENV,
                 )

@@ -31,7 +31,7 @@ Confirm the runner shows **Idle** under Settings → Actions → Runners.
 
 ### 2. Point the deploy at your live checkout
 
-`deploy.sh` deploys into `DEPLOY_DIR` — the directory the compose stack actually
+`deploy.sh` deploys into `DEPLOY_DIR`, the directory the compose stack actually
 runs from (where `docker-compose.yml` and the `../cumulus/edge` sibling live).
 The default is `/home/cumulus/github/energy-pebble-api`. If yours differs, set a
 repo **Variable** (not a secret): Settings → Secrets and variables → Actions →
@@ -56,7 +56,7 @@ sudo usermod -aG docker cumulus   # then re-login / restart the runner service
 - **Concurrency:** deploys never overlap; an in-flight deploy finishes before the
   next starts.
 - **Migrations:** schema changes are idempotent and applied at app startup, so a
-  restart migrates automatically — no separate step.
+  restart migrates automatically; no separate step.
 - **Rollback:** if the API doesn't answer `GET /api/sample` within ~60s after
   restart, the script resets to the previous commit and rebuilds, then fails the
   job so you get a red ❌ on the merge.
@@ -67,6 +67,6 @@ sudo usermod -aG docker cumulus   # then re-login / restart the runner service
 
 This is convenience automation, not a hardened release gate. Because it deploys
 whatever lands on `main`, protect `main` with a branch rule requiring PR review
-(and, ideally, a passing test workflow) before merge — otherwise a direct push to
+(and, ideally, a passing test workflow) before merge; otherwise a direct push to
 `main` deploys straight to production. Pair this with the fixes in
 `FIRMWARE_SIGNING.md` and the platform security review before going commercial.

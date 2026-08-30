@@ -504,7 +504,7 @@
         <div class="content">
             <div class="card">
                 <h2 data-i18n="home.how.title">How It Works</h2>
-                <p data-i18n="home.how.intro">Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption. Signed-in users tune the signal to their household &mdash; energy contract, solar panels, home battery &mdash; and their pebble follows automatically:</p>
+                <p data-i18n="home.how.intro">Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption. Signed-in users tune the signal to their household (energy contract, solar panels, home battery), and their pebble follows automatically:</p>
                 
                 <div class="color-legend">
                     <div class="color-item color-green" data-i18n="color.green">GREEN</div>
@@ -534,7 +534,7 @@
                     <h2 data-i18n="home.now.title">Your Pebble, Right Now</h2>
                     <button class="refresh-button" onclick="fetchColorData()" data-i18n="home.now.refresh">🔄 Refresh</button>
                 </div>
-                <p style="color: #6c757d;" data-i18n="home.now.description">The center dot is the current hour; each ring segment is labeled with the hour it applies to. Try the settings &mdash; signed-in users can save them for their own pebble.</p>
+                <p style="color: #6c757d;" data-i18n="home.now.description">The center dot is the current hour; each ring segment is labeled with the hour it applies to. Try the settings; signed-in users can save them for their own pebble.</p>
                 <p style="margin-top: 10px;"><a href="simulator.html" style="color: #27ae60; font-weight: 600;" data-i18n="home.now.simulatorLink">Explore typical days in the full simulator &rarr;</a></p>
                 <pebble-sim id="home-pebble" src="/api/color-code" controls></pebble-sim>
             </div>
@@ -548,7 +548,7 @@
                     <li><strong><a href="/api/json" target="_blank">GET /api/json</a></strong> - <span data-i18n="home.api.json">Raw electricity price data</span></li>
                     <li><strong><a href="/api/sample" target="_blank">GET /api/sample</a></strong> - <span data-i18n="home.api.sample">Sample data for testing</span></li>
                     <li><strong><a href="/api/sample-color-code" target="_blank">GET /api/sample-color-code</a></strong> - <span data-i18n="home.api.sampleColorCode">Sample color codes</span></li>
-                    <li><strong>GET/PUT /api/user/settings</strong> - <span data-i18n="home.api.userSettings">Your household profile (contract, solar, battery, display) &mdash; sign-in required</span></li>
+                    <li><strong>GET/PUT /api/user/settings</strong> - <span data-i18n="home.api.userSettings">Your household profile (contract, solar, battery, display). Sign-in required</span></li>
                     <li><strong><a href="/docs" target="_blank">GET /docs</a></strong> - <span data-i18n="home.api.docs">Interactive API documentation</span></li>
                 </ul>
             </div>
@@ -679,7 +679,7 @@
             updateNavigation(username);
         });
         
-        // User settings — the modal itself lives in the shared
+        // User settings: the modal itself lives in the shared
         // <settings-modal> component (settings-modal.js), same as the dashboard.
         function openUserSettings() {
             // Close user menu first
@@ -709,7 +709,7 @@
         setInterval(fetchColorData, 15 * 60 * 1000);
     </script>
 
-    <!-- User Settings Modal (shared component — see settings-modal.js) -->
+    <!-- User Settings Modal (shared component, see settings-modal.js) -->
     <settings-modal id="settings-modal"></settings-modal>
 
 </body>

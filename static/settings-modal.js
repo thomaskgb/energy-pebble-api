@@ -1,11 +1,11 @@
 /**
- * <settings-modal> — the shared User Settings modal (Pebble / Homes / Account).
+ * <settings-modal>: the shared User Settings modal (Pebble / Homes / Account).
  *
  * The single source of truth for the logged-in settings UI: index.html and
  * dashboard.html both mount this element instead of carrying their own copy,
  * so the two pages can no longer drift apart. Follows the <pebble-sim>
  * pattern: a self-contained web component with its styles in the shadow DOM
- * (no dependency on page CSS — the host pages style .modal differently).
+ * (no dependency on page CSS; the host pages style .modal differently).
  *
  * Usage:
  *   <script src="/pebble-sim.js"></script>      (the preview needs it)
@@ -113,7 +113,7 @@
             <div style="text-align: center; margin-bottom: 18px;">
               <pebble-sim id="settings-preview" src="/api/color-code"></pebble-sim>
               <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;" data-i18n="settings.pebble.previewCaption">
-                Live preview &mdash; this is what your pebble will show once you save
+                Live preview: this is what your pebble will show once you save
               </div>
             </div>
             <form id="pebble-settings-form" style="display: grid; gap: 2px; text-align: left;">
@@ -202,7 +202,7 @@
                 <button type="button" class="btn-action" id="create-token" data-i18n="settings.tokens.create">Create token</button>
               </div>
               <div id="new-token-box" style="display: none; background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;" data-i18n="settings.tokens.copyOnce">Copy this token now — it won't be shown again:</div>
+                <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;" data-i18n="settings.tokens.copyOnce">Copy this token now; it won't be shown again:</div>
                 <input type="text" id="new-token-value" readonly
                        style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px; font-family: monospace; font-size: 12px; box-sizing: border-box;">
               </div>
@@ -223,7 +223,7 @@
       this._homeId = null;
       this._wire();
       // Shadow DOM is invisible to document.querySelectorAll, so the runtime
-      // needs the root handed to it explicitly — once here, then again on every
+      // needs the root handed to it explicitly: once here, then again on every
       // language change.
       window.I18n.register(this.shadowRoot);
       document.addEventListener('language-changed', () => this._retranslate());
@@ -273,7 +273,7 @@
         });
       });
 
-      // Homes tab (rows are rendered dynamically — delegate)
+      // Homes tab (rows are rendered dynamically, so delegate)
       this.$('#add-home').addEventListener('click', () => this._createHome());
       this.$('#home-list').addEventListener('click', e => {
         const btn = e.target.closest('button[data-action]');

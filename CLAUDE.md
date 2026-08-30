@@ -33,7 +33,7 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /api/devices`: Get detected devices from client's IP address
 - `POST /api/devices/{id}/claim`: Claim a device and assign nickname (requires auth)
 - `GET /api/user/devices`: Get all devices claimed by authenticated user
-- `GET/PUT /api/user/preferences`: Account-level preferences — currently the interface `language` (requires auth)
+- `GET/PUT /api/user/preferences`: Account-level preferences, currently the interface `language` (requires auth)
 
 ## Web Routes
 - `GET /`: Public landing page with color codes and API information
@@ -87,14 +87,14 @@ itself shows colors and needs no translation.
   (all three catalogs). Load them in that order and **before** `pebble-sim.js`
   and `settings-modal.js`, which register their shadow roots with the runtime
   when they upgrade.
-- **Markup**: put the key in an attribute — `data-i18n` (textContent),
+- **Markup**: put the key in an attribute: `data-i18n` (textContent),
   `data-i18n-html` (strings with inline markup), or `data-i18n-<attr>` for
   placeholders, titles and aria labels. Strings built in JavaScript use
   `I18n.t('key', {vars})`, counts use `I18n.plural('key', n)`.
 - **Adding a string**: add the key to all three catalogs. `tests/test_i18n.py`
   fails when `nl`/`fr` fall behind `en`, when a key is used but not translated,
   or when a catalog key is never referenced.
-- **Scope**: admin pages are deliberately untranslated — they are internal.
+- **Scope**: admin pages are deliberately untranslated; they are internal.
 
 ## Color Logic
 The system uses a commitment-based approach to ensure color stability:
@@ -123,7 +123,7 @@ docker compose up -d
 
 ### Static asset caching
 Our own HTML, CSS and JS carry no version in their filenames, so Caddy serves
-them with `Cache-Control: no-cache` — they revalidate against an ETag, which
+them with `Cache-Control: no-cache`, so they revalidate against an ETag, which
 costs a 304 and no body. Only vendored libraries (pinned by filename) and
 images keep the year-long cache. Extensionless routes (`/`, `/setup/`,
 `/dashboard`, `/impact-circle`, `/login`, `/admin/*`) are named explicitly in

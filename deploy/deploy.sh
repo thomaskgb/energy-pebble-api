@@ -38,7 +38,7 @@ git reset --hard "origin/$DEPLOY_BRANCH"
 NEW_SHA="$(git rev-parse HEAD)"
 
 if [ "$PREV_SHA" = "$NEW_SHA" ]; then
-  log "Already at $NEW_SHA — nothing to deploy"
+  log "Already at $NEW_SHA, nothing to deploy"
   exit 0
 fi
 log "Deploying $PREV_SHA → $NEW_SHA"
@@ -46,7 +46,7 @@ git --no-pager log --oneline "$PREV_SHA..$NEW_SHA" | sed 's/^/    /' || true
 
 log "Rebuilding and restarting containers"
 # Schema migrations are idempotent and run at app startup (init_database), so a
-# restart applies them — no separate migration step needed.
+# restart applies them; no separate migration step needed.
 $COMPOSE up -d --build
 
 log "Waiting for the API to become healthy"
@@ -59,11 +59,29 @@ for i in $(seq 1 20); do
   sleep 3
 done
 
-if [ "$ok" != true ]; then
-  log "Health check failed — rolling back to $PREV_SHA"
+rollback() {
+  log "$1, rolling back to $PREV_SHA"
   git reset --hard "$PREV_SHA"
   $COMPOSE up -d --build
-  fail "Deploy of $NEW_SHA failed health check; rolled back to $PREV_SHA"
+  fail "Deploy of $NEW_SHA failed ($1); rolled back to $PREV_SHA"
+}
+
+if [ "$ok" != true ]; then
+  rollback "health check failed"
+fi
+
+# Caddy reads its Caddyfile once at startup and the file is bind-mounted, so
+# `up -d` leaves the old config running in memory: a Caddyfile-only change
+# would deploy the file and silently never take effect. Validate the deployed
+# config, then hand it to the running Caddy.
+log "Reloading Caddy with the deployed Caddyfile"
+if ! $COMPOSE exec -T caddy caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+  rollback "deployed Caddyfile is invalid"
+fi
+if ! $COMPOSE exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+  # A reload can fail on a Caddy too old for the API; a restart still applies it.
+  log "caddy reload failed, restarting the container instead"
+  $COMPOSE restart caddy || rollback "could not reload Caddy"
 fi
 
 log "Pruning dangling images"

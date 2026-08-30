@@ -52,7 +52,7 @@
     # Our own HTML, CSS and JS have no version in their filenames, so a
     # year-long max-age pinned returning visitors to whatever shipped last:
     # they would keep running the old settings-modal.js against freshly
-    # deployed HTML. These files revalidate instead — file_server answers with
+    # deployed HTML. These files revalidate instead: file_server answers with
     # an ETag, so an unchanged file costs a 304 and no body.
     @app_assets {
         file
@@ -63,10 +63,10 @@
 
     # The extensionless page routes above are rewritten to .html inside their
     # handle blocks, which is too late for the matcher on @app_assets to see a
-    # file — they are named here so the pages people actually land on are not
+    # file, so they are named here and the pages people actually land on are not
     # heuristically cached either.
     # A directory request serves its index.html, but the request path carries no
-    # extension, so it needs naming here too — "/" is the landing page.
+    # extension, so it needs naming here too. "/" is the landing page.
     @page_routes path / /setup/ /dashboard /impact-circle /login /admin/*
     header @page_routes Cache-Control "no-cache"
 
