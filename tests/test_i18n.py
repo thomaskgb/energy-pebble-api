@@ -14,7 +14,9 @@ Runs offline (no live server, no Elia calls):
 import json
 import os
 import re
+import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -40,6 +42,7 @@ TRANSLATED_FILES = [
     STATIC / "dashboard.html",
     STATIC / "login.html",
     STATIC / "insights.html",
+    STATIC / "privacy.html",
     STATIC / "simulator.html",
     STATIC / "setup" / "index.html",
     STATIC / "settings-modal.js",
@@ -232,6 +235,21 @@ def test_runtime_loads_before_the_components_that_register_with_it():
             position = _script_position(source, component)
             if position is not None:
                 assert runtime < position, f"{name} loads {component} before i18n.js"
+
+
+def test_the_catalogs_are_valid_javascript():
+    """The other catalog tests read this file with regexes, which are perfectly
+    happy with a file the browser refuses to run. A missing comma between two
+    entries is invalid JavaScript, and the whole catalog fails to load: every
+    translated page on the site then renders bare key names. Parse it properly.
+    """
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    for script in ("i18n-strings.js", "i18n.js", "icons.js"):
+        result = subprocess.run([node, "--check", str(STATIC / script)],
+                                capture_output=True, text=True)
+        assert result.returncode == 0, f"{script} is not valid JavaScript:\n{result.stderr}"
 
 
 def test_our_assets_are_cache_busted():
