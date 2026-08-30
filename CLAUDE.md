@@ -208,6 +208,12 @@ Script and stylesheet tags carry a `?v=` marker. It exists to break caches
 populated under the previous year-long policy; with revalidation in place it
 does not need bumping on every deploy.
 
+**Cloudflare sits in front of Caddy**, and it caches by URL. A copy taken
+while the old year-long policy was in force is still being served today, so
+the origin's `no-cache` header does not reach the visitor. Bumping the marker
+is what invalidates it, because a new URL is a new cache key. Purging the
+Cloudflare cache fixes the copies already out there.
+
 Bump it when an asset's *content* changes in a way the HTML depends on. A
 browser still holding a year-long copy from before the revalidation policy
 will fetch the new HTML (it revalidates) but keep the old script, and the two
