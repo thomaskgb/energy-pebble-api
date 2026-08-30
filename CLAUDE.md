@@ -27,6 +27,7 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /api/json`: Get raw electricity price data in JSON format
 - `GET /api/sample`: Get sample data for testing
 - `GET /api/sample-color-code`: Get sample color codes for testing
+- `GET /api/device/config-version`: Short fingerprint of the device's effective settings; firmware polls it every 30s and refetches colors only when it changes
 - `GET /docs`: Swagger UI documentation
 
 ### Device Management (Protected)
