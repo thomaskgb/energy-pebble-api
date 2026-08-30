@@ -117,6 +117,14 @@
             color: var(--text-muted);
         }
 
+        /* Same provenance line as the landing page: a reader comparing scenarios
+           should know whose prices these are without leaving the page. */
+        .sim__source {
+            margin-top: var(--space-2);
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
         .sim-row {
             display: flex;
             justify-content: center;
@@ -163,6 +171,11 @@
                 <div class="legend" data-i18n-html="simulator.legend">Bar height = the price this household pays &middot; bar color = what its pebble shows &middot;
                     bright bars = the 9 hours on the pebble &middot;
                     dashed <span style="color: var(--info-500)">blue outline</span> = negative price (you get paid to consume)</div>
+
+                <p class="sim__source">
+                    <span data-i18n="home.source">Prices come from Elia, the Belgian grid operator.</span>
+                    <span data-i18n="home.coverage">Belgian day-ahead market.</span>
+                </p>
 
                 <div class="sim-row">
                     <pebble-sim id="sim" controls></pebble-sim>
