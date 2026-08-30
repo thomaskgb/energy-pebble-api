@@ -15,6 +15,11 @@
     }
 
     # Handle privacy route
+    handle /developers {
+        rewrite * /developers.html
+        file_server
+    }
+
     handle /privacy {
         rewrite * /privacy.html
         file_server
@@ -81,7 +86,7 @@
     # heuristically cached either.
     # A directory request serves its index.html, but the request path carries no
     # extension, so it needs naming here too. "/" is the landing page.
-    @page_routes path / /setup/ /dashboard /insights /privacy /login /admin/*
+    @page_routes path / /setup/ /dashboard /insights /developers /privacy /login /admin/*
     header @page_routes Cache-Control "no-cache"
 
     # Vendored libraries are pinned to a version and images never change under
