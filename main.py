@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Query, Depends, Security, File, UploadFile, Form
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from pydantic import BaseModel
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import httpx
@@ -1608,6 +1608,39 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
 )
+
+# --- Home Assistant component download -----------------------------------------
+# "Copy custom_components/energy_pebble/ into your config" asks the reader to
+# find a directory in a git repository first. This hands them the directory as
+# a zip instead, built on request from the files actually shipping, so it can
+# never be a stale artifact someone forgot to rebuild.
+_HA_COMPONENT_DIR = Path(__file__).parent / "homeassistant" / "custom_components" / "energy_pebble"
+
+
+@app.get("/downloads/energy-pebble-home-assistant.zip", include_in_schema=False)
+async def home_assistant_component_zip():
+    """The custom component, zipped so it can be dropped into config/."""
+    if not _HA_COMPONENT_DIR.is_dir():
+        raise HTTPException(status_code=404, detail="Component not found")
+
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(_HA_COMPONENT_DIR.rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts:
+                # Unpacking leaves custom_components/energy_pebble/ ready to move
+                archive.write(path, Path("custom_components/energy_pebble") /
+                              path.relative_to(_HA_COMPONENT_DIR))
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition":
+                 'attachment; filename="energy-pebble-home-assistant.zip"'},
+    )
+
 
 # --- API reference ------------------------------------------------------------
 # Swagger UI stays generated from the OpenAPI schema: a hand-written reference

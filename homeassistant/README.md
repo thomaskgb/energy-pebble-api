@@ -5,10 +5,15 @@ current color (`green` / `yellow` / `red`) and the next 8 hours as attributes.
 The data is personalized to your household profile (contract, solar, battery)
 because it polls the same endpoint your physical pebble uses.
 
-## Install (manual, for now)
+## Install
 
-1. Copy `custom_components/energy_pebble/` into your Home Assistant
-   `config/custom_components/` directory and restart Home Assistant.
+Easiest: download
+<https://energypebble.tdlx.nl/downloads/energy-pebble-home-assistant.zip>,
+which is zipped from these files on request, and unzip it next to your
+`configuration.yaml`. It already contains `custom_components/energy_pebble/`.
+
+1. Or copy `custom_components/energy_pebble/` from this directory into your Home
+   Assistant `config/custom_components/`, then restart Home Assistant.
 2. On [energypebble.tdlx.nl/dashboard](https://energypebble.tdlx.nl/dashboard),
    open your user menu → **Settings → Account** and create a
    **Home Assistant token**. Copy it; it is shown only once.
