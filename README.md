@@ -75,3 +75,7 @@ The API analyzes the current hour and the next 11 hours, comparing prices within
    docker compose up -d
    ```
 4. The API will be available at http://localhost:8000
+
+## License
+
+MIT. See [LICENSE](LICENSE).
