@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Energy Pebble - Electricity Price Color Codes</title>
+    <title data-i18n="home.pageTitle">Energy Pebble - Electricity Price Color Codes</title>
     <style>
         * {
             margin: 0;
@@ -55,6 +55,41 @@
         .nav-buttons {
             display: flex;
             gap: 15px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .lang-switcher {
+            display: flex;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .lang-switcher .lang-option {
+            background: none;
+            border: none;
+            padding: 6px 10px;
+            font: inherit;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .lang-switcher .lang-option:hover {
+            background: #f1f3f4;
+            color: #2c3e50;
+        }
+
+        .lang-switcher .lang-option.active {
+            background: #27ae60;
+            color: white;
         }
 
         .nav-btn {
@@ -449,9 +484,12 @@
             <a href="/" class="nav-logo">
                 ⚡ Energy Pebble
             </a>
-            <div class="nav-buttons" id="nav-buttons">
-                <!-- Will be populated by JavaScript based on auth status -->
-                <a href="/dashboard" class="nav-btn login">Login</a>
+            <div class="nav-right">
+                <div class="lang-switcher" id="lang-switcher"></div>
+                <div class="nav-buttons" id="nav-buttons">
+                    <!-- Will be populated by JavaScript based on auth status -->
+                    <a href="/dashboard" class="nav-btn login" data-i18n="nav.login">Login</a>
+                </div>
             </div>
         </div>
     </nav>
@@ -459,33 +497,33 @@
     <div class="container">
         <div class="header">
             <img src="energy-pebble-image.jpg" alt="Energy Pebble">
-            <h1>Energy Pebble API</h1>
-            <p>Real-time electricity price data and color-coded indicators for smart energy consumption</p>
+            <h1 data-i18n="home.title">Energy Pebble API</h1>
+            <p data-i18n="home.subtitle">Real-time electricity price data and color-coded indicators for smart energy consumption</p>
         </div>
         
         <div class="content">
             <div class="card">
-                <h2>How It Works</h2>
-                <p>Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption. Signed-in users tune the signal to their household &mdash; energy contract, solar panels, home battery &mdash; and their pebble follows automatically:</p>
+                <h2 data-i18n="home.how.title">How It Works</h2>
+                <p data-i18n="home.how.intro">Energy Pebble fetches real-time electricity prices from Elia's grid data and converts them into simple color codes to help you optimize your energy consumption. Signed-in users tune the signal to their household &mdash; energy contract, solar panels, home battery &mdash; and their pebble follows automatically:</p>
                 
                 <div class="color-legend">
-                    <div class="color-item color-green">GREEN</div>
-                    <div class="color-item color-yellow">YELLOW</div>
-                    <div class="color-item color-red">RED</div>
+                    <div class="color-item color-green" data-i18n="color.green">GREEN</div>
+                    <div class="color-item color-yellow" data-i18n="color.yellow">YELLOW</div>
+                    <div class="color-item color-red" data-i18n="color.red">RED</div>
                 </div>
                 
                 <ul style="list-style: none; padding: 0; margin-top: 20px;">
-                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #27ae60;">Green:</strong> Cheapest hours - perfect for high energy usage</li>
-                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #f39c12;">Yellow:</strong> Average prices - moderate energy usage recommended</li>
-                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #e74c3c;">Red:</strong> Most expensive hours - avoid high energy usage</li>
+                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #27ae60;" data-i18n="color.green.label">Green:</strong> <span data-i18n="home.how.green">Cheapest hours - perfect for high energy usage</span></li>
+                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #f39c12;" data-i18n="color.yellow.label">Yellow:</strong> <span data-i18n="home.how.yellow">Average prices - moderate energy usage recommended</span></li>
+                    <li style="margin-bottom: 10px; color: #495057;"><strong style="color: #e74c3c;" data-i18n="color.red.label">Red:</strong> <span data-i18n="home.how.red">Most expensive hours - avoid high energy usage</span></li>
                 </ul>
                 
                 <div class="info-box">
-                    <h3>🔒 Stable Color Promise</h3>
-                    <p>
+                    <h3 data-i18n="home.stable.title">🔒 Stable Color Promise</h3>
+                    <p data-i18n-html="home.stable.body">
                         Once you see a color, <strong>it won't change</strong> for the next 8 hours. This means you can confidently plan your energy usage without worrying about colors shifting.
                     </p>
-                    <p style="margin-bottom: 0;">
+                    <p style="margin-bottom: 0;" data-i18n-html="home.stable.scheduling">
                         <strong>Smart scheduling:</strong> Use green hours for dishwashers, washing machines, electric car charging, and other energy-intensive tasks.
                     </p>
                 </div>
@@ -493,45 +531,47 @@
             
             <div class="card current-colors" style="text-align: center;">
                 <div class="color-codes-header">
-                    <h2>Your Pebble, Right Now</h2>
-                    <button class="refresh-button" onclick="fetchColorData()">🔄 Refresh</button>
+                    <h2 data-i18n="home.now.title">Your Pebble, Right Now</h2>
+                    <button class="refresh-button" onclick="fetchColorData()" data-i18n="home.now.refresh">🔄 Refresh</button>
                 </div>
-                <p style="color: #6c757d;">The center dot is the current hour; each ring segment is labeled with the hour it applies to. Try the settings &mdash; signed-in users can save them for their own pebble.</p>
-                <p style="margin-top: 10px;"><a href="simulator.html" style="color: #27ae60; font-weight: 600;">Explore typical days in the full simulator &rarr;</a></p>
+                <p style="color: #6c757d;" data-i18n="home.now.description">The center dot is the current hour; each ring segment is labeled with the hour it applies to. Try the settings &mdash; signed-in users can save them for their own pebble.</p>
+                <p style="margin-top: 10px;"><a href="simulator.html" style="color: #27ae60; font-weight: 600;" data-i18n="home.now.simulatorLink">Explore typical days in the full simulator &rarr;</a></p>
                 <pebble-sim id="home-pebble" src="/api/color-code" controls></pebble-sim>
             </div>
         </div>
 
         <div class="content">
             <div class="card">
-                <h2>API Endpoints</h2>
+                <h2 data-i18n="home.api.title">API Endpoints</h2>
                 <ul class="api-endpoints">
-                    <li><strong><a href="/api/color-code" target="_blank">GET /api/color-code</a></strong> - Current and upcoming color codes; devices sending <code>X-Device-ID</code> get their household's personalized signal and display settings</li>
-                    <li><strong><a href="/api/json" target="_blank">GET /api/json</a></strong> - Raw electricity price data</li>
-                    <li><strong><a href="/api/sample" target="_blank">GET /api/sample</a></strong> - Sample data for testing</li>
-                    <li><strong><a href="/api/sample-color-code" target="_blank">GET /api/sample-color-code</a></strong> - Sample color codes</li>
-                    <li><strong>GET/PUT /api/user/settings</strong> - Your household profile (contract, solar, battery, display) &mdash; sign-in required</li>
-                    <li><strong><a href="/docs" target="_blank">GET /docs</a></strong> - Interactive API documentation</li>
+                    <li><strong><a href="/api/color-code" target="_blank">GET /api/color-code</a></strong> - <span data-i18n-html="home.api.colorCode">Current and upcoming color codes; devices sending <code>X-Device-ID</code> get their household's personalized signal and display settings</span></li>
+                    <li><strong><a href="/api/json" target="_blank">GET /api/json</a></strong> - <span data-i18n="home.api.json">Raw electricity price data</span></li>
+                    <li><strong><a href="/api/sample" target="_blank">GET /api/sample</a></strong> - <span data-i18n="home.api.sample">Sample data for testing</span></li>
+                    <li><strong><a href="/api/sample-color-code" target="_blank">GET /api/sample-color-code</a></strong> - <span data-i18n="home.api.sampleColorCode">Sample color codes</span></li>
+                    <li><strong>GET/PUT /api/user/settings</strong> - <span data-i18n="home.api.userSettings">Your household profile (contract, solar, battery, display) &mdash; sign-in required</span></li>
+                    <li><strong><a href="/docs" target="_blank">GET /docs</a></strong> - <span data-i18n="home.api.docs">Interactive API documentation</span></li>
                 </ul>
             </div>
 
             <div class="card">
-                <h2>Technical Details</h2>
-                <p><strong>Data Source:</strong> Elia Grid International (Belgian TSO)</p>
-                <p><strong>Update Frequency:</strong> Real-time with 8-hour commitment windows</p>
-                <p><strong>Coverage:</strong> Belgium electricity market prices</p>
-                <p><strong>API Format:</strong> JSON responses with CORS support</p>
-                <p><strong>Caching:</strong> Optimized for performance and stability</p>
+                <h2 data-i18n="home.tech.title">Technical Details</h2>
+                <p data-i18n-html="home.tech.source"><strong>Data Source:</strong> Elia Grid International (Belgian TSO)</p>
+                <p data-i18n-html="home.tech.frequency"><strong>Update Frequency:</strong> Real-time with 8-hour commitment windows</p>
+                <p data-i18n-html="home.tech.coverage"><strong>Coverage:</strong> Belgium electricity market prices</p>
+                <p data-i18n-html="home.tech.format"><strong>API Format:</strong> JSON responses with CORS support</p>
+                <p data-i18n-html="home.tech.caching"><strong>Caching:</strong> Optimized for performance and stability</p>
             </div>
         </div>
 
         <div class="login-section">
-            <h3 style="color: #2c3e50; margin-bottom: 10px;">🔋 Ready for More?</h3>
-            <p style="color: #6c757d; margin-bottom: 0;">Access the Impact Circle to discover energy secrets and learn how to maximize your savings.</p>
-            <a href="/dashboard" class="login-btn">🔐 Access Impact Circle</a>
+            <h3 style="color: #2c3e50; margin-bottom: 10px;" data-i18n="home.cta.title">🔋 Ready for More?</h3>
+            <p style="color: #6c757d; margin-bottom: 0;" data-i18n="home.cta.body">Access the Impact Circle to discover energy secrets and learn how to maximize your savings.</p>
+            <a href="/dashboard" class="login-btn" data-i18n="home.cta.button">🔐 Access Impact Circle</a>
         </div>
     </div>
 
+    <script src="i18n-strings.js"></script>
+    <script src="i18n.js"></script>
     <script src="pebble-sim.js"></script>
     <script src="settings-modal.js"></script>
     <script>
@@ -546,10 +586,9 @@
         
         function getColorName(colorCode) {
             switch(colorCode) {
-                case 'G': return 'GREEN';
-                case 'Y': return 'YELLOW';
-                case 'R': return 'RED';
-                default: return 'GREEN';
+                case 'Y': return I18n.t('color.yellow');
+                case 'R': return I18n.t('color.red');
+                default: return I18n.t('color.green');
             }
         }
         
@@ -580,17 +619,18 @@
             if (username) {
                 // User is logged in - show user menu
                 navButtons.innerHTML = `
-                    <a href="/dashboard" class="nav-btn dashboard">📊 Dashboard</a>
+                    <a href="/dashboard" class="nav-btn dashboard" data-i18n="nav.dashboard">📊 Dashboard</a>
                     <div class="user-menu" id="user-menu">
                         <button class="user-menu-trigger" id="user-menu-trigger">
                             👤 ${username} ▼
                         </button>
                         <div class="user-menu-dropdown">
-                            <a href="#" class="user-menu-item" onclick="openUserSettings()">⚙️ Settings</a>
-                            <a href="#" class="user-menu-item logout" onclick="logout()">🚪 Logout</a>
+                            <a href="#" class="user-menu-item" onclick="openUserSettings()" data-i18n="nav.settings">⚙️ Settings</a>
+                            <a href="#" class="user-menu-item logout" onclick="logout()" data-i18n="nav.logout">🚪 Logout</a>
                         </div>
                     </div>
                 `;
+                I18n.apply(navButtons);
                 
                 // Add click handler for dropdown
                 const userMenuTrigger = document.getElementById('user-menu-trigger');
@@ -610,8 +650,9 @@
             } else {
                 // User is not logged in - show login button
                 navButtons.innerHTML = `
-                    <a href="/dashboard" class="nav-btn login">Login</a>
+                    <a href="/dashboard" class="nav-btn login" data-i18n="nav.login">Login</a>
                 `;
+                I18n.apply(navButtons);
             }
         }
 
@@ -627,7 +668,10 @@
         }
 
         // Initialize page
+        I18n.start();
+
         document.addEventListener('DOMContentLoaded', async function() {
+            I18n.mountSwitcher(document.getElementById('lang-switcher'), { save: true });
             fetchColorData();
             
             // Check authentication and update navigation

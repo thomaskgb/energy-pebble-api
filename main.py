@@ -447,6 +447,17 @@ def init_database():
                 WHERE home_id IS NULL AND id IN (SELECT device_id FROM user_devices WHERE user_id = ?)
             ''', (home_id, uid))
 
+        # Account-level preferences. These belong to the person, not to a home
+        # or a device: one language for the whole account, whichever home or
+        # pebble they are looking at. A missing row means the defaults below.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                user_id TEXT PRIMARY KEY,
+                language TEXT NOT NULL DEFAULT 'en',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # Create API tokens table for bearer token authentication
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS api_tokens (
@@ -1173,6 +1184,54 @@ def save_user_settings(user_id: str, updates: UserSettingsUpdate) -> Dict[str, A
     """Save to the user's default home (backward-compatible helper)."""
     return save_home_settings(get_or_create_default_home(user_id), updates)
 
+# --- Account preferences ------------------------------------------------------
+# Settings that belong to the person rather than to a home or a device. The
+# interface language is the first of them: it drives the web UI only — the
+# pebble itself shows colors, which need no translation.
+
+LANGUAGES = ("en", "nl", "fr")
+
+DEFAULT_USER_PREFERENCES = {
+    "language": "en",
+}
+
+class UserPreferencesUpdate(BaseModel):
+    language: Optional[str] = None
+
+def get_user_preferences(user_id: str) -> Dict[str, Any]:
+    """Return the user's account preferences merged over defaults."""
+    preferences = dict(DEFAULT_USER_PREFERENCES)
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            'SELECT language FROM user_preferences WHERE user_id = ?', (user_id,)
+        ).fetchone()
+    if row:
+        preferences["language"] = row[0]
+    return preferences
+
+def save_user_preferences(user_id: str, updates: UserPreferencesUpdate) -> Dict[str, Any]:
+    """Validate and persist a partial preferences update."""
+    changes = {k: v for k, v in updates.model_dump().items() if v is not None}
+
+    if "language" in changes and changes["language"] not in LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"language must be one of {list(LANGUAGES)}")
+
+    preferences = get_user_preferences(user_id)
+    preferences.update(changes)
+
+    with db_lock, sqlite3.connect(DB_PATH) as conn:
+        conn.execute('''
+            INSERT INTO user_preferences (user_id, language, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET
+                language = excluded.language,
+                updated_at = CURRENT_TIMESTAMP
+        ''', (user_id, preferences["language"]))
+        conn.commit()
+
+    logger.info(f"Saved preferences for user {user_id}: {changes}")
+    return preferences
+
 def get_settings_for_device(device_id: Optional[str]) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
     """Resolve a device id to its home's settings.
 
@@ -1765,6 +1824,7 @@ async def root():
             "/api/json": "Get electricity price data in JSON format (Optional query param: date=YYYY-MM-DD)",
             "/api/color-code": "Color codes for the current hour and next 8 hours. Devices sending X-Device-ID get their household's personalized signal plus a display block (palette, brightness, night dim)",
             "/api/user/settings": "GET/PUT the household profile driving personalization: contract type, solar, battery, display preferences (authentication required)",
+            "/api/user/preferences": "GET/PUT account-level preferences such as the interface language (authentication required)",
             "/api/sample": "Get sample electricity price data for testing",
             "/api/sample-color-code": "Get sample color codes for testing",
             "/docs": "API documentation (Swagger UI)"
@@ -2570,6 +2630,73 @@ async def test_update_user_settings(updates: UserSettingsUpdate, user: str = Que
         "user_id": user,
         "settings": settings,
         "derived_signal": derive_signal_source(settings)
+    }
+
+# --- Account preferences ------------------------------------------------------
+
+@app.get("/api/user/preferences", tags=["user"])
+async def get_user_preferences_endpoint(request: Request):
+    """
+    Get the authenticated user's account preferences.
+
+    Authentication: Requires valid Authelia session or API token.
+
+    Account preferences apply to the person, not to a home or a device.
+    Currently: `language`, the interface language of the web UI.
+    """
+    try:
+        user_info = get_current_user(request)
+        return {
+            "user_id": user_info['user_id'],
+            "preferences": get_user_preferences(user_info['user_id']),
+            "options": {"language": list(LANGUAGES)},
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user preferences: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user preferences: {str(e)}")
+
+@app.put("/api/user/preferences", tags=["user"])
+async def update_user_preferences_endpoint(updates: UserPreferencesUpdate, request: Request):
+    """
+    Update the authenticated user's account preferences (partial update).
+
+    Authentication: Requires valid Authelia session or API token.
+
+    `language` is one of 'en', 'nl', 'fr'. It changes the web interface only;
+    the pebble shows colors and is unaffected.
+    """
+    try:
+        user_info = get_current_user(request)
+        return {
+            "message": "Preferences updated successfully",
+            "user_id": user_info['user_id'],
+            "preferences": save_user_preferences(user_info['user_id'], updates),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user preferences: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating user preferences: {str(e)}")
+
+@app.get("/api/test/user/preferences", tags=["user"])
+async def test_get_user_preferences(user: str = Query("thomas", description="Test user (thomas or willie)")):
+    """Test endpoint for account preferences - local development (blocked at the edge)."""
+    return {
+        "user_id": user,
+        "preferences": get_user_preferences(user),
+        "options": {"language": list(LANGUAGES)},
+    }
+
+@app.put("/api/test/user/preferences", tags=["user"])
+async def test_update_user_preferences(updates: UserPreferencesUpdate,
+                                       user: str = Query("thomas", description="Test user (thomas or willie)")):
+    """Test endpoint for updating account preferences - local development (blocked at the edge)."""
+    return {
+        "message": "Preferences updated successfully (test mode)",
+        "user_id": user,
+        "preferences": save_user_preferences(user, updates),
     }
 
 # --- Homes --------------------------------------------------------------------

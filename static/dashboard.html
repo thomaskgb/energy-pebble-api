@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Energy Pebble - Dashboard</title>
+    <title data-i18n="dashboard.pageTitle">Energy Pebble - Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -709,6 +709,8 @@
             }
         }
     </style>
+    <script src="i18n-strings.js"></script>
+    <script src="i18n.js"></script>
     <script src="pebble-sim.js"></script>
     <script src="settings-modal.js"></script>
 </head>
@@ -720,14 +722,14 @@
                 ⚡ Energy Pebble
             </a>
             <div class="nav-buttons">
-                <a href="/" class="nav-btn home">Home</a>
+                <a href="/" class="nav-btn home" data-i18n="nav.home">Home</a>
                 <div class="admin-dropdown" id="adminDropdown" style="display: none;">
-                    <div class="nav-btn admin" onclick="toggleAdminMenu()">Admin ▼</div>
+                    <div class="nav-btn admin" onclick="toggleAdminMenu()" data-i18n="nav.admin">Admin ▼</div>
                     <div class="admin-dropdown-content" id="adminMenuDropdown">
-                        <a href="/admin/users" class="admin-dropdown-item">Users</a>
-                        <a href="/admin/devices" class="admin-dropdown-item">Devices</a>
-                        <a href="/admin/firmware" class="admin-dropdown-item">Firmware</a>
-                        <a href="/admin/tokens" class="admin-dropdown-item">API Tokens</a>
+                        <a href="/admin/users" class="admin-dropdown-item" data-i18n="nav.admin.users">Users</a>
+                        <a href="/admin/devices" class="admin-dropdown-item" data-i18n="nav.admin.devices">Devices</a>
+                        <a href="/admin/firmware" class="admin-dropdown-item" data-i18n="nav.admin.firmware">Firmware</a>
+                        <a href="/admin/tokens" class="admin-dropdown-item" data-i18n="nav.admin.tokens">API Tokens</a>
                     </div>
                 </div>
                 <div class="user-menu">
@@ -735,8 +737,8 @@
                         <span id="current-username">User</span> ▼
                     </button>
                     <div class="user-menu-dropdown" id="userMenuDropdown">
-                        <a href="#" onclick="openUserSettings()" class="user-menu-item">Settings</a>
-                        <a href="https://auth.tdlx.nl/logout" class="user-menu-item logout">Logout</a>
+                        <a href="#" onclick="openUserSettings()" class="user-menu-item" data-i18n="nav.settings.plain">Settings</a>
+                        <a href="https://auth.tdlx.nl/logout" class="user-menu-item logout" data-i18n="nav.logout.plain">Logout</a>
                     </div>
                 </div>
             </div>
@@ -746,30 +748,30 @@
     <div class="container">
         <div class="welcome-section">
             <div class="welcome-message">
-                <h2 id="welcome-greeting">Welcome back!</h2>
-                <p>Ready to optimize your energy usage and manage your connected devices?</p>
+                <h2 id="welcome-greeting" data-i18n="dashboard.greeting">Welcome back!</h2>
+                <p data-i18n="dashboard.greetingSub">Ready to optimize your energy usage and manage your connected devices?</p>
             </div>
             
             <div class="quick-stats">
                 <div class="stat-card">
                     <div class="stat-value" id="current-color">-</div>
-                    <div class="stat-label">Current Energy Price</div>
+                    <div class="stat-label" data-i18n="dashboard.stat.currentPrice">Current Energy Price</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="connected-devices">-</div>
-                    <div class="stat-label">Connected Energy Dots</div>
+                    <div class="stat-label" data-i18n="dashboard.stat.connected">Connected Energy Dots</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="unclaimed-devices">-</div>
-                    <div class="stat-label">Unclaimed Devices</div>
+                    <div class="stat-label" data-i18n="dashboard.stat.unclaimed">Unclaimed Devices</div>
                 </div>
             </div>
         </div>
 
         <div class="dashboard-grid">
             <div class="dashboard-card" style="grid-column: 1 / -1; text-align: center;">
-                <h3 class="card-title">My Pebble</h3>
-                <p class="card-description">
+                <h3 class="card-title" data-i18n="dashboard.pebble.title">My Pebble</h3>
+                <p class="card-description" data-i18n-html="dashboard.pebble.description">
                     What your pebble shows right now, based on your household profile.
                     Adjust it under <strong>Settings</strong> in your user menu &mdash; devices pick up changes within 15 minutes.
                 </p>
@@ -777,70 +779,70 @@
             </div>
 
             <div class="dashboard-card">
-                                <h3 class="card-title">My Energy Dots</h3>
-                <p class="card-description">
+                                <h3 class="card-title" data-i18n="dashboard.dots.title">My Energy Dots</h3>
+                <p class="card-description" data-i18n="dashboard.dots.description">
                     View and manage your assigned Energy Dot devices. Monitor their status and configure device settings.
                 </p>
-                <span class="card-status status-ready">Available Now</span>
+                <span class="card-status status-ready" data-i18n="dashboard.status.available">Available Now</span>
                 <br>
-                <div id="device-summary" style="margin: 15px 0; font-size: 0.9em; color: #6c757d;">
+                <div id="device-summary" style="margin: 15px 0; font-size: 0.9em; color: #6c757d;" data-i18n="dashboard.dots.loading">
                     Loading device information...
                 </div>
-                <button class="card-action" onclick="toggleDeviceManagement()">View My Devices</button>
-                <a href="/setup/" class="card-action" style="margin-left: 10px;">➕ Add a Device</a>
+                <button class="card-action" onclick="toggleDeviceManagement()" data-i18n="dashboard.dots.view">View My Devices</button>
+                <a href="/setup/" class="card-action" style="margin-left: 10px;" data-i18n="dashboard.dots.add">➕ Add a Device</a>
             </div>
 
             <div class="dashboard-card">
-                                <h3 class="card-title">Solar Data Integration</h3>
-                <p class="card-description">
+                                <h3 class="card-title" data-i18n="dashboard.solar.title">Solar Data Integration</h3>
+                <p class="card-description" data-i18n="dashboard.solar.description">
                     Connect your Enode account to access real-time solar production data. 
                     Optimize energy usage based on your solar generation and grid prices.
                 </p>
-                <span class="card-status status-coming-soon">Coming Soon</span>
+                <span class="card-status status-coming-soon" data-i18n="dashboard.status.comingSoon">Coming Soon</span>
                 <br>
-                <a href="#" class="card-action disabled">Connect Enode</a>
+                <a href="#" class="card-action disabled" data-i18n="dashboard.solar.action">Connect Enode</a>
             </div>
 
             <div class="dashboard-card">
-                                <h3 class="card-title">Impact Circle</h3>
-                <p class="card-description">
+                                <h3 class="card-title" data-i18n="dashboard.impact.title">Impact Circle</h3>
+                <p class="card-description" data-i18n="dashboard.impact.description">
                     Discover the energy secrets that help you save money and protect the planet. 
                     Learn about optimal energy usage times and hidden green hours.
                 </p>
-                <span class="card-status status-ready">Available Now</span>
+                <span class="card-status status-ready" data-i18n="dashboard.status.available">Available Now</span>
                 <br>
-                <a href="/impact-circle" class="card-action">Enter Impact Circle</a>
+                <a href="/impact-circle" class="card-action" data-i18n="dashboard.impact.action">Enter Impact Circle</a>
             </div>
 
             <div class="dashboard-card">
-                                <h3 class="card-title">Energy Analytics</h3>
-                <p class="card-description">
+                                <h3 class="card-title" data-i18n="dashboard.analytics.title">Energy Analytics</h3>
+                <p class="card-description" data-i18n="dashboard.analytics.description">
                     View detailed analytics of your energy usage patterns, savings achieved, 
                     and environmental impact. Track your optimization progress over time.
                 </p>
-                <span class="card-status status-coming-soon">Coming Soon</span>
+                <span class="card-status status-coming-soon" data-i18n="dashboard.status.comingSoon">Coming Soon</span>
                 <br>
-                <a href="#" class="card-action disabled">View Analytics</a>
+                <a href="#" class="card-action disabled" data-i18n="dashboard.analytics.action">View Analytics</a>
             </div>
         </div>
 
         <!-- Device Management Section (Hidden by default) -->
         <div id="device-management" class="device-management" style="display: none;">
             <div class="card" style="margin-top: 30px;">
-                <h2>My Energy Dots</h2>
+                <h2 data-i18n="dashboard.dots.title">My Energy Dots</h2>
                 
                 <!-- User's Devices -->
                 <div class="device-section">
-                    <h3>Your Assigned Devices</h3>
+                    <h3 data-i18n="dashboard.devices.assignedTitle">Your Assigned Devices</h3>
                     <div id="user-devices" class="device-list">
-                        <p class="loading-message">Loading your devices...</p>
+                        <p class="loading-message" data-i18n="dashboard.devices.loading">Loading your devices...</p>
                     </div>
                 </div>
                 
                 <div style="margin-top: 20px; text-align: center;">
-                    <a href="/setup/" class="card-action">➕ Add a Device</a>
-                    <button class="refresh-button" onclick="refreshDeviceData()" style="margin-left: 10px;">Refresh Status</button>
-                    <button class="card-action" onclick="toggleDeviceManagement()" style="margin-left: 10px; background: #6c757d;">Close</button>
+                    <a href="/setup/" class="card-action" data-i18n="dashboard.dots.add">➕ Add a Device</a>
+                    <button class="refresh-button" onclick="refreshDeviceData()" style="margin-left: 10px;" data-i18n="dashboard.devices.refresh">Refresh Status</button>
+                    <button class="card-action" onclick="toggleDeviceManagement()" style="margin-left: 10px; background: #6c757d;" data-i18n="common.close">Close</button>
                 </div>
             </div>
         </div>
@@ -850,7 +852,7 @@
     <div id="deviceModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title" id="modalTitle">Device Details</h2>
+                <h2 class="modal-title" id="modalTitle" data-i18n="dashboard.deviceModal.title">Device Details</h2>
                 <button class="close-btn" onclick="closeDeviceModal()">&times;</button>
             </div>
             <div class="modal-body" id="modalBody">
@@ -863,6 +865,26 @@
     <settings-modal id="settings-modal"></settings-modal>
 
     <script>
+        I18n.start();
+        const t = (key, vars) => I18n.t(key, vars);
+
+        // The API reports device status as a machine value; the label is ours.
+        function statusLabel(status) {
+            switch (status) {
+                case 'online': return t('device.status.online');
+                case 'recently_active': return t('device.status.recentlyActive');
+                default: return t('device.status.offline');
+            }
+        }
+
+        // Lists built as HTML strings do not carry data-i18n keys, so they are
+        // rebuilt whenever the language changes.
+        document.addEventListener('language-changed', function() {
+            loadCurrentColor();
+            loadDeviceStats();
+            if (deviceData.claimed.length) renderUserDevices();
+        });
+
         // Load current energy color
         async function loadCurrentColor() {
             try {
@@ -872,9 +894,9 @@
                 
                 const colorElement = document.getElementById('current-color');
                 const colorMap = {
-                    'G': { text: 'GREEN', color: '#27ae60' },
-                    'Y': { text: 'YELLOW', color: '#f39c12' },
-                    'R': { text: 'RED', color: '#e74c3c' }
+                    'G': { text: t('color.green'), color: '#27ae60' },
+                    'Y': { text: t('color.yellow'), color: '#f39c12' },
+                    'R': { text: t('color.red'), color: '#e74c3c' }
                 };
                 
                 if (currentColor && colorMap[currentColor]) {
@@ -919,9 +941,9 @@
                     const summaryElement = document.getElementById('device-summary');
                     if (summaryElement) {
                         if (data.total_devices === 0) {
-                            summaryElement.textContent = 'No devices assigned to your account yet.';
+                            summaryElement.textContent = t('dashboard.devices.none');
                         } else {
-                            summaryElement.textContent = `You have ${data.total_devices} Energy Dot${data.total_devices !== 1 ? 's' : ''} assigned to your account.`;
+                            summaryElement.textContent = I18n.plural('dashboard.devices.summary', data.total_devices);
                         }
                     }
                 }
@@ -957,7 +979,7 @@
         // Show loading state for device management
         function showDeviceLoading() {
             const userContainer = document.getElementById('user-devices');
-            userContainer.innerHTML = '<p class="loading-message">Loading your devices...</p>';
+            userContainer.innerHTML = `<p class="loading-message">${t('dashboard.devices.loading')}</p>`;
         }
 
         // Refresh device data
@@ -979,7 +1001,7 @@
                     console.log('User devices loaded:', userData);
                 } else {
                     console.warn('Failed to load user devices:', userResponse.status);
-                    showDeviceError('Failed to load your devices. Please ensure you are logged in.');
+                    showDeviceError(t('dashboard.devices.loadFailed'));
                     return;
                 }
                 
@@ -991,7 +1013,7 @@
                 
             } catch (error) {
                 console.error('Failed to refresh device data:', error);
-                showDeviceError('Failed to load device data. Please check your connection and try again.');
+                showDeviceError(t('dashboard.devices.loadFailedGeneric'));
             }
         }
 
@@ -1001,23 +1023,23 @@
             const container = document.getElementById('user-devices');
             
             if (deviceData.claimed.length === 0) {
-                container.innerHTML = '<p class="loading-message">No devices assigned to your account yet. Contact your administrator to have devices assigned to you.</p>';
+                container.innerHTML = `<p class="loading-message">${t('dashboard.devices.emptyList')}</p>`;
                 return;
             }
             
             container.innerHTML = deviceData.claimed.map(device => `
                 <div class="device-item" onclick="showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})">
                     <div class="device-info">
-                        <div class="device-nickname">${device.nickname || 'Energy Dot'}
+                        <div class="device-nickname">${device.nickname || t('device.defaultName')}
                             ${device.home_name ? `<span style="font-weight: 400; font-size: 0.8em; background: #eef2e9; color: #2c3e50; border-radius: 10px; padding: 2px 8px; margin-left: 6px;">${device.home_name}</span>` : ''}</div>
                         <div class="device-details">
-                            <span class="device-status ${device.status}">${device.status}</span>
-                            Last seen: ${formatDeviceTime(device.last_seen)}<br>
-                            Requests: ${device.request_count} • Device ID: ${device.device_id || 'Unknown'}
+                            <span class="device-status ${device.status}">${statusLabel(device.status)}</span>
+                            ${t('device.lastSeen', { time: formatDeviceTime(device.last_seen) })}<br>
+                            ${t('device.requests', { count: device.request_count })} • ${t('device.id', { id: device.device_id || t('common.unknown') })}
                         </div>
                     </div>
                     <div class="device-actions">
-                        <button class="device-btn" onclick="event.stopPropagation(); showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})" style="background: #3498db;">View Details</button>
+                        <button class="device-btn" onclick="event.stopPropagation(); showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})" style="background: #3498db;">${t('device.viewDetails')}</button>
                     </div>
                 </div>
             `).join('');
@@ -1029,10 +1051,10 @@
             const now = new Date();
             const diffMinutes = Math.floor((now - date) / (1000 * 60));
             
-            if (diffMinutes < 1) return 'Just now';
-            if (diffMinutes < 60) return `${diffMinutes}m ago`;
-            if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h ago`;
-            return date.toLocaleDateString();
+            if (diffMinutes < 1) return t('time.justNow');
+            if (diffMinutes < 60) return t('time.minutesAgo', { count: diffMinutes });
+            if (diffMinutes < 1440) return t('time.hoursAgo', { count: Math.floor(diffMinutes / 60) });
+            return date.toLocaleDateString(I18n.language);
         }
 
         function showDeviceError(message) {
@@ -1046,29 +1068,18 @@
             const title = document.getElementById('modalTitle');
             const body = document.getElementById('modalBody');
             
-            title.textContent = device.nickname || 'Energy Dot';
+            title.textContent = device.nickname || t('device.defaultName');
             
             // Use the status and minutes from the API response
-            let connectionStatus = 'Offline';
             let statusClass = device.status || 'offline';
-            
-            switch(device.status) {
-                case 'online':
-                    connectionStatus = 'Online';
-                    break;
-                case 'recently_active':
-                    connectionStatus = 'Recently Active';
-                    break;
-                default:
-                    connectionStatus = 'Offline';
-                    statusClass = 'offline';
-            }
+            if (statusClass !== 'online' && statusClass !== 'recently_active') statusClass = 'offline';
+            const connectionStatus = statusLabel(statusClass);
             
             const minutesAgo = device.minutes_since_last_seen || 0;
             
             body.innerHTML = `
                 <div class="detail-row">
-                    <span class="detail-label">Status:</span>
+                    <span class="detail-label">${t('device.detail.status')}</span>
                     <span class="detail-value">
                         <span class="status-indicator">
                             <span class="status-dot ${statusClass}"></span>
@@ -1077,40 +1088,40 @@
                     </span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Device ID:</span>
-                    <span class="detail-value">${device.device_id || 'Not provided'}</span>
+                    <span class="detail-label">${t('device.detail.deviceId')}</span>
+                    <span class="detail-value">${device.device_id || t('common.notProvided')}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Hardware ID:</span>
-                    <span class="detail-value">${device.hardware_id || 'Unknown'}</span>
+                    <span class="detail-label">${t('device.detail.hardwareId')}</span>
+                    <span class="detail-value">${device.hardware_id || t('common.unknown')}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">MAC Address:</span>
-                    <span class="detail-value">${device.mac_address || 'Unknown'}</span>
+                    <span class="detail-label">${t('device.detail.macAddress')}</span>
+                    <span class="detail-value">${device.mac_address || t('common.unknown')}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Software Version:</span>
-                    <span class="detail-value">${device.software_version || 'Unknown'}</span>
+                    <span class="detail-label">${t('device.detail.softwareVersion')}</span>
+                    <span class="detail-value">${device.software_version || t('common.unknown')}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">First Seen:</span>
+                    <span class="detail-label">${t('device.detail.firstSeen')}</span>
                     <span class="detail-value">${formatDetailTime(device.first_seen)}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Last Connection:</span>
-                    <span class="detail-value">${formatDetailTime(device.last_seen)} (${minutesAgo} minutes ago)</span>
+                    <span class="detail-label">${t('device.detail.lastConnection')}</span>
+                    <span class="detail-value">${formatDetailTime(device.last_seen)} (${t('time.minutesAgo', { count: minutesAgo })})</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Request Count:</span>
+                    <span class="detail-label">${t('device.detail.requestCount')}</span>
                     <span class="detail-value">${device.request_count || 0}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Client IP:</span>
-                    <span class="detail-value">${device.client_ip || 'Unknown'}</span>
+                    <span class="detail-label">${t('device.detail.clientIp')}</span>
+                    <span class="detail-value">${device.client_ip || t('common.unknown')}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Fingerprint:</span>
-                    <span class="detail-value">${device.fingerprint ? device.fingerprint.substring(0, 12) + '...' : 'Unknown'}</span>
+                    <span class="detail-label">${t('device.detail.fingerprint')}</span>
+                    <span class="detail-value">${device.fingerprint ? device.fingerprint.substring(0, 12) + '...' : t('common.unknown')}</span>
                 </div>
             `;
             
@@ -1124,7 +1135,7 @@
         
         function formatDetailTime(timestamp) {
             const date = new Date(timestamp);
-            return date.toLocaleString('en-US', {
+            return date.toLocaleString(I18n.language, {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -1212,7 +1223,9 @@
                     const greetingElement = document.getElementById('welcome-greeting');
                     if (greetingElement) {
                         const capitalizedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-                        greetingElement.textContent = `Welcome back, ${capitalizedName}!`;
+                        greetingElement.dataset.i18n = 'dashboard.greetingNamed';
+                        greetingElement.dataset.i18nVars = JSON.stringify({ name: capitalizedName });
+                        greetingElement.textContent = t('dashboard.greetingNamed', { name: capitalizedName });
                     }
                 }
             } catch (error) {
@@ -1220,7 +1233,7 @@
                 // Fallback to generic greeting
                 const greetingElement = document.getElementById('welcome-greeting');
                 if (greetingElement) {
-                    greetingElement.textContent = 'Welcome back!';
+                    greetingElement.textContent = t('dashboard.greeting');
                 }
             }
         }
@@ -1234,7 +1247,9 @@
             const greetingElement = document.getElementById('welcome-greeting');
             if (greetingElement) {
                 const capitalizedUsername = newUsername.charAt(0).toUpperCase() + newUsername.slice(1);
-                greetingElement.textContent = `Welcome back, ${capitalizedUsername}!`;
+                greetingElement.dataset.i18n = 'dashboard.greetingNamed';
+                greetingElement.dataset.i18nVars = JSON.stringify({ name: capitalizedUsername });
+                greetingElement.textContent = t('dashboard.greetingNamed', { name: capitalizedUsername });
             }
         });
 

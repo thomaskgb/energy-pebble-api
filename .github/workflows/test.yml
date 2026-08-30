@@ -22,6 +22,24 @@ jobs:
       - name: Firmware upload + OTA signing integration tests
         run: python tests/test_firmware_upload_signing.py
 
+  # Guards the interface translations: catches a string added to a page without
+  # a matching nl/fr entry (which would silently render in English), a key used
+  # but never translated, and the script-order dependency the web components
+  # rely on.
+  i18n-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Interface language tests
+        run: pytest tests/test_i18n.py -q
+        env:
+          ENERGY_PEBBLE_DATA_DIR: ${{ runner.temp }}
+
   # Builds the actual Docker image and boots it, so image-level breakage — a file
   # main.py imports but the Dockerfile forgot to COPY, a missing dependency, an
   # import error at startup — fails CI instead of reaching prod (where only the

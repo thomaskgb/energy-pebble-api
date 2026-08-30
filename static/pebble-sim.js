@@ -284,33 +284,34 @@
         </style>
         <div class="wrap">
           <svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" role="img"
+               data-i18n-aria-label="pebble.ariaLabel"
                aria-label="Energy Pebble: center shows the current hour, ring segments the next 8 hours">
             <rect class="body" x="6" y="6" width="${SIZE - 12}" height="${SIZE - 12}" rx="78"/>
             <circle class="well" cx="${CX}" cy="${CY}" r="${R_OUT + 6}"/>
             <g>${segs}</g>
             <circle class="well" cx="${CX}" cy="${CY}" r="${R_IN - 6}"/>
             <circle id="dot" cx="${CX}" cy="${CY}" r="${DOT_R}"/>
-            <text class="now-label" x="${CX}" y="${CY}">now</text>
+            <text class="now-label" x="${CX}" y="${CY}" data-i18n="pebble.now">now</text>
           </svg>
           ${controls ? `
           <div class="panel">
             <fieldset>
-              <legend>Your household</legend>
-              <label><span>Contract</span>
+              <legend data-i18n="pebble.household">Your household</legend>
+              <label><span data-i18n="pebble.contract">Contract</span>
                 <select id="contract">
-                  <option value="dynamic" selected>Dynamic prices</option>
-                  <option value="day_night">Day &amp; night tariff</option>
-                  <option value="fixed">Fixed price</option>
+                  <option value="dynamic" selected data-i18n="settings.contract.dynamic">Dynamic prices</option>
+                  <option value="day_night" data-i18n="settings.contract.dayNight">Day &amp; night tariff</option>
+                  <option value="fixed" data-i18n="settings.contract.fixed">Fixed price</option>
                 </select>
               </label>
-              <label><span>Solar panels</span><input type="checkbox" id="solar"></label>
-              <label><span>Home battery</span><input type="checkbox" id="battery"></label>
+              <label><span data-i18n="settings.pebble.solar">Solar panels</span><input type="checkbox" id="solar"></label>
+              <label><span data-i18n="settings.pebble.battery">Home battery</span><input type="checkbox" id="battery"></label>
             </fieldset>
             <fieldset>
-              <legend>Display</legend>
-              <label><span>Colorblind-friendly colors</span><input type="checkbox" id="pal"></label>
-              <label><span>Night dimming <small>30% &middot; 22:00&ndash;07:00</small></span><input type="checkbox" id="dim" checked></label>
-              <label><span>Brightness</span><input type="range" id="bri" min="5" max="100" value="100"></label>
+              <legend data-i18n="pebble.display">Display</legend>
+              <label><span data-i18n="settings.pebble.colorblind">Colorblind-friendly colors</span><input type="checkbox" id="pal"></label>
+              <label><span><span data-i18n="pebble.nightDim">Night dimming</span> <small>30% &middot; 22:00&ndash;07:00</small></span><input type="checkbox" id="dim" checked></label>
+              <label><span data-i18n="settings.pebble.brightness">Brightness</span><input type="range" id="bri" min="5" max="100" value="100"></label>
             </fieldset>
           </div>` : ''}
         </div>`;
@@ -334,6 +335,10 @@
         this.shadowRoot.getElementById('bri').addEventListener('input', e => {
           this._settings.brightness = Number(e.target.value); this._changed();
         });
+      }
+      if (window.I18n) {
+        window.I18n.register(this.shadowRoot);
+        window.I18n.apply(this.shadowRoot);
       }
       this._paint();
     }

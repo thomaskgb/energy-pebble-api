@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pebble Simulator - Energy Pebble</title>
+    <title data-i18n="simulator.pageTitle">Pebble Simulator - Energy Pebble</title>
     <!-- Situation-focused simulator: pick a typical day, scrub the time of
          day, then toggle what the household has (contract, solar, battery)
          to see what the pebble would show. -->
@@ -52,24 +52,26 @@
             font-size: 0.9em; color: #2c3e50; margin-top: 14px;
         }
     </style>
+    <script src="i18n-strings.js"></script>
+    <script src="i18n.js"></script>
     <script src="pebble-sim.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <h1>🎛️ Pebble Simulator</h1>
-            <p class="hint">Pick a typical day, drag the clock through it, and toggle what the household
+            <h1 data-i18n="simulator.title">🎛️ Pebble Simulator</h1>
+            <p class="hint" data-i18n="simulator.hint">Pick a typical day, drag the clock through it, and toggle what the household
             has. The bar strip is the wholesale market; the pebble is what that household would see.</p>
 
             <div class="scenarios" id="scenarios"></div>
 
             <div class="timebar">
-                <span class="clock" id="clock">Time: 12:00</span>
+                <span class="clock" id="clock">12:00</span>
                 <input type="range" id="hour" min="0" max="23" value="12">
             </div>
             <div class="strip" id="strip"></div>
             <div class="strip-labels" id="strip-labels"></div>
-            <div class="legend">Bar height = the price this household pays · bar color = what its pebble shows ·
+            <div class="legend" data-i18n-html="simulator.legend">Bar height = the price this household pays · bar color = what its pebble shows ·
                 bright bars = the 9 hours on the pebble ·
                 dashed <span style="color:#2980b9">blue outline</span> = negative price (you get paid to consume)</div>
 
@@ -81,39 +83,46 @@
     </div>
 
     <script>
+        I18n.start();
+        const t = (key, vars) => I18n.t(key, vars);
+
+        // The scenario note and clock are written by JavaScript, so they are
+        // rewritten when the language changes.
+        document.addEventListener('language-changed', () => applyScenario());
+
         // --- Typical days (prices in €/MWh; sun = hours with real solar production) ---
         const SCENARIOS = {
             sunny: {
-                label: '☀️ Sunny summer day',
-                note: 'Lots of solar pushes midday prices negative. With solar panels the pebble turns green even earlier — with a fixed contract, midday self-consumption is still the play.',
+                labelKey: 'simulator.scenario.sunny.label',
+                noteKey: 'simulator.scenario.sunny.note',
                 prices: [95, 88, 82, 78, 75, 74, 78, 70, 45, 15, -5, -20, -30, -28, -15, 5, 30, 65, 100, 125, 115, 100, 92, 88],
                 sun: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
                 defaultHour: 11
             },
             winter: {
-                label: '☁️ Grey winter day',
-                note: 'Barely any sun, high demand: prices stay expensive all day with brutal evening peaks. Green is rare — the pebble mostly says "wait if you can".',
+                labelKey: 'simulator.scenario.winter.label',
+                noteKey: 'simulator.scenario.winter.note',
                 prices: [140, 135, 130, 128, 125, 128, 140, 165, 180, 175, 160, 150, 145, 140, 145, 155, 175, 200, 220, 210, 190, 170, 155, 145],
                 sun: [],
                 defaultHour: 18
             },
             windy: {
-                label: '🌬️ Windy day',
-                note: 'Wind makes the whole day cheap — the pebble is green most of the time. This is the day to run everything.',
+                labelKey: 'simulator.scenario.windy.label',
+                noteKey: 'simulator.scenario.windy.note',
                 prices: [20, 15, 10, 8, 5, 8, 15, 25, 35, 40, 42, 40, 38, 35, 30, 28, 30, 45, 60, 70, 65, 50, 35, 25],
                 sun: [10, 11, 12, 13, 14],
                 defaultHour: 9
             },
             spike: {
-                label: '🔥 Evening price spike',
-                note: 'A scarcity evening: prices explode after 18:00. The pebble goes hard red — shifting the dishwasher past the peak saves the most on days like this.',
+                labelKey: 'simulator.scenario.spike.label',
+                noteKey: 'simulator.scenario.spike.note',
                 prices: [90, 85, 80, 78, 80, 85, 100, 130, 140, 120, 100, 90, 85, 80, 85, 95, 120, 180, 320, 380, 290, 180, 130, 100],
                 sun: [10, 11, 12, 13, 14, 15],
                 defaultHour: 16
             },
             live: {
-                label: '📡 Live — today',
-                note: "Today's real day-ahead prices and live colors from the API — exactly what real pebbles receive right now. The clock follows the actual time.",
+                labelKey: 'simulator.scenario.live.label',
+                noteKey: 'simulator.scenario.live.note',
                 prices: null, sun: [10, 11, 12, 13, 14, 15], defaultHour: null
             }
         };
@@ -171,13 +180,13 @@
             const sim = document.getElementById('sim');
             const isLive = currentScenario === 'live';
 
-            document.getElementById('note').textContent = sc.note;
+            document.getElementById('note').textContent = t(sc.noteKey);
             document.getElementById('hour').disabled = isLive;
 
             if (isLive) {
                 nowHour = new Date().getHours();
                 document.getElementById('hour').value = nowHour;
-                document.getElementById('clock').textContent = 'Time: now';
+                document.getElementById('clock').textContent = t('simulator.clock.now');
                 sim.setSolarBoost(null);
                 sim.setAttribute('src', '/api/color-code');
                 await sim.refresh();
@@ -213,7 +222,7 @@
                 entries.push({ hour: hourKey(h), color_code: colors[h % 24] });
             }
             document.getElementById('clock').textContent =
-                'Time: ' + String(nowHour).padStart(2, '0') + ':00';
+                t('simulator.clock.at', { time: String(nowHour).padStart(2, '0') + ':00' });
             sim.removeAttribute('src');
             sim.setEntries(entries);
             // The strip shares the pebble's signal: bar heights are the price
@@ -260,7 +269,7 @@
                 fill.style.height = Math.max(8, Math.round(Math.abs(p) / maxAbs * 62)) + 'px';
                 fill.style.background = PALETTE[colors[h]];
                 bar.title = String(h).padStart(2, '0') + ':00 — ' + p +
-                            (sim._settings.contract_type === 'dynamic' ? ' €/MWh' : ' (tariff level)');
+                            (sim._settings.contract_type === 'dynamic' ? ' €/MWh' : ' ' + t('simulator.tariffLevel'));
                 bar.appendChild(fill);
                 bar.addEventListener('click', () => {
                     nowHour = h;
@@ -278,7 +287,8 @@
         const chips = document.getElementById('scenarios');
         Object.entries(SCENARIOS).forEach(([key, sc]) => {
             const b = document.createElement('button');
-            b.textContent = sc.label;
+            b.dataset.i18n = sc.labelKey;
+            b.textContent = t(sc.labelKey);
             b.id = 'sc-' + key;
             b.addEventListener('click', () => {
                 currentScenario = key;
