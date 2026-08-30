@@ -137,6 +137,20 @@
     .row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--c-accent); }
     .row input[type="range"] { width: 160px; accent-color: var(--c-accent); }
 
+    /* A setting that only applies while the row above it is on: indented under
+       its parent, and dimmed and inert when the parent is off, so the
+       relationship is visible rather than something you find out by clicking. */
+    .row--sub {
+      justify-content: flex-start;
+      gap: 8px;
+      padding-left: 16px;
+      border-bottom: 1px solid var(--c-border);
+      cursor: default;
+      transition: opacity 0.12s;
+    }
+    .row--sub label { color: var(--c-muted); font-size: 13px; }
+    .row--sub[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
+
     /* Form controls */
     .input, .select, input[type="time"] {
       padding: 7px 10px; font: inherit; font-size: 14px;
@@ -187,6 +201,37 @@
       padding: 8px 0; border-bottom: 1px solid var(--c-border);
     }
     .list-row:last-child { border-bottom: none; }
+
+    /* Homes: every row is four columns, and they line up down the whole tab.
+       ONE grid does that. Giving each row its own grid was the bug this
+       replaces: tracks only align inside a single container, so a saved row
+       carrying a device count sized its columns differently from the add row
+       below it. The rows are display:contents so their cells become items of
+       this grid, and the separators sit on the cells rather than the row. */
+    .homes-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto;
+      align-items: center;
+      gap: 10px 8px;
+    }
+    #home-rows, .home-row { display: contents; }
+
+    .home-row__meta {
+      justify-self: end;
+      font-size: 13px;
+      color: var(--c-muted);
+      white-space: nowrap;
+    }
+    .home-row__actions { display: flex; gap: 6px; justify-self: end; }
+
+    /* The add row closes the list, so its cells carry the rule above them */
+    .home-row--new > * { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--c-border); }
+
+    @media (max-width: 560px) {
+      .homes-grid { grid-template-columns: minmax(0, 1fr) auto; }
+      .home-row__meta { grid-column: 2; }
+      .home-row__actions { grid-column: 1 / -1; justify-self: start; }
+    }
     .list-row small { color: var(--c-muted); white-space: nowrap; }
     .list-empty { color: var(--c-muted); font-style: normal; }
 
@@ -254,10 +299,16 @@
               <label class="row"><span data-i18n="settings.pebble.solar">Solar panels</span><input type="checkbox" id="ps-solar"></label>
               <label class="row"><span><span data-i18n="settings.pebble.battery">Home battery</span> <small data-i18n="settings.pebble.batteryHint">bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
               <label class="row"><span data-i18n="settings.pebble.colorblind">Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
-              <label class="row"><span><span data-i18n="settings.pebble.nightDim">Dim at night to 30%</span>
-                (<input type="time" id="ps-dim-start" value="22:00"> &ndash;
-                <input type="time" id="ps-dim-end" value="07:00">)</span>
+              <label class="row"><span data-i18n="settings.pebble.nightDim">Dim at night to 30%</span>
                 <input type="checkbox" id="ps-night-dim"></label>
+              <!-- The window only means anything while the toggle is on, so it
+                   sits under it and follows its state. -->
+              <div class="row row--sub" id="ps-dim-window">
+                <label for="ps-dim-start" data-i18n="settings.pebble.nightDimFrom">from</label>
+                <input type="time" id="ps-dim-start" value="22:00">
+                <label for="ps-dim-end" data-i18n="settings.pebble.nightDimTo">to</label>
+                <input type="time" id="ps-dim-end" value="07:00">
+              </div>
               <label class="row"><span><span data-i18n="settings.pebble.brightness">Brightness</span> <small><span id="ps-bri-val">100</span>%</small></span>
                 <input type="range" id="ps-brightness" min="5" max="100" value="100"></label>
               <div class="actions">
@@ -272,11 +323,16 @@
               Devices and pebble settings belong to a home. Add one per address;
               pick which home to configure on the Pebble tab.
             </p>
-            <div id="home-list" class="list" style="margin-bottom: 14px;"></div>
-            <div class="inline-form">
-              <input type="text" id="home-name" class="input" placeholder="Name (e.g. Beach house)" data-i18n-placeholder="settings.homes.namePlaceholder">
-              <input type="text" id="home-address" class="input" style="flex: 2;" placeholder="Address (optional)" data-i18n-placeholder="settings.homes.addressPlaceholder">
-              <button type="button" class="btn btn--primary" id="add-home" data-i18n="settings.homes.add">Add home</button>
+            <div class="homes-grid" id="home-list">
+              <div id="home-rows"></div>
+              <div class="home-row home-row--new">
+                <input type="text" id="home-name" class="input" placeholder="Name (e.g. Beach house)" data-i18n-placeholder="settings.homes.namePlaceholder">
+                <input type="text" id="home-address" class="input" placeholder="Address (optional)" data-i18n-placeholder="settings.homes.addressPlaceholder">
+                <span class="home-row__meta"></span>
+                <div class="home-row__actions">
+                  <button type="button" class="btn btn--primary" id="add-home" data-i18n="settings.homes.add">Add home</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -354,6 +410,13 @@
     }
 
     $(sel) { return this.shadowRoot.querySelector(sel); }
+
+    /** The night window is only editable while night dimming is on. */
+    _syncDimWindow() {
+      var on = this.$('#ps-night-dim').checked;
+      var win = this.$('#ps-dim-window');
+      if (win) win.setAttribute('aria-disabled', on ? 'false' : 'true');
+    }
 
     _emit(name, detail) {
       this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
@@ -455,6 +518,7 @@
       ['#ps-contract', '#ps-solar', '#ps-battery', '#ps-palette', '#ps-brightness',
        '#ps-night-dim', '#ps-dim-start', '#ps-dim-end'].forEach(sel => {
         this.$(sel).addEventListener('input', () => {
+          this._syncDimWindow();
           this.$('#ps-bri-val').textContent = this.$('#ps-brightness').value;
           this._applyToPreview(this._formToSettings());
         });
@@ -515,14 +579,16 @@
         select.innerHTML = this._homes.map(h =>
           `<option value="${h.id}" ${h.id === this._homeId ? 'selected' : ''}>${esc(h.name)}</option>`).join('');
 
-        this.$('#home-list').innerHTML = this._homes.map(h =>
-          `<div class="list-row">
-              <input type="text" id="home-name-${h.id}" class="input" style="flex:1;" value="${esc(h.name)}">
-              <input type="text" id="home-address-${h.id}" class="input" style="flex:2;" value="${esc(h.address)}"
+        this.$('#home-rows').innerHTML = this._homes.map(h =>
+          `<div class="home-row">
+              <input type="text" id="home-name-${h.id}" class="input" value="${esc(h.name)}">
+              <input type="text" id="home-address-${h.id}" class="input" value="${esc(h.address)}"
                      placeholder="${esc(t('settings.homes.address'))}">
-              <small>${esc(window.I18n.plural('settings.homes.deviceCount', h.device_count))}</small>
-              <button type="button" class="btn btn--primary btn--sm" data-action="save-home" data-id="${h.id}">${esc(t('common.save'))}</button>
-              ${this._homes.length > 1 && !h.device_count ? `<button type="button" class="btn btn--danger btn--sm" data-action="delete-home" data-id="${h.id}">${esc(t('common.delete'))}</button>` : ''}
+              <small class="home-row__meta">${esc(window.I18n.plural('settings.homes.deviceCount', h.device_count))}</small>
+              <div class="home-row__actions">
+                <button type="button" class="btn btn--primary" data-action="save-home" data-id="${h.id}">${esc(t('common.save'))}</button>
+                ${this._homes.length > 1 && !h.device_count ? `<button type="button" class="btn btn--danger" data-action="delete-home" data-id="${h.id}">${esc(t('common.delete'))}</button>` : ''}
+              </div>
           </div>`).join('');
       } catch (e) {
         console.error('Error loading homes:', e);
@@ -600,6 +666,7 @@
       this.$('#ps-night-dim').checked = settings.night_dim_enabled;
       this.$('#ps-dim-start').value = settings.night_dim_start;
       this.$('#ps-dim-end').value = settings.night_dim_end;
+      this._syncDimWindow();
     }
 
     _applyToPreview(settings) {
