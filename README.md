@@ -1,77 +1,82 @@
-# Energy Pebble API
-A simple REST API that provides electricity price color codes (Green, Yellow, Red) based on Day ahead prices published by Elia's grid data end-point.
+# Energy Pebble
 
-## What It Does
+Belgian electricity prices change every hour. Energy Pebble is a small device
+that glows **green** when power is cheap, **amber** when it is average and
+**red** when it is expensive, so running the dishwasher at the right time takes
+no app and no reading of price graphs.
 
-This API fetches electricity price data and converts it to simple color codes to help users optimize their energy consumption:
+This repository is the service behind it: the API the device polls, the website
+people configure it on, and the admin console that runs the fleet.
 
-- **Green (G)**: Indicates the cheapest hours to use electricity
-- **Yellow (Y)**: Indicates medium-priced hours
-- **Red (R)**: Indicates the most expensive hours to avoid using electricity
+**Live at [energypebble.tdlx.nl](https://energypebble.tdlx.nl)**
 
-The API analyzes the current hour and the next 11 hours, comparing prices within this window to determine the optimal times for energy consumption.
+## How the colour is decided
 
-## Project Files
+Prices come from Elia, the Belgian grid operator, published a day ahead. The
+day's range is split into thirds: cheapest third green, middle amber, dearest
+third red.
 
-- `main.py`: The FastAPI application
-- `requirements.txt`: Python dependencies
-- `Dockerfile`: Docker container configuration
-- `docker-compose.yml`: Docker Compose setup
-- `sample_data.json`: Sample data for testing
+Two rules make it usable rather than merely accurate:
 
-## API Endpoints
+- **Colours are committed for 8 hours.** Once you have seen a colour it will not
+  change under you, so you can plan around it.
+- **The signal follows the household.** A fixed-price contract, a day/night
+  tariff, solar panels or a home battery each change what "cheap" means, so the
+  same hour can be green on one pebble and amber on another.
 
-### Root endpoint
-- `GET /`: Shows basic information about the API
+## What is here
 
-### JSON Data Endpoint
-- `GET /api/json`: Returns electricity price data in JSON format
-- Optional query parameter: `date` (format: YYYY-MM-DD)
+| | |
+| --- | --- |
+| `main.py` | The FastAPI service: prices, colour codes, devices, users, firmware |
+| `static/` | The website: landing page, dashboard, insights, simulator, setup, admin |
+| `firmware/`, `firmware_signing.py` | Signed over-the-air firmware, see [FIRMWARE_SIGNING.md](FIRMWARE_SIGNING.md) |
+| `authelia/` | Authentication config, users and secrets are not in git |
+| `deploy/`, `Caddyfile`, `docker-compose.yml` | How it runs in production |
+| `tests/` | Pytest suite |
 
-### Color Code Endpoint
-- `GET /api/color-code`: Returns color codes for current hour and next 11 hours
-- Optional query parameter: `date` (format: YYYY-MM-DD)
+The website ships in **English, Dutch and French**, chosen per account. Admin
+pages are deliberately English only.
 
-### Sample Data Endpoints (for testing)
-- `GET /api/sample`: Returns sample electricity price data
-- `GET /api/sample-color-code`: Returns sample color codes for current hour and next 11 hours
+## The rest of the product
 
-### API Documentation
-- `GET /docs`: Swagger UI documentation for the API
+- **[energy-pebble-esphome](https://github.com/thomaskgb/energy-pebble-esphome)**
+  is the device: ESPHome firmware, the LED behaviour, and the Wi-Fi setup page.
+- **[energy-pebble-homeassistant](https://github.com/thomaskgb/energy-pebble-homeassistant)**
+  is the Home Assistant integration, which exposes your pebble's colour as a
+  sensor. It lives apart because HACS resolves integrations from a repository
+  root.
 
-## Example Response (Color Code)
+## Running it
 
-```json
-{
-  "current_hour": "2025-04-14T17:00:00Z",
-  "hour_color_codes": [
-    {
-      "hour": "2025-04-14T17:00:00Z",
-      "color_code": "R"
-    },
-    {
-      "hour": "2025-04-14T18:00:00Z",
-      "color_code": "R"
-    },
-    {
-      "hour": "2025-04-14T19:00:00Z",
-      "color_code": "G"
-    }
-  ]
-}
+```bash
+docker compose up -d
 ```
 
-## Getting Started
+For the website and API together on one host, without the edge stack:
 
-### Prerequisites
-- Docker and Docker Compose
+```bash
+LOCAL_DEV_USER=you python3 -m uvicorn main:app --port 8000
+```
 
-### Running the API
+`LOCAL_DEV_USER` bypasses authentication and adds the page routes Caddy
+normally serves. Local development only; it is never set in production.
 
-1. Clone this repository
-2. Navigate to the project directory
-3. Start the application:
-   ```
-   docker compose up -d
-   ```
-4. The API will be available at http://localhost:8000
+## API
+
+The endpoints, the token flow and the Home Assistant integration are documented
+at **[energypebble.tdlx.nl/developers](https://energypebble.tdlx.nl/developers)**,
+with the generated reference at
+**[/docs](https://energypebble.tdlx.nl/docs)**.
+
+## Tests
+
+```bash
+python3 -m pytest tests/
+```
+
+Some tests expect a running server on `localhost:8000` and fail without one.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
