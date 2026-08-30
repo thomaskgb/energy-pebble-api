@@ -108,7 +108,13 @@ The system uses a commitment-based approach to ensure color stability:
 - **Day-ahead pricing**: New prices published daily at 12:45 CET
 - **Color stability**: Once committed, colors don't change for 8 hours
 - **Data fetching**: Fetches 3 days of data for extended analysis
-- **Persistence**: Committed colors survive container restarts
+- **Price cache**: A fetched day is kept in memory and in
+  `/tmp/elia_prices.json`, so page loads no longer hit griddata.elia.be. A
+  complete day (96 quarter-hourly entries) is held for 6 hours, a missing or
+  partial one is retried after 5 minutes, concurrent requests for the same day
+  share a single fetch, and if Elia is unreachable the stale day is served
+  rather than an error.
+- **Persistence**: Committed colors and cached prices survive container restarts
 
 ## Deployment
 ```bash
