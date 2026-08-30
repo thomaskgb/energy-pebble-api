@@ -154,43 +154,43 @@
             <h2>Home Assistant</h2>
             <p class="prose">A custom component exposes your pebble's signal as a sensor. It polls
             the same endpoint the physical device does, so the value is personalized to your
-            household profile rather than the raw market price.</p>
+            household profile rather than the raw market price. It lives in its own repository,
+            <a href="https://github.com/thomaskgb/energy-pebble-homeassistant" target="_blank"
+            rel="noopener">energy-pebble-homeassistant</a>.</p>
 
-            <h3>Install</h3>
+            <h3>Install with HACS</h3>
+            <ol class="steps">
+                <li>In HACS, open the three-dot menu and choose
+                    <strong>Custom repositories</strong>.</li>
+                <li>Add <code>https://github.com/thomaskgb/energy-pebble-homeassistant</code>,
+                    category <strong>Integration</strong>.</li>
+                <li>Install <strong>Energy Pebble</strong>, then restart Home Assistant.</li>
+            </ol>
+
+            <h3>Or install manually</h3>
             <p class="dl">
-                <a class="btn btn--primary" href="/downloads/energy-pebble-home-assistant.zip">
+                <a class="btn btn--primary"
+                   href="https://github.com/thomaskgb/energy-pebble-homeassistant/releases/latest"
+                   target="_blank" rel="noopener">
                     <i data-icon="save" data-icon-size="16"></i>
-                    Download the component
+                    Download the latest release
                 </a>
-                <span class="dl__note">zip, built from the files running right now</span>
+                <span class="dl__note">unzips to <code>custom_components/energy_pebble/</code></span>
             </p>
             <ol class="steps">
-                <li>Unzip it into your Home Assistant configuration directory. It already
-                    contains <code>custom_components/energy_pebble/</code>, so unpacking it
-                    alongside your <code>configuration.yaml</code> puts the files where Home
-                    Assistant looks for them.</li>
+                <li>Unzip it next to your <code>configuration.yaml</code>, so the files land in
+                    <code>custom_components/energy_pebble/</code>.</li>
                 <li>Restart Home Assistant.</li>
+            </ol>
+
+            <h3>Then connect it</h3>
+            <ol class="steps">
                 <li>Create a token here under <strong>Settings &rarr; Account</strong>, as above.
                     It is shown once.</li>
                 <li>In Home Assistant: <strong>Settings &rarr; Devices &amp; services &rarr; Add
                     integration &rarr; Energy Pebble</strong>. Paste the token, then pick which
                     pebble to follow.</li>
             </ol>
-
-            <h3>HACS</h3>
-            <div class="notice">
-                <i data-icon="info" data-icon-size="16"></i>
-                <div>
-                    <span class="notice__title">Not available through HACS yet.</span>
-                    <p style="margin-top: var(--space-1);">HACS looks for
-                    <code>custom_components/&lt;domain&gt;/</code> at the root of a repository.
-                    This one keeps the component under <code>homeassistant/</code>, alongside the
-                    API it talks to, so adding this repository as a HACS custom repository will
-                    not find it. Publishing needs the integration in a repository of its own,
-                    which is planned once it settles. Until then the download above is the
-                    supported route, and it is the same files.</p>
-                </div>
-            </div>
 
             <h3>Entity</h3>
             <p class="prose"><code>sensor.&lt;nickname&gt;_color</code> holds the current color
