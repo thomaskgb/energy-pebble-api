@@ -202,35 +202,35 @@
     }
     .list-row:last-child { border-bottom: none; }
 
-    /* Homes: the saved rows and the "add" row are the same four columns, so
-       the fields and the buttons line up down the tab. Built as a grid rather
-       than flex because the saved rows carry a device count and a delete
-       button that the add row does not, and flex would let that shift every
-       column along. */
-    .home-row {
+    /* Homes: every row is four columns, and they line up down the whole tab.
+       ONE grid does that. Giving each row its own grid was the bug this
+       replaces: tracks only align inside a single container, so a saved row
+       carrying a device count sized its columns differently from the add row
+       below it. The rows are display:contents so their cells become items of
+       this grid, and the separators sit on the cells rather than the row. */
+    .homes-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto;
       align-items: center;
-      gap: 8px;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--c-border);
+      gap: 10px 8px;
     }
-    .home-row:last-of-type { border-bottom: none; }
+    #home-rows, .home-row { display: contents; }
+
     .home-row__meta {
       justify-self: end;
-      padding-inline: 4px;
       font-size: 13px;
       color: var(--c-muted);
       white-space: nowrap;
     }
     .home-row__actions { display: flex; gap: 6px; justify-self: end; }
 
-    /* The add row closes the list, so it gets a little air above it */
-    .home-row--new { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--c-border); border-bottom: none; }
+    /* The add row closes the list, so its cells carry the rule above them */
+    .home-row--new > * { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--c-border); }
 
     @media (max-width: 560px) {
-      .home-row { grid-template-columns: 1fr 1fr; }
-      .home-row__meta, .home-row__actions { grid-column: span 2; justify-self: start; }
+      .homes-grid { grid-template-columns: minmax(0, 1fr) auto; }
+      .home-row__meta { grid-column: 2; }
+      .home-row__actions { grid-column: 1 / -1; justify-self: start; }
     }
     .list-row small { color: var(--c-muted); white-space: nowrap; }
     .list-empty { color: var(--c-muted); font-style: normal; }
@@ -323,13 +323,15 @@
               Devices and pebble settings belong to a home. Add one per address;
               pick which home to configure on the Pebble tab.
             </p>
-            <div id="home-list" class="list" style="margin-bottom: 14px;"></div>
-            <div class="home-row home-row--new">
-              <input type="text" id="home-name" class="input" placeholder="Name (e.g. Beach house)" data-i18n-placeholder="settings.homes.namePlaceholder">
-              <input type="text" id="home-address" class="input" placeholder="Address (optional)" data-i18n-placeholder="settings.homes.addressPlaceholder">
-              <span class="home-row__meta"></span>
-              <div class="home-row__actions">
-                <button type="button" class="btn btn--primary" id="add-home" data-i18n="settings.homes.add">Add home</button>
+            <div class="homes-grid" id="home-list">
+              <div id="home-rows"></div>
+              <div class="home-row home-row--new">
+                <input type="text" id="home-name" class="input" placeholder="Name (e.g. Beach house)" data-i18n-placeholder="settings.homes.namePlaceholder">
+                <input type="text" id="home-address" class="input" placeholder="Address (optional)" data-i18n-placeholder="settings.homes.addressPlaceholder">
+                <span class="home-row__meta"></span>
+                <div class="home-row__actions">
+                  <button type="button" class="btn btn--primary" id="add-home" data-i18n="settings.homes.add">Add home</button>
+                </div>
               </div>
             </div>
           </div>
@@ -577,7 +579,7 @@
         select.innerHTML = this._homes.map(h =>
           `<option value="${h.id}" ${h.id === this._homeId ? 'selected' : ''}>${esc(h.name)}</option>`).join('');
 
-        this.$('#home-list').innerHTML = this._homes.map(h =>
+        this.$('#home-rows').innerHTML = this._homes.map(h =>
           `<div class="home-row">
               <input type="text" id="home-name-${h.id}" class="input" value="${esc(h.name)}">
               <input type="text" id="home-address-${h.id}" class="input" value="${esc(h.address)}"
