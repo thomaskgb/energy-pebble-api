@@ -27,6 +27,8 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /api/json`: Get raw electricity price data in JSON format
 - `GET /api/sample`: Get sample data for testing
 - `GET /api/sample-color-code`: Get sample color codes for testing
+- `GET /api/insights`: Last 7 completed days of price swings, what they were worth per load, and the week coloured hour by hour. Public; adds a `personal` block when signed in
+- `POST /api/waitlist`: Ask to be told when pebbles are available. Public, rate limited
 - `GET /docs`: Swagger UI documentation
 
 ### Device Management (Protected)
@@ -37,7 +39,9 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 
 ## Web Routes
 - `GET /`: Public landing page with color codes and API information
-- `GET /dashboard`: Protected area with energy secrets (requires authentication)
+- `GET /dashboard`: Protected area with device management (requires authentication)
+- `GET /insights`: Public. What last week's price swings were worth; adds a personal section when signed in
+- `GET /admin/waitlist`: Admin. People who asked to be told when pebbles are available
 - `GET /api/verify`: Authelia verification endpoint
 - `GET /api/authz/*`: Authelia authorization endpoints
 
@@ -64,7 +68,8 @@ energy_pebble/
 │   ├── index.html        # Main webpage
 │   ├── dashboard.html    # Protected dashboard
 │   ├── login.html        # Sign-in page
-│   ├── impact-circle.html # Energy secrets page
+│   ├── insights.html     # What last week's price swings were worth
+│   ├── admin-waitlist.html # Admin: people waiting for a pebble
 │   ├── simulator.html    # Scenario simulator
 │   ├── setup/index.html  # Device Wi-Fi setup (translated variant; see the file header)
 │   ├── pebble-sim.js     # <pebble-sim> web component
@@ -140,6 +145,21 @@ itself shows colors and needs no translation.
   or when a catalog key is never referenced.
 - **Scope**: admin pages are deliberately untranslated; they are internal.
 
+## Waitlist
+Energy Pebble is not on general sale, so the call to action on `/insights`
+collects an address rather than an order.
+
+- **Stored, never mailed from here.** A public endpoint that triggers outbound
+  mail is a spam relay, and a failed send loses a signup silently where a row
+  cannot. `energypebble@tdlx.nl` appears on the page as the contact and
+  deletion address; nothing is sent automatically.
+- **Thin by design**: address, timestamp, and which language they were reading.
+  It is the only personal data held about someone who is not a user.
+- **Deletable**: `DELETE /api/admin/waitlist/{id}`, surfaced as a button on
+  `/admin/waitlist`, is how the promise on the form is kept.
+- Signing up twice returns the same response as signing up once, so the
+  endpoint cannot be used to probe whether an address is on the list.
+
 ## Color Logic
 The system uses a commitment-based approach to ensure color stability:
 
@@ -164,7 +184,7 @@ Our own HTML, CSS and JS carry no version in their filenames, so Caddy serves
 them with `Cache-Control: no-cache`; they revalidate against an ETag, which
 costs a 304 and no body. Only vendored libraries (pinned by filename) and
 images keep the year-long cache. Extensionless routes (`/`, `/setup/`,
-`/dashboard`, `/impact-circle`, `/login`, `/admin/*`) are named explicitly in
+`/dashboard`, `/insights`, `/login`, `/admin/*`) are named explicitly in
 the Caddyfile because the `file` matcher cannot see them before the rewrite.
 
 Script and stylesheet tags carry a `?v=` marker. It exists to break caches
