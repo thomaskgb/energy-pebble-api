@@ -393,6 +393,41 @@ hr {
     gap: var(--space-2);
 }
 
+/* Primary destinations. Present on every page in the same order, with the
+   current one marked rather than removed: navigation that rearranges itself
+   per page gives the reader nothing stable to aim at. */
+.site-nav--primary {
+    flex: 1;
+    justify-content: flex-start;
+    gap: var(--space-1);
+    margin-left: var(--space-4);
+}
+
+.site-nav--utility { flex: none; }
+
+.site-nav__link {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 var(--space-3);
+    font-size: var(--text-base);
+    font-weight: var(--weight-medium);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+}
+
+.site-nav__link:hover { background: var(--surface-sunken); color: var(--text); }
+
+.site-nav__link.is-active {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+}
+
+.site-account__name { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
+
 /* Actions grouped inside the nav (auth buttons, user menu) */
 .nav-actions {
     display: flex;
@@ -411,6 +446,9 @@ hr {
 
     .brand { font-size: var(--text-md); white-space: nowrap; }
     .site-nav { width: 100%; }
+    .site-nav--primary { margin-left: 0; order: 3; overflow-x: auto; }
+    .site-nav--utility { order: 2; }
+    .site-nav__link { padding: 0 var(--space-2); }
 
     /* Secondary nav buttons shrink to their icon. The label stays in the
        accessibility tree, so screen readers still announce the destination. */

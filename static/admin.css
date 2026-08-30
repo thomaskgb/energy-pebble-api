@@ -123,6 +123,42 @@
 
 .section-title [data-icon] { color: var(--text-muted); }
 
+/* Section tabs: the admin area's four pages, under the page title. A section
+   with sub-pages carries its own second-level nav rather than pushing four
+   more items into the top bar, which is what kept the Admin menu behaving
+   differently from every other menu in the app. */
+.section-nav {
+    display: flex;
+    gap: var(--space-1);
+    margin-bottom: var(--space-8);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+}
+
+.section-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: -1px;
+    font-size: var(--text-base);
+    font-weight: var(--weight-medium);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color var(--duration-fast) var(--ease),
+                border-color var(--duration-fast) var(--ease);
+}
+
+.section-nav a:hover { color: var(--text); }
+
+.section-nav a.is-active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.section-nav a [data-icon] { color: currentColor; }
+
 /* Row of controls above a table */
 .controls {
     display: flex;
