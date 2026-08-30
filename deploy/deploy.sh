@@ -74,18 +74,27 @@ fi
 # `up -d` leaves the old config running in memory: a Caddyfile-only change
 # would deploy the file and silently never take effect. Validate the deployed
 # config, then hand it to the running Caddy.
-log "Reloading Caddy with the deployed Caddyfile"
-# The Caddy container is the `web` service in docker-compose.yml; `caddy` is
-# only the binary inside it. exec-ing a nonexistent `caddy` service fails and,
-# with the output swallowed, was misread as an invalid Caddyfile - rolling
-# back every deploy.
-if ! $COMPOSE exec -T web caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
-  rollback "deployed Caddyfile is invalid"
-fi
-if ! $COMPOSE exec -T web caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
-  # A reload can fail on a Caddy too old for the API; a restart still applies it.
-  log "caddy reload failed, restarting the container instead"
-  $COMPOSE restart web || rollback "could not reload Caddy"
+#
+# A reload is not enough on its own. The Caddyfile is bind-mounted as a single
+# FILE, and Docker resolves that to an inode when the container is created.
+# `git reset --hard` replaces the file rather than editing it in place, so the
+# new Caddyfile lands on a new inode and the container keeps reading the one it
+# was created with. Production ran a Caddyfile from 2025-11-12 for ten months
+# that way: every deploy wrote a new file, every reload succeeded, and Caddy
+# reloaded the same stale copy each time. Recreating the container is what
+# re-resolves the mount, so do that whenever the file has actually changed.
+if git diff --quiet "$PREV_SHA" "$NEW_SHA" -- Caddyfile; then
+  log "Caddyfile unchanged, leaving the web container alone"
+else
+  log "Caddyfile changed, recreating the web container so the mount re-resolves"
+  # The Caddy container is the `web` service in docker-compose.yml; `caddy` is
+  # only the binary inside it. exec-ing a nonexistent `caddy` service fails and,
+  # with the output swallowed, was misread as an invalid Caddyfile - rolling
+  # back every deploy.
+  if ! $COMPOSE run --rm --no-deps --entrypoint caddy web validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+    rollback "deployed Caddyfile is invalid"
+  fi
+  $COMPOSE up -d --force-recreate web || rollback "could not recreate the web container"
 fi
 
 log "Pruning dangling images"
