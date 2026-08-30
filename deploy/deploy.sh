@@ -36,6 +36,7 @@ git fetch --prune origin "$DEPLOY_BRANCH"
 git checkout "$DEPLOY_BRANCH"
 git reset --hard "origin/$DEPLOY_BRANCH"
 NEW_SHA="$(git rev-parse HEAD)"
+SHORT_SHA="$(git rev-parse --short HEAD)"
 
 if [ "$PREV_SHA" = "$NEW_SHA" ]; then
   log "Already at $NEW_SHA, nothing to deploy"
@@ -43,6 +44,20 @@ if [ "$PREV_SHA" = "$NEW_SHA" ]; then
 fi
 log "Deploying $PREV_SHA → $NEW_SHA"
 git --no-pager log --oneline "$PREV_SHA..$NEW_SHA" | sed 's/^/    /' || true
+
+# Stamp the deployed commit into every ?v= marker.
+#
+# The marker exists to give changed assets a new URL. Hand-editing it means
+# remembering to, and twice now that was missed: the catalog changed under a
+# marker that had not moved, so browsers and Cloudflare went on serving the
+# previous copy from the same key. The second time, the interface rendered
+# `nav.insights` as literal text because the cached catalog predated the key.
+#
+# A marker derived from the commit cannot drift from what is being served.
+# The working tree is reset from origin on every deploy, so editing it here is
+# safe and is redone each time.
+log "Stamping assets with $SHORT_SHA"
+find static -name '*.html' -print0 | xargs -0 sed -i "s/?v=[0-9A-Za-z.-]\+/?v=$SHORT_SHA/g"
 
 log "Rebuilding and restarting containers"
 # Schema migrations are idempotent and run at app startup (init_database), so a
