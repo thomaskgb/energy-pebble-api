@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Query, Depends, Security, File, UploadFile, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import httpx
@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 import os
 import re
+import csv
+import io
 import json
 import hashlib
 from pathlib import Path
@@ -457,6 +459,19 @@ def init_database():
                 user_id TEXT PRIMARY KEY,
                 language TEXT NOT NULL DEFAULT 'en',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # People who asked to be told when pebbles are available. The only
+        # personal data we hold about someone who is not a user, so it stays
+        # deliberately thin: an address, when they left it, and which language
+        # they were reading. Deleted on request (energypebble@tdlx.nl).
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS waitlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                language TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
 
@@ -1552,9 +1567,18 @@ if LOCAL_DEV_USER:
     async def _dev_dashboard():
         return RedirectResponse("/static/dashboard.html")
 
+    @app.get("/insights", include_in_schema=False)
+    async def _dev_insights():
+        return RedirectResponse("/static/insights.html")
+
     @app.get("/impact-circle", include_in_schema=False)
     async def _dev_impact_circle():
-        return RedirectResponse("/static/impact-circle.html")
+        # The Impact Circle is gone; its readers are not.
+        return RedirectResponse("/insights", status_code=301)
+
+    @app.get("/admin/waitlist", include_in_schema=False)
+    async def _dev_admin_waitlist():
+        return RedirectResponse("/static/admin-waitlist.html")
 
     @app.get("/login", include_in_schema=False)
     async def _dev_login():
@@ -2263,6 +2287,295 @@ async def get_sample_color_code():
         "current_hour": current_hour,
         "hour_color_codes": color_codes
     }
+
+# --- Insights: what last week's price swings were worth -----------------------
+# The pebble answers "when"; this answers "what was that worth". We have no
+# consumption data (the device reports requests, not kWh), so a "you saved X"
+# figure would be invented. What is exact is the difference between the
+# cheapest and priciest hour of a day: the fixed parts of a Belgian bill,
+# network fees and levies, are identical whichever hour you pick, so they
+# cancel and the difference holds for every household whatever its tariff.
+
+INSIGHTS_WINDOW_DAYS = 7
+
+# kWh for one run of each load. Printed on the page rather than hidden: they
+# stand in for a household's own appliances, they are not measurements.
+INSIGHT_LOADS = {
+    "dishwasher": 1.2,
+    "washing_machine": 0.9,
+    "tumble_dryer": 2.5,
+    "electric_car": 11.0,
+    "hot_water": 4.0,
+    "heat_pump": 6.0,
+}
+
+# Raw prices are already cached by fetch_data(); this holds the derived shape
+# of a finished day, which never changes either. Pruned because the window
+# slides forward daily.
+_insights_day_cache: Dict[str, Dict[str, Any]] = {}
+INSIGHTS_CACHE_MAX_DAYS = 40
+
+def _local_hours_for_date(entries: List[Dict[str, Any]], date_str: str) -> Dict[int, float]:
+    """Average price per local hour, keeping only hours that fall on date_str."""
+    buckets: Dict[int, List[float]] = {}
+    for entry in entries:
+        moment = datetime.fromisoformat(entry["dateTime"].replace('Z', '+00:00')).astimezone(BRUSSELS_TZ)
+        if moment.strftime("%Y-%m-%d") != date_str:
+            continue
+        buckets.setdefault(moment.hour, []).append(entry["price"])
+    return {hour: sum(prices) / len(prices) for hour, prices in buckets.items() if prices}
+
+async def _insights_day(date_str: str) -> Optional[Dict[str, Any]]:
+    """One completed day: its price shape, its extremes, and its colors.
+
+    Colors are thirds of that day's own range, the same retrospective
+    convention the simulator uses, rather than the live 48-hour rolling window.
+    """
+    if date_str in _insights_day_cache:
+        return _insights_day_cache[date_str]
+
+    # A local day starts at 22:00/23:00 UTC the day before, so both are needed.
+    day = datetime.strptime(date_str, "%Y-%m-%d")
+    previous = (day - timedelta(days=1)).strftime("%Y-%m-%d")
+    entries: List[Dict[str, Any]] = []
+    for wanted in (previous, date_str):
+        fetched = await fetch_data(wanted)
+        if isinstance(fetched, list):
+            entries.extend(fetched)
+    if not entries:
+        return None
+
+    hourly = _local_hours_for_date(entries, date_str)
+    if len(hourly) < 24:
+        # A short day (DST, or a gap in Elia's data) would skew the extremes.
+        logger.warning(f"Insights: {date_str} has {len(hourly)} hours, skipping")
+        return None
+
+    cheapest = min(hourly, key=hourly.get)
+    priciest = max(hourly, key=hourly.get)
+
+    ordered = [{"dateTime": f"{date_str}T{hour:02d}:00", "avgPrice": hourly[hour]}
+               for hour in sorted(hourly)]
+    colors = [entry["color_code"] for entry in determine_color_codes(ordered, reference_window_hours=24)]
+
+    result = {
+        "date": date_str,
+        "cheapest_hour": cheapest,
+        "cheapest_price": round(hourly[cheapest], 2),
+        "priciest_hour": priciest,
+        "priciest_price": round(hourly[priciest], 2),
+        # EUR/MWh to EUR/kWh: what one kWh moved between the best and worst hour
+        "spread_eur_per_kwh": round((hourly[priciest] - hourly[cheapest]) / 1000, 4),
+        "negative_hours": sum(1 for price in hourly.values() if price < 0),
+        "colors": colors,
+        "prices": [round(hourly[hour], 1) for hour in sorted(hourly)],
+    }
+    _insights_day_cache[date_str] = result
+    for stale in sorted(_insights_day_cache)[:-INSIGHTS_CACHE_MAX_DAYS]:
+        del _insights_day_cache[stale]
+    return result
+
+def _personal_week(days: List[Dict[str, Any]], settings: Dict[str, Any]) -> Dict[str, Any]:
+    """How the household profile reshaped the week versus price alone.
+
+    Retrospective, so there is no committed solar forecast to replay: this uses
+    apply_signal_source's documented offline fallback, the fixed midday window.
+    """
+    green_price_only = 0
+    green_personal = 0
+    battery_evenings = 0
+
+    for day in days:
+        # day["colors"] is indexed by local hour; apply_signal_source reads UTC
+        # hour keys and converts back, so convert to UTC going in.
+        entries = [{"hour": BRUSSELS_TZ.localize(
+                        datetime.strptime(f"{day['date']} {hour:02d}", "%Y-%m-%d %H")
+                    ).astimezone(pytz.UTC).isoformat().replace('+00:00', 'Z'),
+                    "color_code": color}
+                   for hour, color in enumerate(day["colors"])]
+        shifted = apply_signal_source(entries, settings, solar_boost=None)
+
+        green_price_only += sum(1 for e in entries if e["color_code"] == "G")
+        green_personal += sum(1 for e in shifted if e["color_code"] == "G")
+
+        if settings.get("has_battery") and settings.get("has_solar"):
+            bridged = any(
+                before["color_code"] == "R" and after["color_code"] != "R"
+                and BATTERY_BRIDGE_HOURS[0] <= hour < BATTERY_BRIDGE_HOURS[1]
+                for hour, (before, after) in enumerate(zip(entries, shifted))
+            )
+            if bridged:
+                battery_evenings += 1
+
+    return {
+        "signal_source": derive_signal_source(settings),
+        "has_solar": bool(settings.get("has_solar")),
+        "has_battery": bool(settings.get("has_battery")),
+        "green_hours": green_personal,
+        "green_hours_price_only": green_price_only,
+        "battery_evenings": battery_evenings,
+    }
+
+@app.get("/api/insights", tags=["public"])
+async def get_insights(request: Request):
+    """
+    What the last 7 completed days of price swings were worth.
+
+    Authentication: none required, public endpoint. When the caller is signed
+    in, a `personal` block is added comparing what their pebble showed against
+    what the price alone would have shown.
+
+    Every figure is a difference between the cheapest and priciest hour of a
+    day, never an absolute bill: the fixed components of a Belgian bill do not
+    move with the hour, so they cancel out and these numbers hold whatever the
+    household's tariff. They are also ceilings, assuming the best hour was hit
+    every single day.
+    """
+    # Yesterday backwards: only completed days, so every day is final.
+    yesterday = datetime.now(BRUSSELS_TZ).date() - timedelta(days=1)
+    wanted = [(yesterday - timedelta(days=offset)).strftime("%Y-%m-%d")
+              for offset in reversed(range(INSIGHTS_WINDOW_DAYS))]
+
+    days = [day for day in [await _insights_day(date_str) for date_str in wanted] if day]
+    if not days:
+        raise HTTPException(status_code=503, detail="No price history available yet")
+
+    total_spread = sum(day["spread_eur_per_kwh"] for day in days)
+    cheapest = min(days, key=lambda day: day["cheapest_price"])
+    priciest = max(days, key=lambda day: day["priciest_price"])
+
+    personal = None
+    try:
+        user_info = get_current_user(request)
+        home_id = get_or_create_default_home(user_info['user_id'])
+        personal = _personal_week(days, get_home_settings(home_id))
+    except HTTPException:
+        pass  # Not signed in: the public half of the page is the whole page.
+    except Exception as e:
+        logger.warning(f"Insights personalization failed (showing public view): {e}")
+
+    return {
+        "window": {"days": len(days), "from": days[0]["date"], "to": days[-1]["date"]},
+        "spread_eur_per_kwh": round(total_spread, 4),
+        "loads": {name: {"kwh": kwh, "worth": round(total_spread * kwh, 2)}
+                  for name, kwh in INSIGHT_LOADS.items()},
+        "days": days,
+        "highlights": {
+            "cheapest": {"date": cheapest["date"], "hour": cheapest["cheapest_hour"],
+                         "price": cheapest["cheapest_price"]},
+            "priciest": {"date": priciest["date"], "hour": priciest["priciest_hour"],
+                         "price": priciest["priciest_price"]},
+            # The claim the old Impact Circle page got backwards.
+            "midday_cheapest_days": sum(1 for day in days if 10 <= day["cheapest_hour"] < 16),
+            "night_cheapest_days": sum(1 for day in days
+                                       if day["cheapest_hour"] >= 22 or day["cheapest_hour"] < 6),
+            "negative_hours": sum(day["negative_hours"] for day in days),
+        },
+        "personal": personal,
+    }
+
+# --- Waitlist ----------------------------------------------------------------
+# Energy Pebble is not on general sale, so the landing call to action collects
+# an address rather than an order. Addresses are stored, never mailed out from
+# here: a public endpoint that triggers outbound mail is a spam relay, and a
+# failed send loses a signup silently where a row cannot.
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$")
+WAITLIST_MAX_PER_IP_PER_HOUR = 5
+_waitlist_hits: Dict[str, List[float]] = {}
+
+class WaitlistSignup(BaseModel):
+    email: str
+    language: Optional[str] = None
+
+def _waitlist_rate_limited(client_ip: str) -> bool:
+    """Crude per-IP throttle: enough to stop a script filling the table."""
+    now = time.time()
+    hits = [t for t in _waitlist_hits.get(client_ip, []) if now - t < 3600]
+    _waitlist_hits[client_ip] = hits
+    if len(hits) >= WAITLIST_MAX_PER_IP_PER_HOUR:
+        return True
+    hits.append(now)
+    return False
+
+@app.post("/api/waitlist", tags=["public"])
+async def join_waitlist(signup: WaitlistSignup, request: Request):
+    """
+    Ask to be told when pebbles are available.
+
+    Authentication: none required, public endpoint.
+
+    Stores an email address and nothing else. Signing up twice is not an
+    error: the response is the same either way, so the endpoint cannot be used
+    to probe whether an address is already on the list.
+    """
+    email = (signup.email or "").strip().lower()
+    if not EMAIL_RE.match(email) or len(email) > 254:
+        raise HTTPException(status_code=400, detail="That does not look like an email address")
+
+    if _waitlist_rate_limited(get_real_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many signups from here. Try again later.")
+
+    language = signup.language if signup.language in ("en", "nl", "fr") else None
+    try:
+        with db_lock:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute(
+                    "INSERT INTO waitlist (email, language) VALUES (?, ?) "
+                    "ON CONFLICT(email) DO NOTHING",
+                    (email, language),
+                )
+                conn.commit()
+    except Exception as e:
+        logger.error(f"Waitlist signup failed: {e}")
+        raise HTTPException(status_code=500, detail="Could not save your address. Please try again.")
+
+    logger.info("Waitlist signup recorded")
+    return {"status": "ok"}
+
+@app.get("/api/admin/waitlist", tags=["admin"])
+async def get_waitlist(request: Request, user_info = Depends(get_admin_user)):
+    """Everyone waiting for a pebble, newest first. Admin only."""
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            rows = conn.execute(
+                "SELECT id, email, language, created_at FROM waitlist ORDER BY created_at DESC"
+            ).fetchall()
+    entries = [{"id": r[0], "email": r[1], "language": r[2], "created_at": r[3]} for r in rows]
+    by_language: Dict[str, int] = {}
+    for entry in entries:
+        key = entry["language"] or "unknown"
+        by_language[key] = by_language.get(key, 0) + 1
+    return {"entries": entries, "total": len(entries), "by_language": by_language}
+
+@app.delete("/api/admin/waitlist/{entry_id}", tags=["admin"])
+async def delete_waitlist_entry(entry_id: int, request: Request, user_info = Depends(get_admin_user)):
+    """Remove one address: the deletion route promised on the signup form."""
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute("DELETE FROM waitlist WHERE id = ?", (entry_id,))
+            conn.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="No such waitlist entry")
+    return {"status": "deleted"}
+
+@app.get("/api/admin/waitlist.csv", tags=["admin"])
+async def export_waitlist(request: Request, user_info = Depends(get_admin_user)):
+    """The list as CSV, for when there is finally something to announce."""
+    with db_lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            rows = conn.execute(
+                "SELECT email, language, created_at FROM waitlist ORDER BY created_at"
+            ).fetchall()
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["email", "language", "created_at"])
+    writer.writerows(rows)
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="waitlist.csv"'},
+    )
 
 @app.get("/api/verify", tags=["auth"])
 async def verify_user(request: Request):

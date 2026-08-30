@@ -39,7 +39,7 @@ TRANSLATED_FILES = [
     STATIC / "index.html",
     STATIC / "dashboard.html",
     STATIC / "login.html",
-    STATIC / "impact-circle.html",
+    STATIC / "insights.html",
     STATIC / "simulator.html",
     STATIC / "setup" / "index.html",
     STATIC / "settings-modal.js",

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f1319" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>Energy Pebble - Admin: Waitlist</title>
+    <!-- Admin pages are internal and stay English (see CLAUDE.md). Asset hrefs
+         are root-absolute because the browser URL is /admin/waitlist. -->
+    <link rel="stylesheet" href="/base.css?v=2026-08-30-2">
+    <link rel="stylesheet" href="/admin.css?v=2026-08-30-2">
+    <style>
+        .controls { align-items: center; }
+        .lang-counts { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+        .spacer { flex: 1; }
+        td.email { font-family: var(--font-mono); font-size: var(--text-sm); }
+        td.when { color: var(--text-secondary); white-space: nowrap; }
+        td.row-actions { text-align: right; }
+    </style>
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a href="/" class="brand">
+                <i data-icon="bolt" data-icon-size="20" class="brand__mark"></i>
+                Energy Pebble
+            </a>
+            <div class="site-nav">
+                <a href="/dashboard" class="btn btn--ghost btn--collapse">
+                    <i data-icon="dashboard" data-icon-size="16"></i>
+                    <span>Dashboard</span>
+                </a>
+                <div class="menu" id="adminMenu">
+                    <button type="button" class="btn btn--secondary" id="adminMenuTrigger"
+                            onclick="toggleAdminMenu()" aria-haspopup="true" aria-expanded="false">
+                        <i data-icon="shield" data-icon-size="16"></i>
+                        <span>Admin</span>
+                        <i data-icon="chevronDown" data-icon-size="14" class="menu__chevron"></i>
+                    </button>
+                    <div class="menu__panel" id="adminMenuDropdown" role="menu">
+                        <a href="/admin/users" class="menu__item" role="menuitem">
+                            <i data-icon="users" data-icon-size="16"></i>
+                            <span>Users</span>
+                        </a>
+                        <a href="/admin/devices" class="menu__item" role="menuitem">
+                            <i data-icon="chip" data-icon-size="16"></i>
+                            <span>Devices</span>
+                        </a>
+                        <a href="/admin/firmware" class="menu__item" role="menuitem">
+                            <i data-icon="save" data-icon-size="16"></i>
+                            <span>Firmware</span>
+                        </a>
+                        <a href="/admin/tokens" class="menu__item" role="menuitem">
+                            <i data-icon="key" data-icon-size="16"></i>
+                            <span>API Tokens</span>
+                        </a>
+                        <a href="/admin/waitlist" class="menu__item menu__item--active" role="menuitem">
+                            <i data-icon="user" data-icon-size="16"></i>
+                            <span>Waitlist</span>
+                        </a>
+                        <div class="menu__separator"></div>
+                        <a href="https://auth.tdlx.nl/logout" class="menu__item menu__item--danger" role="menuitem">
+                            <i data-icon="logout" data-icon-size="16"></i>
+                            <span>Logout</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main" class="container page">
+        <div class="header">
+            <h1><i data-icon="user" data-icon-size="24"></i> Waitlist</h1>
+            <p class="subtitle">People who asked to be told when pebbles are available, from the signup form on <a href="/insights">/insights</a>.</p>
+        </div>
+
+        <div class="admin-warning">
+            The signup form promises these addresses are never passed on and can be deleted on
+            request. Deleting a row here is how that promise is kept.
+        </div>
+
+        <div class="section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="total">-</div>
+                    <div class="stat-label">Waiting</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="lang-counts" id="lang-counts"></div>
+                <div class="spacer"></div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="load()">
+                    <i data-icon="refresh" data-icon-size="15"></i> Refresh
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="export">
+                    <i data-icon="save" data-icon-size="15"></i> Export CSV
+                </button>
+            </div>
+
+            <div class="table-scroll">
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Language</th>
+                            <th>Signed up</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="rows">
+                        <tr><td colspan="4" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="/icons.js?v=2026-08-30-2"></script>
+    <script>
+        function toggleAdminMenu() {
+            const menu = document.getElementById('adminMenu');
+            const trigger = document.getElementById('adminMenuTrigger');
+            const open = menu.classList.toggle('is-open');
+            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        document.addEventListener('click', function (event) {
+            const menu = document.getElementById('adminMenu');
+            if (menu && !menu.contains(event.target)) {
+                menu.classList.remove('is-open');
+                document.getElementById('adminMenuTrigger').setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        const esc = (value) => String(value == null ? '' : value)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+
+        function when(timestamp) {
+            // SQLite writes naive UTC; make that explicit before formatting.
+            const parsed = new Date(timestamp.replace(' ', 'T') + 'Z');
+            return isNaN(parsed) ? timestamp : parsed.toLocaleString('en-GB', {
+                day: 'numeric', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        async function load() {
+            const body = document.getElementById('rows');
+            try {
+                const response = await fetch('/api/admin/waitlist');
+                if (response.status === 401 || response.status === 403) {
+                    body.innerHTML = '<tr><td colspan="4" class="no-access">Admin access required.</td></tr>';
+                    return;
+                }
+                if (!response.ok) throw new Error(response.status);
+                const data = await response.json();
+
+                document.getElementById('total').textContent = data.total;
+
+                document.getElementById('lang-counts').innerHTML =
+                    Object.entries(data.by_language)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([lang, count]) =>
+                            `<span class="status-badge status-active">${esc(lang)} ${count}</span>`)
+                        .join('');
+
+                body.innerHTML = data.entries.length
+                    ? data.entries.map(entry => `
+                        <tr>
+                            <td class="email">${esc(entry.email)}</td>
+                            <td>${esc(entry.language || '-')}</td>
+                            <td class="when">${esc(when(entry.created_at))}</td>
+                            <td class="row-actions">
+                                <button type="button" class="btn btn-danger btn-sm"
+                                        data-delete="${entry.id}" data-email="${esc(entry.email)}">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>`).join('')
+                    : '<tr><td colspan="4" class="empty">Nobody on the list yet.</td></tr>';
+
+                Icons.render(body);
+            } catch (error) {
+                console.error('[waitlist] load failed:', error);
+                body.innerHTML = '<tr><td colspan="4" class="error">Could not load the waitlist.</td></tr>';
+            }
+        }
+
+        // Delegated so it survives every re-render.
+        document.getElementById('rows').addEventListener('click', async function (event) {
+            const button = event.target.closest('[data-delete]');
+            if (!button) return;
+            if (!confirm(`Delete ${button.dataset.email} from the waitlist?`)) return;
+            button.disabled = true;
+            try {
+                const response = await fetch(`/api/admin/waitlist/${button.dataset.delete}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error(response.status);
+                load();
+            } catch (error) {
+                console.error('[waitlist] delete failed:', error);
+                button.disabled = false;
+            }
+        });
+
+        // Fetched rather than linked, so the admin session header is sent and a
+        // failure is visible instead of opening a blank tab.
+        document.getElementById('export').addEventListener('click', async function () {
+            try {
+                const response = await fetch('/api/admin/waitlist.csv');
+                if (!response.ok) throw new Error(response.status);
+                const url = URL.createObjectURL(await response.blob());
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'waitlist.csv';
+                link.click();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('[waitlist] export failed:', error);
+            }
+        });
+
+        Icons.render(document.body);
+        load();
+    </script>
+</body>
+</html>
