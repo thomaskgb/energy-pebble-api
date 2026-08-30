@@ -42,6 +42,7 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /dashboard`: Protected area with device management (requires authentication)
 - `GET /insights`: Public. What last week's price swings were worth; adds a personal section when signed in
 - `GET /admin/waitlist`: Admin. People who asked to be told when pebbles are available
+- `GET /privacy`: Public. What is collected, why, how long it is kept, and how to have it deleted
 - `GET /api/verify`: Authelia verification endpoint
 - `GET /api/authz/*`: Authelia authorization endpoints
 
@@ -159,6 +160,22 @@ collects an address rather than an order.
   `/admin/waitlist`, is how the promise on the form is kept.
 - Signing up twice returns the same response as signing up once, so the
   endpoint cannot be used to probe whether an address is on the list.
+
+## Privacy and retention
+`static/privacy.html` states what the project collects and how long it keeps
+it. It is customer-facing, so it is translated like the rest of the site.
+
+- **Device records are deleted after twelve months** without a connection
+  (`DEVICE_RETENTION_DAYS`, `prune_device_records`). They hold the only
+  network-identifying data we keep: IP address, user agent and a fingerprint.
+  The sweep rides along with device traffic, at most once a day, because there
+  is no scheduler in this app.
+- **The page and the code must move together.** `tests/test_retention.py` fails
+  if `DEVICE_RETENTION_DAYS` changes without the catalog sentence changing too.
+- **Account deletion is manual** for now: people email energypebble@tdlx.nl.
+  The page says so plainly rather than implying a button that does not exist.
+- Data lives on a DigitalOcean droplet in Amsterdam. Elia and Open-Meteo are
+  the only outside services involved, and neither receives personal data.
 
 ## Color Logic
 The system uses a commitment-based approach to ensure color stability:
