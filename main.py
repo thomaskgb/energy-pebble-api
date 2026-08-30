@@ -16,6 +16,7 @@ from pathlib import Path
 import sqlite3
 import threading
 import time
+import asyncio
 import shutil
 import yaml
 import secrets
@@ -1526,12 +1527,108 @@ if LOCAL_DEV_USER:
     async def _dev_impact_circle():
         return RedirectResponse("/static/impact-circle.html")
 
+# --- Elia day-ahead price cache -------------------------------------------
+# Elia publishes a day's quarter-hourly prices once (around 12:45 CET for the
+# next day) and does not revise them afterwards, so a fetched day stays valid.
+# Without this cache every page load pulled three days straight from
+# griddata.elia.be. Cached days survive restarts via DATA_DIR.
+ELIA_CACHE_TTL_SECONDS = 6 * 3600      # a complete day: refresh only occasionally
+ELIA_CACHE_RETRY_SECONDS = 300         # a missing or partial day: retry soon
+ELIA_CACHE_MAX_DAYS = 16               # bound the cache; /api/json takes any date
+ELIA_QUARTERS_PER_DAY = 96             # 24h of quarter-hourly entries
+
+elia_cache: Dict[str, Dict[str, Any]] = {}
+elia_cache_file = DATA_DIR / "elia_prices.json"
+elia_cache_locks: Dict[str, asyncio.Lock] = {}
+
+
+def load_elia_cache():
+    """Load the persisted price cache so a restart does not refetch everything."""
+    global elia_cache
+    try:
+        if elia_cache_file.exists():
+            stored = json.loads(elia_cache_file.read_text())
+            elia_cache = {
+                date_str: entry for date_str, entry in stored.items()
+                if isinstance(entry, dict) and isinstance(entry.get("data"), list)
+            }
+            logger.info(f"Loaded {len(elia_cache)} cached Elia days from disk")
+    except Exception as e:
+        logger.warning(f"Could not load Elia price cache: {e}")
+        elia_cache = {}
+
+
+def save_elia_cache():
+    """Persist the price cache, keeping only the most recently fetched days."""
+    try:
+        trimmed = dict(sorted(
+            elia_cache.items(),
+            key=lambda item: item[1].get("fetched_at", 0),
+            reverse=True,
+        )[:ELIA_CACHE_MAX_DAYS])
+        elia_cache.clear()
+        elia_cache.update(trimmed)
+        elia_cache_file.write_text(json.dumps(trimmed))
+    except Exception as e:
+        logger.warning(f"Could not persist Elia price cache: {e}")
+
+
+def elia_cache_ttl(data: Any) -> int:
+    """A full day of prices is final; anything shorter is worth retrying."""
+    if isinstance(data, list) and len(data) >= ELIA_QUARTERS_PER_DAY:
+        return ELIA_CACHE_TTL_SECONDS
+    return ELIA_CACHE_RETRY_SECONDS
+
+
+def get_cached_elia_data(date_str: str, allow_stale: bool = False) -> Optional[List[Any]]:
+    """Return cached prices for a date, or None when absent or expired."""
+    entry = elia_cache.get(date_str)
+    if not entry:
+        return None
+    if allow_stale:
+        return entry["data"]
+    if time.time() - entry.get("fetched_at", 0) > elia_cache_ttl(entry["data"]):
+        return None
+    return entry["data"]
+
+
 async def fetch_data(date_str: Optional[str] = None):
-    """Fetch data from Elia's API for a given date."""
+    """Fetch a day of Elia prices, serving from cache when it is still valid."""
     if not date_str:
         # Use today's date if not specified
         date_str = datetime.now().strftime("%Y-%m-%d")
-    
+
+    cached = get_cached_elia_data(date_str)
+    if cached is not None:
+        logger.debug(f"Serving Elia data for {date_str} from cache")
+        return cached
+
+    # One fetch per date at a time: a burst of reloads must not stampede Elia.
+    lock = elia_cache_locks.setdefault(date_str, asyncio.Lock())
+    async with lock:
+        cached = get_cached_elia_data(date_str)
+        if cached is not None:
+            return cached
+
+        try:
+            data = await fetch_data_from_elia(date_str)
+        except Exception as e:
+            # Elia is unreachable: stale prices beat no prices at all.
+            stale = get_cached_elia_data(date_str, allow_stale=True)
+            if stale:
+                logger.warning(f"Elia fetch for {date_str} failed ({e}); serving stale cache")
+                return stale
+            raise
+
+        # Only the expected list-of-entries shape is worth caching.
+        if isinstance(data, list):
+            elia_cache[date_str] = {"fetched_at": time.time(), "data": data}
+            save_elia_cache()
+        return data
+
+
+async def fetch_data_from_elia(date_str: str):
+    """Fetch data from Elia's API for a given date."""
     url = f"https://griddata.elia.be/eliabecontrols.prod/interface/Interconnections/daily/auctionresultsqh/{date_str}"
     
     logger.info(f"Fetching data from URL: {url}")
@@ -1571,6 +1668,8 @@ async def fetch_data(date_str: Optional[str] = None):
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+load_elia_cache()
 
 def should_data_be_available(target_date: datetime) -> bool:
     """
