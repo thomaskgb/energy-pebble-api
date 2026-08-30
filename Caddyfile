@@ -8,11 +8,14 @@
         file_server
     }
     
-    # Handle impact circle route
-    handle /impact-circle {
-        rewrite * /impact-circle.html
+    # Handle insights route
+    handle /insights {
+        rewrite * /insights.html
         file_server
     }
+
+    # The Impact Circle page became /insights; keep old links working.
+    redir /impact-circle /insights permanent
     
     # Handle login route
     handle /login {
@@ -43,6 +46,11 @@
         rewrite * /admin-tokens.html
         file_server
     }
+
+    handle /admin/waitlist {
+        rewrite * /admin-waitlist.html
+        file_server
+    }
     
     # Enable file serving for all other routes
     file_server
@@ -67,7 +75,7 @@
     # heuristically cached either.
     # A directory request serves its index.html, but the request path carries no
     # extension, so it needs naming here too. "/" is the landing page.
-    @page_routes path / /setup/ /dashboard /impact-circle /login /admin/*
+    @page_routes path / /setup/ /dashboard /insights /login /admin/*
     header @page_routes Cache-Control "no-cache"
 
     # Vendored libraries are pinned to a version and images never change under
