@@ -1,4 +1,4 @@
-# Energy Pebble — Home Assistant integration
+# Energy Pebble: Home Assistant integration
 
 Shows your pebble's color signal in Home Assistant: a `sensor` with the
 current color (`green` / `yellow` / `red`) and the next 8 hours as attributes.
@@ -11,16 +11,16 @@ because it polls the same endpoint your physical pebble uses.
    `config/custom_components/` directory and restart Home Assistant.
 2. On [energypebble.tdlx.nl/dashboard](https://energypebble.tdlx.nl/dashboard),
    open your user menu → **Settings → Account** and create a
-   **Home Assistant token**. Copy it — it is shown only once.
+   **Home Assistant token**. Copy it; it is shown only once.
 3. In Home Assistant: **Settings → Devices & services → Add integration →
    Energy Pebble**. Paste the token, then pick which of your pebbles to follow.
 
-HACS distribution needs the integration in its own repository — planned once
+HACS distribution needs the integration in its own repository, planned once
 the integration stabilizes.
 
 ## Entities
 
-- `sensor.<nickname>_color` — current color (enum: green/yellow/red), with
+- `sensor.<nickname>_color`: current color (enum: green/yellow/red), with
   attributes: `next_hours` (hour + color for the next 8 hours),
   `signal_source`, `personalized`, and the `display` block.
 

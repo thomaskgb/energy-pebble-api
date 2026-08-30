@@ -40,9 +40,9 @@ jobs:
         env:
           ENERGY_PEBBLE_DATA_DIR: ${{ runner.temp }}
 
-  # Builds the actual Docker image and boots it, so image-level breakage — a file
+  # Builds the actual Docker image and boots it, so image-level breakage (a file
   # main.py imports but the Dockerfile forgot to COPY, a missing dependency, an
-  # import error at startup — fails CI instead of reaching prod (where only the
+  # import error at startup) fails CI instead of reaching prod (where only the
   # deploy health-check + rollback would catch it).
   docker-smoke:
     runs-on: ubuntu-latest

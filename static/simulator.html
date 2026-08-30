@@ -268,7 +268,7 @@
                 fill.className = 'fill';
                 fill.style.height = Math.max(8, Math.round(Math.abs(p) / maxAbs * 62)) + 'px';
                 fill.style.background = PALETTE[colors[h]];
-                bar.title = String(h).padStart(2, '0') + ':00 — ' + p +
+                bar.title = String(h).padStart(2, '0') + ':00: ' + p +
                             (sim._settings.contract_type === 'dynamic' ? ' €/MWh' : ' ' + t('simulator.tariffLevel'));
                 bar.appendChild(fill);
                 bar.addEventListener('click', () => {
@@ -313,7 +313,7 @@
             applyScenario();
         });
 
-        // Start on the sunny day with solar panels on — the most telling situation
+        // Start on the sunny day with solar panels on: the most telling situation
         document.getElementById('sc-sunny').classList.add('active');
         nowHour = SCENARIOS.sunny.defaultHour;
         document.getElementById('hour').value = nowHour;

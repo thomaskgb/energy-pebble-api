@@ -129,7 +129,7 @@ def _catalogs():
 
 def test_translations_cover_every_english_key():
     catalogs = _catalogs()
-    assert catalogs["en"], "English catalog is empty — the parser is wrong"
+    assert catalogs["en"], "English catalog is empty, the parser is wrong"
     for lang in ("nl", "fr"):
         missing = sorted(catalogs["en"] - catalogs[lang])
         extra = sorted(catalogs[lang] - catalogs["en"])
@@ -161,7 +161,7 @@ def _keys_used():
 def test_every_key_used_in_the_ui_exists_in_the_catalog():
     english = _catalogs()["en"]
     keys, plurals = _keys_used()
-    assert keys, "no keys found — the extraction patterns are wrong"
+    assert keys, "no keys found, the extraction patterns are wrong"
 
     missing = sorted(f"{key} (in {where})" for key, where in keys.items() if key not in english)
     assert not missing, f"keys used but not translated: {missing}"

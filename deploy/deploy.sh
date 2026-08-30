@@ -38,7 +38,7 @@ git reset --hard "origin/$DEPLOY_BRANCH"
 NEW_SHA="$(git rev-parse HEAD)"
 
 if [ "$PREV_SHA" = "$NEW_SHA" ]; then
-  log "Already at $NEW_SHA — nothing to deploy"
+  log "Already at $NEW_SHA, nothing to deploy"
   exit 0
 fi
 log "Deploying $PREV_SHA → $NEW_SHA"
@@ -46,7 +46,7 @@ git --no-pager log --oneline "$PREV_SHA..$NEW_SHA" | sed 's/^/    /' || true
 
 log "Rebuilding and restarting containers"
 # Schema migrations are idempotent and run at app startup (init_database), so a
-# restart applies them — no separate migration step needed.
+# restart applies them; no separate migration step needed.
 $COMPOSE up -d --build
 
 log "Waiting for the API to become healthy"
@@ -60,7 +60,7 @@ for i in $(seq 1 20); do
 done
 
 if [ "$ok" != true ]; then
-  log "Health check failed — rolling back to $PREV_SHA"
+  log "Health check failed, rolling back to $PREV_SHA"
   git reset --hard "$PREV_SHA"
   $COMPOSE up -d --build
   fail "Deploy of $NEW_SHA failed health check; rolled back to $PREV_SHA"

@@ -1,5 +1,5 @@
 /**
- * <pebble-sim> — a faithful, minimal replica of the Energy Pebble device:
+ * <pebble-sim>: a faithful, minimal replica of the Energy Pebble device:
  * squircle body, 8 ring segments (next 8 hours) and a center dot (now).
  *
  * Usage:
@@ -105,7 +105,7 @@
       this._changed();
     }
 
-    // Apply this pebble's household transform to arbitrary entries — lets a
+    // Apply this pebble's household transform to arbitrary entries; lets a
     // host page (e.g. the simulator's price strip) share the exact signal.
     transform(entries) {
       return this._transform(entries);
