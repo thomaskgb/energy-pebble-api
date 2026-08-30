@@ -45,168 +45,292 @@
   });
 
   const STYLE = `
-    :host { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    /* The modal lives in a shadow root, so it cannot use base.css directly.
+       Custom properties do cross the boundary, so the tokens below are the
+       host page's — with standalone fallbacks for anything that loads this
+       component without the design system. */
+    :host {
+      font-family: var(--font-sans, system-ui, sans-serif);
+      --c-text: var(--text, #171c24);
+      --c-secondary: var(--text-secondary, #4d5765);
+      --c-muted: var(--text-muted, #6b7686);
+      --c-surface: var(--surface, #fff);
+      --c-sunken: var(--surface-sunken, #eef1f5);
+      --c-border: var(--border, #e2e7ee);
+      --c-border-strong: var(--border-strong, #cbd3de);
+      --c-accent: var(--accent, #16815a);
+      --c-on-accent: var(--on-accent, #fff);
+      --c-accent-hover: var(--accent-hover, #106145);
+      --c-danger: var(--danger-500, #d4453c);
+      --r-sm: var(--radius-sm, 6px);
+      --r-md: var(--radius-md, 8px);
+    }
+
+    * { box-sizing: border-box; }
+
     .modal {
-      display: none; position: fixed; z-index: 1000; left: 0; top: 0;
-      width: 100%; height: 100%; overflow: auto;
-      background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(5px);
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      align-items: flex-start; justify-content: center;
+      padding: 24px 16px; overflow: auto;
+      background: rgba(15, 19, 25, 0.5); backdrop-filter: blur(3px);
     }
-    .modal.open { display: block; }
-    .modal-content {
-      background: white; margin: 5% auto; padding: 30px; border-radius: 15px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); width: 90%; max-width: 500px;
-      position: relative; animation: modalSlideIn 0.3s ease-out;
-      color: #2c3e50; line-height: 1.6;
+    .modal.open { display: flex; }
+
+    .panel {
+      width: 100%; max-width: 520px;
+      background: var(--c-surface);
+      color: var(--c-text);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-xl, 16px);
+      box-shadow: var(--shadow-lg, 0 12px 32px rgba(16, 24, 40, 0.16));
+      line-height: 1.6;
+      animation: modalIn 0.18s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    @keyframes modalSlideIn {
-      from { opacity: 0; transform: translateY(-50px) scale(0.9); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+      to   { opacity: 1; transform: none; }
     }
-    .modal-header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 20px; border-bottom: 2px solid #f1f3f4; padding-bottom: 15px;
-    }
-    .modal-title { color: #2c3e50; font-size: 1.4em; font-weight: 600; margin: 0; }
-    .close-btn {
-      background: none; border: none; font-size: 28px; color: #6c757d;
-      cursor: pointer; padding: 0; line-height: 1; transition: color 0.2s ease;
-    }
-    .close-btn:hover { color: #e74c3c; }
-    .settings-tab {
-      border: none; background: none; padding: 8px 16px; cursor: pointer;
-      font-size: 14px; color: #6c757d; border-bottom: 2px solid transparent;
-      font-family: inherit;
-    }
-    .settings-tab.active { color: #27ae60; border-bottom-color: #27ae60; font-weight: 600; }
-    .settings-row {
+
+    @media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
+
+    .head {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 16px; padding: 9px 0; border-bottom: 1px solid #f1f3f4; cursor: pointer;
+      gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--c-border);
     }
-    .settings-row small { color: #adb5bd; font-weight: 400; }
-    .settings-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: #27ae60; }
-    .btn-action {
-      display: inline-block; padding: 10px 20px; background: #27ae60; color: white;
-      text-decoration: none; border: none; border-radius: 8px; font-weight: 500;
-      transition: all 0.2s ease; font-size: 0.9em; cursor: pointer; font-family: inherit;
+    .title { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+
+    .close {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; padding: 0;
+      background: none; border: none; border-radius: var(--r-sm);
+      font-size: 22px; line-height: 1; color: var(--c-muted);
+      cursor: pointer; transition: background 0.12s, color 0.12s;
     }
-    .btn-action:hover { background: #229954; transform: translateY(-1px); }
-    input, select, button { font-family: inherit; }
-    @media (max-width: 768px) {
-      .modal-content { margin: 10% auto; width: 95%; padding: 20px; }
+    .close:hover { background: var(--c-sunken); color: var(--c-text); }
+
+    .body { padding: 20px 24px 24px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--c-border); margin-bottom: 20px; }
+    .tab {
+      border: none; background: none; padding: 8px 12px; margin-bottom: -1px;
+      font: inherit; font-size: 14px; color: var(--c-muted);
+      border-bottom: 2px solid transparent; cursor: pointer;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    .tab:hover { color: var(--c-text); }
+    .tab.active { color: var(--c-accent); border-bottom-color: var(--c-accent); font-weight: 600; }
+
+    /* Preview */
+    .preview { text-align: center; margin-bottom: 18px; }
+    .caption { font-size: 13px; color: var(--c-muted); margin-top: 6px; }
+
+    /* Setting rows: name on the left, control on the right */
+    .row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--c-border);
+      cursor: pointer;
+    }
+    .row:last-of-type { border-bottom: none; }
+    .row small { color: var(--c-muted); font-weight: 400; }
+    .row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--c-accent); }
+    .row input[type="range"] { width: 160px; accent-color: var(--c-accent); }
+
+    /* Form controls */
+    .input, .select, input[type="time"] {
+      padding: 7px 10px; font: inherit; font-size: 14px;
+      color: var(--c-text); background: var(--c-surface);
+      border: 1px solid var(--c-border-strong); border-radius: var(--r-sm);
+      transition: border-color 0.12s, box-shadow 0.12s;
+    }
+    .input--block { width: 100%; }
+    .input:focus, .select:focus, input[type="time"]:focus {
+      outline: none; border-color: var(--c-accent);
+      box-shadow: 0 0 0 3px var(--accent-soft, rgba(28, 138, 94, 0.15));
+    }
+    .input--mono { font-family: var(--font-mono, monospace); font-size: 12px; }
+
+    .field { margin-bottom: 18px; }
+    .field label { display: block; margin-bottom: 6px; font-weight: 500; }
+    .hint { display: block; margin-top: 4px; font-size: 12px; color: var(--c-muted); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      height: 34px; padding: 0 14px;
+      font: inherit; font-size: 14px; font-weight: 500; line-height: 1;
+      border: 1px solid transparent; border-radius: var(--r-md);
+      cursor: pointer; white-space: nowrap;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .btn--primary { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
+    .btn--primary:hover { background: var(--c-accent-hover); border-color: var(--c-accent-hover); }
+    .btn--secondary { background: var(--c-surface); border-color: var(--c-border-strong); color: var(--c-text); }
+    .btn--secondary:hover { background: var(--c-sunken); }
+    .btn--danger { background: none; border-color: var(--c-danger); color: var(--c-danger); }
+    .btn--danger:hover { background: var(--danger-soft, rgba(212, 69, 60, 0.1)); }
+    .btn--sm { height: 28px; padding: 0 10px; font-size: 13px; }
+
+    .actions { display: flex; gap: 8px; margin-top: 18px; }
+    .actions--end { justify-content: flex-end; }
+
+    /* Inline save feedback */
+    .status { font-size: 13px; align-self: center; }
+    .status--ok { color: var(--c-accent); }
+    .status--error { color: var(--c-danger); }
+
+    /* Repeating rows (homes, tokens) */
+    .list { font-size: 14px; color: var(--c-secondary); }
+    .list-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid var(--c-border);
+    }
+    .list-row:last-child { border-bottom: none; }
+    .list-row small { color: var(--c-muted); white-space: nowrap; }
+    .list-empty { color: var(--c-muted); font-style: normal; }
+
+    .section {
+      margin-top: 24px; padding-top: 20px;
+      border-top: 1px solid var(--c-border);
+    }
+    .section h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+    .section p { margin: 0 0 12px; font-size: 13px; color: var(--c-muted); }
+
+    .inline-form { display: flex; gap: 8px; margin-bottom: 12px; }
+    .inline-form .input { flex: 1; }
+
+    .token-box {
+      display: none;
+      padding: 12px; margin-bottom: 12px;
+      background: var(--accent-soft, #e8f6ef);
+      border: 1px solid var(--c-accent); border-radius: var(--r-md);
+    }
+    .token-box.show { display: block; }
+    .token-box > div { font-size: 13px; margin-bottom: 6px; }
+
+    input, select, button, textarea { font-family: inherit; }
+    :focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+
+    @media (max-width: 560px) {
+      .body { padding: 16px; }
+      .head { padding: 16px; }
+      .inline-form { flex-wrap: wrap; }
     }
   `;
 
   const TEMPLATE = `
     <div class="modal" id="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2 class="modal-title" data-i18n="settings.title">User Settings</h2>
-          <button class="close-btn" id="close-x">&times;</button>
+      <div class="panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="head">
+          <h2 class="title" id="settings-title" data-i18n="settings.title">User Settings</h2>
+          <button class="close" id="close-x" data-i18n-aria-label="common.close" aria-label="Close">&times;</button>
         </div>
-        <div class="modal-body">
-          <div class="settings-tabs" style="display: flex; gap: 6px; border-bottom: 1px solid #e9ecef; margin-bottom: 20px;">
-            <button type="button" id="tab-pebble" class="settings-tab active" data-tab="pebble" data-i18n="settings.tab.pebble">Pebble</button>
-            <button type="button" id="tab-homes" class="settings-tab" data-tab="homes" data-i18n="settings.tab.homes">Homes</button>
-            <button type="button" id="tab-account" class="settings-tab" data-tab="account" data-i18n="settings.tab.account">Account</button>
+        <div class="body">
+          <div class="tabs" role="tablist">
+            <button type="button" id="tab-pebble" class="tab active" data-tab="pebble" data-i18n="settings.tab.pebble">Pebble</button>
+            <button type="button" id="tab-homes" class="tab" data-tab="homes" data-i18n="settings.tab.homes">Homes</button>
+            <button type="button" id="tab-account" class="tab" data-tab="account" data-i18n="settings.tab.account">Account</button>
           </div>
+
           <div id="pane-pebble">
-            <div style="text-align: center; margin-bottom: 18px;">
+            <div class="preview">
               <pebble-sim id="settings-preview" src="/api/color-code"></pebble-sim>
-              <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;" data-i18n="settings.pebble.previewCaption">
+              <div class="caption" data-i18n="settings.pebble.previewCaption">
                 Live preview &mdash; this is what your pebble will show once you save
               </div>
             </div>
-            <form id="pebble-settings-form" style="display: grid; gap: 2px; text-align: left;">
-              <label class="settings-row" id="ps-home-row" style="display: none;"><span data-i18n="settings.pebble.home">Home</span>
-                <select id="ps-home" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;"></select>
+            <form id="pebble-settings-form">
+              <label class="row" id="ps-home-row" style="display: none;"><span data-i18n="settings.pebble.home">Home</span>
+                <select id="ps-home" class="select"></select>
               </label>
-              <label class="settings-row"><span data-i18n="settings.pebble.contract">Energy contract</span>
-                <select id="ps-contract" style="padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
+              <label class="row"><span data-i18n="settings.pebble.contract">Energy contract</span>
+                <select id="ps-contract" class="select">
                   <option value="dynamic" data-i18n="settings.contract.dynamic">Dynamic prices</option>
                   <option value="day_night" data-i18n="settings.contract.dayNight">Day &amp; night tariff</option>
                   <option value="fixed" data-i18n="settings.contract.fixed">Fixed price</option>
                 </select>
               </label>
-              <label class="settings-row"><span data-i18n="settings.pebble.solar">Solar panels</span><input type="checkbox" id="ps-solar"></label>
-              <label class="settings-row"><span><span data-i18n="settings.pebble.battery">Home battery</span> <small data-i18n="settings.pebble.batteryHint">bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
-              <label class="settings-row"><span data-i18n="settings.pebble.colorblind">Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
-              <label class="settings-row"><span><span data-i18n="settings.pebble.nightDim">Dim at night to 30%</span>
-                (<input type="time" id="ps-dim-start" value="22:00" style="border: 1px solid #dee2e6; border-radius: 4px;"> &ndash;
-                <input type="time" id="ps-dim-end" value="07:00" style="border: 1px solid #dee2e6; border-radius: 4px;">)</span>
+              <label class="row"><span data-i18n="settings.pebble.solar">Solar panels</span><input type="checkbox" id="ps-solar"></label>
+              <label class="row"><span><span data-i18n="settings.pebble.battery">Home battery</span> <small data-i18n="settings.pebble.batteryHint">bridges the evening peak on sunny days</small></span><input type="checkbox" id="ps-battery"></label>
+              <label class="row"><span data-i18n="settings.pebble.colorblind">Colorblind-friendly colors</span><input type="checkbox" id="ps-palette"></label>
+              <label class="row"><span><span data-i18n="settings.pebble.nightDim">Dim at night to 30%</span>
+                (<input type="time" id="ps-dim-start" value="22:00"> &ndash;
+                <input type="time" id="ps-dim-end" value="07:00">)</span>
                 <input type="checkbox" id="ps-night-dim"></label>
-              <label class="settings-row"><span><span data-i18n="settings.pebble.brightness">Brightness</span> <small><span id="ps-bri-val">100</span>%</small></span>
-                <input type="range" id="ps-brightness" min="5" max="100" value="100" style="width: 160px;"></label>
-              <div style="margin-top: 14px;">
-                <button type="submit" class="btn-action" data-i18n="settings.pebble.save">Save Settings</button>
-                <span id="ps-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
+              <label class="row"><span><span data-i18n="settings.pebble.brightness">Brightness</span> <small><span id="ps-bri-val">100</span>%</small></span>
+                <input type="range" id="ps-brightness" min="5" max="100" value="100"></label>
+              <div class="actions">
+                <button type="submit" class="btn btn--primary" data-i18n="settings.pebble.save">Save Settings</button>
+                <span id="ps-status" class="status"></span>
               </div>
             </form>
           </div>
+
           <div id="pane-homes" style="display: none;">
-            <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;" data-i18n="settings.homes.intro">
+            <p class="hint" style="margin-bottom: 12px;" data-i18n="settings.homes.intro">
               Devices and pebble settings belong to a home. Add one per address;
               pick which home to configure on the Pebble tab.
             </p>
-            <div id="home-list" style="font-size: 0.9em; color: #495057; margin-bottom: 14px;"></div>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" id="home-name" placeholder="Name (e.g. Beach house)" data-i18n-placeholder="settings.homes.namePlaceholder"
-                     style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-              <input type="text" id="home-address" placeholder="Address (optional)" data-i18n-placeholder="settings.homes.addressPlaceholder"
-                     style="flex: 2; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-              <button type="button" class="btn-action" id="add-home" data-i18n="settings.homes.add">Add home</button>
+            <div id="home-list" class="list" style="margin-bottom: 14px;"></div>
+            <div class="inline-form">
+              <input type="text" id="home-name" class="input" placeholder="Name (e.g. Beach house)" data-i18n-placeholder="settings.homes.namePlaceholder">
+              <input type="text" id="home-address" class="input" style="flex: 2;" placeholder="Address (optional)" data-i18n-placeholder="settings.homes.addressPlaceholder">
+              <button type="button" class="btn btn--primary" id="add-home" data-i18n="settings.homes.add">Add home</button>
             </div>
           </div>
+
           <div id="pane-account" style="display: none;">
-            <div style="margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #e9ecef;">
-              <label for="account-language" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.language">Language:</label>
-              <select id="account-language" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+            <div class="field" style="padding-bottom: 18px; border-bottom: 1px solid var(--c-border);">
+              <label for="account-language" data-i18n="settings.account.language">Language:</label>
+              <select id="account-language" class="select input--block">
                 <option value="en">English</option>
                 <option value="nl">Nederlands</option>
                 <option value="fr">Français</option>
               </select>
-              <small style="color: #6c757d; font-size: 12px;" data-i18n="settings.account.languageHint">Applies to this website on every device you sign in on. Your pebble shows colors, so it is unaffected.</small>
-              <span id="lang-status" style="margin-left: 10px; font-size: 0.85em; color: #27ae60;"></span>
+              <small class="hint" data-i18n="settings.account.languageHint">Applies to this website on every device you sign in on. Your pebble shows colors, so it is unaffected.</small>
+              <span id="lang-status" class="status"></span>
             </div>
+
             <form id="account-form">
-              <div style="margin-bottom: 20px;">
-                <label for="newUsername" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.username">Username:</label>
-                <input type="text" id="newUsername" name="username" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new username" data-i18n-placeholder="settings.account.usernamePlaceholder">
-                <small style="color: #6c757d; font-size: 12px;" data-i18n="settings.account.usernameHint">Username must be unique and contain only letters, numbers, and underscores.</small>
+              <div class="field">
+                <label for="newUsername" data-i18n="settings.account.username">Username:</label>
+                <input type="text" id="newUsername" name="username" class="input input--block" placeholder="Enter new username" data-i18n-placeholder="settings.account.usernamePlaceholder">
+                <small class="hint" data-i18n="settings.account.usernameHint">Username must be unique and contain only letters, numbers, and underscores.</small>
               </div>
-              <div style="margin-bottom: 20px;">
-                <label for="currentPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.currentPassword">Current Password:</label>
-                <input type="password" id="currentPassword" name="currentPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter current password" data-i18n-placeholder="settings.account.currentPasswordPlaceholder">
+              <div class="field">
+                <label for="currentPassword" data-i18n="settings.account.currentPassword">Current Password:</label>
+                <input type="password" id="currentPassword" name="currentPassword" class="input input--block" placeholder="Enter current password" data-i18n-placeholder="settings.account.currentPasswordPlaceholder">
               </div>
-              <div style="margin-bottom: 20px;">
-                <label for="newPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.newPassword">New Password:</label>
-                <input type="password" id="newPassword" name="newPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Enter new password" data-i18n-placeholder="settings.account.newPasswordPlaceholder">
-                <small style="color: #6c757d; font-size: 12px;" data-i18n="settings.account.newPasswordHint">Leave blank to keep current password.</small>
+              <div class="field">
+                <label for="newPassword" data-i18n="settings.account.newPassword">New Password:</label>
+                <input type="password" id="newPassword" name="newPassword" class="input input--block" placeholder="Enter new password" data-i18n-placeholder="settings.account.newPasswordPlaceholder">
+                <small class="hint" data-i18n="settings.account.newPasswordHint">Leave blank to keep your current password.</small>
               </div>
-              <div style="margin-bottom: 20px;">
-                <label for="confirmPassword" style="display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50;" data-i18n="settings.account.confirmPassword">Confirm New Password:</label>
-                <input type="password" id="confirmPassword" name="confirmPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;" placeholder="Confirm new password" data-i18n-placeholder="settings.account.confirmPasswordPlaceholder">
+              <div class="field">
+                <label for="confirmPassword" data-i18n="settings.account.confirmPassword">Confirm New Password:</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" class="input input--block" placeholder="Confirm new password" data-i18n-placeholder="settings.account.confirmPasswordPlaceholder">
               </div>
-              <div style="text-align: right; margin-top: 25px;">
-                <button type="button" id="cancel-account" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; margin-right: 10px; cursor: pointer;" data-i18n="common.cancel">Cancel</button>
-                <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;" data-i18n="common.saveChanges">Save Changes</button>
+              <div class="actions actions--end">
+                <button type="button" class="btn btn--secondary" id="cancel-account" data-i18n="common.cancel">Cancel</button>
+                <button type="submit" class="btn btn--primary" data-i18n="common.saveChanges">Save Changes</button>
               </div>
             </form>
-            <div style="border-top: 1px solid #e9ecef; margin-top: 25px; padding-top: 18px;">
-              <h3 style="font-size: 1em; color: #2c3e50; margin-bottom: 6px;" data-i18n="settings.tokens.title">API tokens</h3>
-              <p style="font-size: 0.85em; color: #6c757d; margin-bottom: 12px;" data-i18n="settings.tokens.intro">
+
+            <div class="section">
+              <h3 data-i18n="settings.tokens.title">API tokens</h3>
+              <p data-i18n="settings.tokens.intro">
                 For integrations like Home Assistant. A token acts as you (never as admin) and is shown only once.
               </p>
-              <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                <input type="text" id="token-name" placeholder="Token name (e.g. Home Assistant)" data-i18n-placeholder="settings.tokens.namePlaceholder"
-                       style="flex: 1; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px;">
-                <button type="button" class="btn-action" id="create-token" data-i18n="settings.tokens.create">Create token</button>
+              <div class="inline-form">
+                <input type="text" id="token-name" class="input" placeholder="Token name (e.g. Home Assistant)" data-i18n-placeholder="settings.tokens.namePlaceholder">
+                <button type="button" class="btn btn--primary" id="create-token" data-i18n="settings.tokens.create">Create token</button>
               </div>
-              <div id="new-token-box" style="display: none; background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                <div style="font-size: 0.85em; color: #2c3e50; margin-bottom: 6px;" data-i18n="settings.tokens.copyOnce">Copy this token now — it won't be shown again:</div>
-                <input type="text" id="new-token-value" readonly
-                       style="width: 100%; padding: 8px; border: 1px solid #dee2e6; border-radius: 6px; font-family: monospace; font-size: 12px; box-sizing: border-box;">
+              <div id="new-token-box" class="token-box">
+                <div data-i18n="settings.tokens.copyOnce">Copy this token now — it won't be shown again:</div>
+                <input type="text" id="new-token-value" class="input input--block input--mono" readonly>
               </div>
-              <div id="token-list" style="font-size: 0.9em; color: #495057;"></div>
+              <div id="token-list" class="list"></div>
             </div>
           </div>
         </div>
@@ -238,25 +362,88 @@
     // --- public API -----------------------------------------------------------
 
     open() {
+      // Remember who opened us, so focus can go back there on close.
+      this._opener = document.activeElement;
       this._loadHomes().then(() => this._loadSettings());
       this._loadAccount();
       this._loadLanguage();
       this._loadTokens();
       this._switchTab('pebble');
       this.$('#modal').classList.add('open');
+      // Move focus inside: a dialog the keyboard cannot reach is a dialog that
+      // traps the reader behind it.
+      const first = this._focusable()[0];
+      (first || this.$('.panel')).focus();
     }
 
     close() {
       this.$('#modal').classList.remove('open');
       this.$('#account-form').reset();
+      if (this._opener && typeof this._opener.focus === 'function') this._opener.focus();
+      this._opener = null;
+    }
+
+    get isOpen() {
+      return this.$('#modal').classList.contains('open');
+    }
+
+    // --- keyboard -------------------------------------------------------------
+
+    /** Every tabbable control currently on screen, in document order. */
+    _focusable() {
+      const sel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+      return [...this.shadowRoot.querySelectorAll(sel)].filter(el =>
+        !el.disabled && el.offsetParent !== null);
+    }
+
+    /**
+     * Escape closes; Tab cycles within the dialog. The panel is the only thing
+     * on screen while it is open, so letting Tab escape into the page behind it
+     * would strand keyboard and screen-reader users.
+     */
+    _onKeydown(e) {
+      if (!this.isOpen) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.close();
+        return;
+      }
+
+      if (e.key !== 'Tab') return;
+
+      const items = this._focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      // composedPath() sees through the shadow boundary; activeElement on the
+      // document only ever reports the host element.
+      const active = this.shadowRoot.activeElement;
+
+      if (e.shiftKey && (active === first || !active)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
 
     // --- wiring ---------------------------------------------------------------
 
     _wire() {
+      // The panel takes focus itself when there is nothing tabbable in it yet.
+      this.$('.panel').setAttribute('tabindex', '-1');
+      // Keydown is bound on the host: shadow DOM events retarget, but the
+      // listener still fires for anything inside the panel.
+      this.addEventListener('keydown', e => this._onKeydown(e));
+      // A click on the backdrop (never on the panel) dismisses too.
+      this.$('#modal').addEventListener('mousedown', e => {
+        if (e.target === this.$('#modal')) this.close();
+      });
       this.$('#close-x').addEventListener('click', () => this.close());
       this.$('#cancel-account').addEventListener('click', () => this.close());
-      this.shadowRoot.querySelectorAll('.settings-tab').forEach(btn =>
+      this.shadowRoot.querySelectorAll('.tab').forEach(btn =>
         btn.addEventListener('click', () => this._switchTab(btn.dataset.tab)));
 
       // Pebble tab
@@ -329,16 +516,13 @@
           `<option value="${h.id}" ${h.id === this._homeId ? 'selected' : ''}>${esc(h.name)}</option>`).join('');
 
         this.$('#home-list').innerHTML = this._homes.map(h =>
-          `<div style="display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
-              <input type="text" id="home-name-${h.id}" value="${esc(h.name)}"
-                     style="flex:1; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
-              <input type="text" id="home-address-${h.id}" value="${esc(h.address)}" placeholder="${esc(t('settings.homes.address'))}"
-                     style="flex:2; padding:6px 8px; border:1px solid #dee2e6; border-radius:6px;">
-              <small style="color:#adb5bd; white-space:nowrap;">${esc(window.I18n.plural('settings.homes.deviceCount', h.device_count))}</small>
-              <button type="button" data-action="save-home" data-id="${h.id}"
-                      style="background:#27ae60; color:white; border:none; border-radius:6px; padding:5px 12px; cursor:pointer;">${esc(t('common.save'))}</button>
-              ${this._homes.length > 1 && !h.device_count ? `<button type="button" data-action="delete-home" data-id="${h.id}"
-                      style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:4px 10px; cursor:pointer;">${esc(t('common.delete'))}</button>` : ''}
+          `<div class="list-row">
+              <input type="text" id="home-name-${h.id}" class="input" style="flex:1;" value="${esc(h.name)}">
+              <input type="text" id="home-address-${h.id}" class="input" style="flex:2;" value="${esc(h.address)}"
+                     placeholder="${esc(t('settings.homes.address'))}">
+              <small>${esc(window.I18n.plural('settings.homes.deviceCount', h.device_count))}</small>
+              <button type="button" class="btn btn--primary btn--sm" data-action="save-home" data-id="${h.id}">${esc(t('common.save'))}</button>
+              ${this._homes.length > 1 && !h.device_count ? `<button type="button" class="btn btn--danger btn--sm" data-action="delete-home" data-id="${h.id}">${esc(t('common.delete'))}</button>` : ''}
           </div>`).join('');
       } catch (e) {
         console.error('Error loading homes:', e);
@@ -447,18 +631,18 @@
           body: JSON.stringify(this._formToSettings())
         });
         if (response.ok) {
-          status.style.color = '#27ae60';
+          status.className = 'status status--ok';
           status.textContent = t('settings.pebble.saved');
           const result = await response.json();
           this._homeId = result.home_id;
           this._emit('settings-saved', { homeId: result.home_id, settings: result.settings });
         } else {
           const error = await response.json();
-          status.style.color = '#e74c3c';
+          status.className = 'status status--error';
           status.textContent = t('settings.pebble.saveError', { error: error.detail || response.status });
         }
       } catch (error) {
-        status.style.color = '#e74c3c';
+        status.className = 'status status--error';
         status.textContent = t('settings.pebble.saveErrorGeneric');
       }
       setTimeout(() => { status.textContent = ''; }, 5000);
@@ -549,11 +733,11 @@
       const status = this.$('#lang-status');
       try {
         await window.I18n.setLanguage(language, { save: true });
-        status.style.color = '#27ae60';
+        status.className = 'status status--ok';
         status.textContent = t('settings.account.languageSaved');
         this._emit('language-saved', { language });
       } catch (e) {
-        status.style.color = '#e74c3c';
+        status.className = 'status status--error';
         status.textContent = t('settings.account.languageSaveFailed');
       }
       setTimeout(() => { status.textContent = ''; }, 5000);
@@ -566,16 +750,15 @@
         const data = await resp.json();
         const list = this.$('#token-list');
         if (!data.tokens.length) {
-          list.innerHTML = `<em style="color:#adb5bd;">${esc(t('settings.tokens.empty'))}</em>`;
+          list.innerHTML = `<span class="list-empty">${esc(t('settings.tokens.empty'))}</span>`;
           return;
         }
         list.innerHTML = data.tokens.map(token =>
-          `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f3f4;">
+          `<div class="list-row" style="justify-content: space-between;">
               <span>${esc(token.token_name)}
-                  <small style="color:#adb5bd;">· ${esc(t('settings.tokens.created', { date: (token.created_at || '').slice(0, 10) }))}${token.last_used_at ? ' · ' + esc(t('settings.tokens.lastUsed', { date: token.last_used_at.slice(0, 10) })) : ''}</small>
+                  <small>· ${esc(t('settings.tokens.created', { date: (token.created_at || '').slice(0, 10) }))}${token.last_used_at ? ' · ' + esc(t('settings.tokens.lastUsed', { date: token.last_used_at.slice(0, 10) })) : ''}</small>
               </span>
-              <button type="button" data-action="revoke-token" data-id="${token.id}"
-                      style="background:none; border:1px solid #e74c3c; color:#e74c3c; border-radius:6px; padding:3px 10px; cursor:pointer;">${esc(t('settings.tokens.revoke'))}</button>
+              <button type="button" class="btn btn--danger btn--sm" data-action="revoke-token" data-id="${token.id}">${esc(t('settings.tokens.revoke'))}</button>
           </div>`).join('');
       } catch (e) {
         console.error('Error loading tokens:', e);
@@ -592,7 +775,7 @@
         });
         if (!resp.ok) { alert(t('settings.tokens.createFailed')); return; }
         const data = await resp.json();
-        this.$('#new-token-box').style.display = 'block';
+        this.$('#new-token-box').classList.add('show');
         this.$('#new-token-value').value = data.token;
         this.$('#token-name').value = '';
         this._loadTokens();

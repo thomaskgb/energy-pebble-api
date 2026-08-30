@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="../favicon.ico" sizes="32x32">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <title data-i18n="setup.pageTitle">Energy Pebble – Wi-Fi Setup</title>
   <!--
     Companion setup page for the Energy Pebble.
@@ -12,90 +15,111 @@
     Web Bluetooth only works on HTTPS or localhost. The Improv SDK and jsQR
     are vendored (self-hosted); no third-party requests are made.
   -->
+  <link rel="stylesheet" href="../base.css?v=2026-08-30">
   <style>
-    :root {
-      --green: #2ecc40;
-      --yellow: #f1c40f;
-      --red: #e74c3c;
-      --blue: #3498db;
-      --ink: #223;
-      --paper: #f7f8fa;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      color: var(--ink);
-      background: var(--paper);
-      line-height: 1.55;
-    }
-    main { max-width: 34rem; margin: 0 auto; padding: 1.25rem 1.25rem 3rem; }
-    header { text-align: center; padding: 2rem 0 0.5rem; }
+    /* Page-specific layout only — tokens and primitives come from base.css.
+       Class names are kept as-is: the setup script toggles them by name. */
+
+    main { max-width: 34rem; margin: 0 auto; padding: var(--space-5) var(--space-5) var(--space-12); }
+
+    header { text-align: center; padding: var(--space-10) 0 var(--space-2); }
+
+    /* A miniature of the device's own light, so the page opens on the thing
+       the reader is holding. */
     .pebble {
-      width: 72px; height: 72px; border-radius: 50%;
-      margin: 0 auto 0.75rem;
-      background: radial-gradient(circle at 50% 45%, var(--green) 0 22%, #fff 26% 55%, var(--yellow) 58% 100%);
-      box-shadow: 0 4px 14px rgba(0,0,0,.15);
+      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto var(--space-3);
+      background: radial-gradient(circle at 50% 45%,
+                  var(--signal-green) 0 22%, var(--surface) 26% 55%, var(--signal-yellow) 58% 100%);
+      box-shadow: var(--shadow-md);
     }
-    h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-    .sub { color: #667; margin: 0 0 1.5rem; text-align: center; }
+
+    h1 { font-size: var(--text-2xl); margin: 0 0 var(--space-1); }
+    .sub { color: var(--text-secondary); margin: 0 0 var(--space-6); text-align: center; }
+
     .card {
-      background: #fff; border-radius: 12px; padding: 1.25rem 1.25rem 1.4rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 1.25rem;
+      padding: var(--space-5);
+      margin-bottom: var(--space-5);
     }
-    .card h2 { font-size: 1.1rem; margin: 0 0 0.6rem; }
-    ol { margin: 0.5rem 0 0; padding-left: 1.3rem; }
-    ol li { margin-bottom: 0.55rem; }
-    .hidden { display: none; }
+    .card h2 { font-size: var(--text-md); margin: 0 0 var(--space-3); }
+
+    ol { margin: var(--space-2) 0 0; padding-left: 1.3rem; color: var(--text-secondary); }
+    ol li { margin-bottom: var(--space-2); }
+    ol strong, ol code { color: var(--text); }
+
+    /* The one primary action per step */
     .bigbtn {
-      display: inline-block; font-size: 1rem; padding: 0.7rem 1.6rem;
-      border: none; border-radius: 8px; cursor: pointer;
-      background: var(--blue); color: #fff; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+      height: 42px; padding: 0 var(--space-6);
+      font: inherit; font-size: var(--text-md); font-weight: var(--weight-medium);
+      color: var(--on-accent); background: var(--accent);
+      border: 1px solid var(--accent); border-radius: var(--radius-md);
+      cursor: pointer; text-decoration: none;
+      transition: background var(--duration-fast) var(--ease);
     }
+    .bigbtn:hover { background: var(--accent-hover); color: var(--on-accent); }
     .bigbtn:disabled { opacity: 0.45; cursor: not-allowed; }
-    .note { font-size: 0.85rem; color: #667; margin-top: 0.75rem; }
-    .led-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    .led-table td { padding: 0.4rem 0.5rem; border-top: 1px solid #eef; }
+
+    .note { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-3); }
+
+    .led-table { width: 100%; border-collapse: collapse; font-size: var(--text-base); }
+    .led-table td { padding: var(--space-2); border-top: 1px solid var(--border); color: var(--text-secondary); }
+    .led-table td:first-child { white-space: nowrap; color: var(--text); }
+    .led-table tr:first-child td { border-top: none; }
+
     .dot {
       display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 50%;
-      vertical-align: -0.1rem; margin-right: 0.35rem;
+      vertical-align: -0.1rem; margin-right: var(--space-2);
     }
+
     .pulse { animation: pulse 2s ease-in-out infinite; }
-    @media (prefers-reduced-motion: reduce) { .pulse, .spinner { animation: none; } }
-    @keyframes pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
-    .ble-action { text-align: center; margin: 0.75rem 0 0.25rem; }
-    .device-chip {
-      text-align: center; margin: -0.75rem 0 1.25rem;
-    }
+    @keyframes pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+    .ble-action { text-align: center; margin: var(--space-3) 0 var(--space-1); }
+
+    .device-chip { text-align: center; margin: calc(-1 * var(--space-3)) 0 var(--space-5); }
     .device-chip strong {
-      background: #e3f0fb; color: #1b5e93; padding: 0.25rem 0.7rem;
-      border-radius: 999px; font-family: ui-monospace, Menlo, monospace;
+      display: inline-block;
+      padding: var(--space-1) var(--space-3);
+      font-family: var(--font-mono); font-size: var(--text-sm); font-weight: var(--weight-medium);
+      background: var(--info-soft); color: var(--info-ink);
+      border-radius: var(--radius-full);
     }
+
     .warn {
-      background: #fdf3e7; border-left: 4px solid #e67e22;
-      padding: 0.6rem 0.8rem; border-radius: 6px; font-size: 0.9rem;
+      display: flex; gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-base); color: var(--text);
+      background: var(--signal-yellow-soft);
+      border-left: 3px solid var(--signal-yellow);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
     }
-    .scanner { margin-top: 0.75rem; text-align: center; }
-    .scanner video {
-      width: 100%; max-height: 60vh; border-radius: 10px; background: #000;
-    }
-    .identify-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .warn--ok { background: var(--signal-green-soft); border-left-color: var(--signal-green); }
+
+    .scanner { margin-top: var(--space-3); text-align: center; }
+    .scanner video { width: 100%; max-height: 60vh; border-radius: var(--radius-lg); background: #000; }
+
+    .identify-row { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
     .identify-row input {
-      flex: 1; min-width: 0; font-size: 1rem; padding: 0.6rem 0.8rem;
-      border: 1px solid #ccd5e0; border-radius: 8px;
-      font-family: ui-monospace, Menlo, monospace;
+      flex: 1; min-width: 0;
+      padding: 0 var(--space-3); height: 42px;
+      font-family: var(--font-mono); font-size: var(--text-md);
+      color: var(--text); background: var(--surface);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-md);
     }
-    .identify-row input:focus { outline: 2px solid var(--blue); border-color: transparent; }
-    .spinner {
-      display: inline-block; width: 1.4rem; height: 1.4rem;
-      border: 3px solid #d6e6f5; border-top-color: var(--blue);
-      border-radius: 50%; vertical-align: middle;
-      animation: spin 0.9s linear infinite;
+    .identify-row input:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    code { background: #eef1f5; padding: 0.1rem 0.35rem; border-radius: 4px; }
-    a { color: var(--blue); }
-    footer { text-align: center; font-size: 0.8rem; color: #99a; }
+
+    .spinner { width: 1.2rem; height: 1.2rem; vertical-align: middle; margin-right: var(--space-2); display: inline-block; }
+
+    code {
+      padding: 1px 5px;
+      background: var(--surface-sunken); border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    footer { text-align: center; font-size: var(--text-sm); color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -105,7 +129,7 @@
     <h1 data-i18n="setup.title">Energy Pebble setup</h1>
   </header>
   <p class="sub" data-i18n-html="setup.intro">Plug in your Energy Pebble. When the middle light slowly
-  pulses <strong style="color:var(--blue)">blue</strong>, it is ready to be
+  pulses <strong style="color:var(--info-500)">blue</strong>, it is ready to be
   connected to your Wi-Fi.</p>
 
   <!-- Shown when the page was opened from a device's QR sticker -->
@@ -125,7 +149,7 @@
   </section>
 
   <!-- Success banner once the backend reports the device online -->
-  <p class="warn hidden" id="linked-note" style="border-left-color:#2ecc40;background:#eafaf0">
+  <p class="warn warn--ok hidden" id="linked-note">
     <span data-i18n="setup.linked.online">✅ Your Pebble is online</span><span id="linked-account-part" data-i18n="setup.linked.account"> and linked to
     your account</span><span data-i18n="setup.linked.soon">. It will start showing energy prices shortly.</span>
   </p>
@@ -136,7 +160,7 @@
     <p data-i18n-html="setup.identify.body">Scan the <strong>QR code on the sticker</strong>, or type the device
     ID printed next to it:</p>
     <div class="ble-action">
-      <button id="scan-btn" class="bigbtn" data-i18n="setup.identify.scan">📷 Scan QR code</button>
+      <button id="scan-btn" class="bigbtn"><i data-icon="camera" data-icon-size="17"></i><span data-i18n="setup.identify.scan">Scan QR code</span></button>
     </div>
     <div class="scanner hidden" id="scanner">
       <video id="scanner-video" playsinline muted></video>
@@ -200,13 +224,13 @@
   <section class="card">
     <h2 data-i18n="setup.led.title">What the middle light means</h2>
     <table class="led-table">
-      <tr><td><span class="dot pulse" style="background:var(--blue)"></span><span data-i18n="setup.led.blue">Blue, slow pulse</span></td>
+      <tr><td><span class="dot pulse" style="background:var(--info-500)"></span><span data-i18n="setup.led.blue">Blue, slow pulse</span></td>
           <td data-i18n="setup.led.blueMeaning">Waiting for setup — follow the steps above</td></tr>
-      <tr><td><span class="dot pulse" style="background:var(--yellow)"></span><span data-i18n="setup.led.yellow">Yellow, slow pulse</span></td>
+      <tr><td><span class="dot pulse" style="background:var(--signal-yellow)"></span><span data-i18n="setup.led.yellow">Yellow, slow pulse</span></td>
           <td data-i18n="setup.led.yellowMeaning">Connecting to your Wi-Fi</td></tr>
-      <tr><td><span class="dot pulse" style="background:var(--red)"></span><span data-i18n="setup.led.red">Red, slow blink</span></td>
+      <tr><td><span class="dot pulse" style="background:var(--signal-red)"></span><span data-i18n="setup.led.red">Red, slow blink</span></td>
           <td data-i18n="setup.led.redMeaning">Couldn't connect — password may be wrong. Redo the steps above</td></tr>
-      <tr><td><span class="dot" style="background:var(--green)"></span><span data-i18n="setup.led.green">Steady colors</span></td>
+      <tr><td><span class="dot" style="background:var(--signal-green)"></span><span data-i18n="setup.led.green">Steady colors</span></td>
           <td data-i18n="setup.led.greenMeaning">Done! The Pebble is showing energy prices</td></tr>
     </table>
   </section>
@@ -219,6 +243,7 @@
 
 <script src="../i18n-strings.js?v=2026-08-30"></script>
 <script src="../i18n.js?v=2026-08-30"></script>
+<script src="../icons.js?v=2026-08-30"></script>
 <script>I18n.start();</script>
 
 <script type="module">

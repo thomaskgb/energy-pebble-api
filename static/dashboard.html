@@ -3,859 +3,370 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f1319" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="favicon.ico" sizes="32x32">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <title data-i18n="dashboard.pageTitle">Energy Pebble - Dashboard</title>
+    <link rel="stylesheet" href="base.css?v=2026-08-30">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* Page-specific layout only — everything reusable lives in base.css. */
+
+        .page-head { margin-bottom: var(--space-8); }
+        .page-head p { margin-top: var(--space-2); }
+
+        .stats-grid {
+            grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+            margin-bottom: var(--space-6);
         }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
-            min-height: 100vh;
+        /* The current signal is the one stat that carries the pebble's colour */
+        .stat__value--green  { color: var(--signal-green-ink); }
+        .stat__value--yellow { color: var(--signal-yellow-ink); }
+        .stat__value--red    { color: var(--signal-red-ink); }
+
+        /* My Pebble — the one card that gets the full width and real elevation */
+        .pebble-card {
+            margin-bottom: var(--space-6);
+            box-shadow: var(--shadow-sm);
         }
 
-        .top-nav {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid #e9ecef;
-            padding: 15px 0;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-
-        .nav-container {
-            max-width: 1200px;
-            margin: 0 auto;
+        .pebble-card__body {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
-            padding: 0 20px;
-        }
-
-        .nav-logo {
-            display: flex;
-            align-items: center;
-            font-size: 1.5em;
-            font-weight: 600;
-            color: #2c3e50;
-            text-decoration: none;
-        }
-
-        .nav-logo:hover {
-            color: #27ae60;
-        }
-
-        .nav-buttons {
-            display: flex;
-            gap: 15px;
-        }
-
-        .nav-btn {
-            padding: 8px 16px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 1em;
-            line-height: 1.5;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            border: 1px solid transparent;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .nav-btn.home {
-            background: #27ae60;
-            color: white;
-        }
-
-        .nav-btn.home:hover {
-            background: #229954;
-            transform: translateY(-1px);
-        }
-
-        .nav-btn.logout {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .nav-btn.logout:hover {
-            background: #c0392b;
-            transform: translateY(-1px);
-        }
-
-        .nav-btn.admin {
-            background: #9b59b6;
-            color: white;
-            cursor: pointer;
-        }
-
-        .nav-btn.admin:hover {
-            background: #8e44ad;
-            transform: translateY(-1px);
-        }
-
-        /* Admin Dropdown Styles */
-        .admin-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        .admin-dropdown-content {
-            display: none;
-            position: absolute;
-            right: 0;
-            top: 100%;
-            background: white;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            min-width: 180px;
-            z-index: 1000;
-            margin-top: 5px;
-        }
-
-        .admin-dropdown-content.show {
-            display: block;
-        }
-
-        .admin-dropdown-item {
-            display: block;
-            padding: 12px 16px;
-            color: #2c3e50;
-            text-decoration: none;
-            transition: background 0.2s ease;
-            border-bottom: 1px solid #f1f3f4;
-        }
-
-        .admin-dropdown-item:last-child {
-            border-bottom: none;
-        }
-
-        .admin-dropdown-item:hover {
-            background: #f8f9fa;
-            color: #9b59b6;
-        }
-
-        /* User Menu Styles */
-        .user-menu {
-            position: relative;
-            display: inline-block;
-        }
-
-        .user-menu-trigger {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 1em;
-            line-height: 1.5;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .user-menu-trigger:hover {
-            background: #2980b9;
-            transform: translateY(-1px);
-        }
-
-        .user-menu-dropdown {
-            display: none;
-            position: absolute;
-            right: 0;
-            top: 100%;
-            background: white;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            min-width: 150px;
-            z-index: 1000;
-            margin-top: 5px;
-        }
-
-        .user-menu-dropdown.show {
-            display: block;
-        }
-
-        .user-menu-item {
-            display: block;
-            padding: 12px 16px;
-            color: #2c3e50;
-            text-decoration: none;
-            transition: background 0.2s ease;
-            border-bottom: 1px solid #f1f3f4;
-        }
-
-        .user-menu-item:last-child {
-            border-bottom: none;
-        }
-
-        .user-menu-item:hover {
-            background: #f8f9fa;
-        }
-
-        .user-menu-item.logout {
-            color: #e74c3c;
-        }
-
-        .user-menu-item.logout:hover {
-            background: #fdeeee;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 30px 20px;
-        }
-
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            gap: var(--space-5);
             text-align: center;
         }
 
-        .header h1 {
-            color: #2c3e50;
-            font-size: 2.2em;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
+        .pebble-card__body .prose { max-width: 64ch; }
 
-        .header .subtitle {
-            color: #6c757d;
-            font-size: 1.1em;
-        }
-
-        .welcome-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
-
-        .welcome-message {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .welcome-message h2 {
-            color: #2c3e50;
-            font-size: 1.6em;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .welcome-message p {
-            color: #6c757d;
-            font-size: 1em;
-        }
-
-        .quick-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            padding: 20px;
-            border-radius: 12px;
-            text-align: center;
-            border-left: 4px solid #27ae60;
-            transition: transform 0.2s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-        }
-
-        .stat-value {
-            font-size: 1.8em;
-            font-weight: 700;
-            color: #27ae60;
-            margin-bottom: 8px;
-        }
-
-        .stat-label {
-            color: #495057;
-            font-size: 0.9em;
-            font-weight: 500;
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 25px;
-        }
-
-        .dashboard-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            border: 1px solid #e9ecef;
-        }
-
-        .dashboard-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-        }
-
-        .card-icon {
-            font-size: 2.5em;
-            margin-bottom: 15px;
-            display: block;
-        }
-
-        .card-title {
-            color: #2c3e50;
-            font-size: 1.3em;
-            margin-bottom: 12px;
-            font-weight: 600;
-        }
-
-        .card-description {
-            color: #6c757d;
-            margin-bottom: 20px;
-            line-height: 1.5;
-            font-size: 0.95em;
-        }
-
-        .card-status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 0.8em;
-            font-weight: 600;
-            margin-bottom: 15px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .status-ready {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-coming-soon {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .card-action {
-            display: inline-block;
-            padding: 10px 20px;
-            background: #27ae60;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            font-size: 0.9em;
-        }
-
-        .card-action:hover {
-            background: #229954;
-            transform: translateY(-1px);
-        }
-
-        .card-action.disabled {
-            background: #adb5bd;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .card-action.disabled:hover {
-            background: #adb5bd;
-            transform: none;
-        }
-
-        /* Device Management Styles */
-        .device-section {
-            margin: 25px 0;
-        }
-
-        .device-section h3 {
-            color: #2c3e50;
-            font-size: 1.2em;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #27ae60;
-        }
-
-        .device-list {
-            display: grid;
-            gap: 15px;
-        }
-
-        .device-item {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 10px;
-            padding: 15px;
+        .home-pebbles {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.2s ease;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: var(--space-8);
         }
 
-        .device-item:hover {
-            background: #e9ecef;
-            transform: translateY(-1px);
+        .home-pebble__name {
+            margin-top: var(--space-2);
+            font-size: var(--text-sm);
+            font-weight: var(--weight-medium);
+            color: var(--text-secondary);
         }
 
-        .device-info {
+        /* Feature cards keep a single rhythm: title, copy, then actions pinned
+           to the bottom so every card in the row ends on the same line. */
+        /* Four cards read best as a 2x2 block rather than a row of three with
+           an orphan underneath. */
+        .feature-grid {
+            grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+            align-items: stretch;
+        }
+
+        .feature-card {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .feature-card .card__body {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
             flex: 1;
         }
 
-        .device-nickname {
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 5px;
+        .feature-card__desc {
+            color: var(--text-secondary);
+            font-size: var(--text-base);
+            flex: 1;
         }
 
-        .device-details {
-            font-size: 0.85em;
-            color: #6c757d;
-            line-height: 1.4;
+        .feature-card__meta {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
         }
 
-        .device-status {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.75em;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-right: 10px;
-        }
+        /* Device list */
+        .device-list { display: flex; flex-direction: column; gap: var(--space-2); }
 
-        .device-status.online {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .device-status.recently_active {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .device-status.offline {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .device-actions {
+        .device-item {
             display: flex;
-            gap: 8px;
             align-items: center;
-        }
-
-        .device-btn {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 0.8em;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .device-btn.claim {
-            background: #27ae60;
-            color: white;
-        }
-
-        .device-btn.claim:hover {
-            background: #229954;
-        }
-
-        .device-btn.rename {
-            background: #f39c12;
-            color: white;
-        }
-
-        .device-btn.rename:hover {
-            background: #e67e22;
-        }
-
-        .loading-message {
-            text-align: center;
-            color: #6c757d;
-            font-style: italic;
-            padding: 20px;
-        }
-
-        .refresh-button {
-            background: #27ae60;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-
-        .refresh-button:hover {
-            background: #229954;
-            transform: translateY(-1px);
-        }
-
-        .refresh-button:disabled {
-            background: #adb5bd;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* Device Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-        }
-
-        .modal-content {
-            background: white;
-            margin: 5% auto;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            width: 90%;
-            max-width: 500px;
-            position: relative;
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-50px) scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        .modal-header {
-            display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #f1f3f4;
-            padding-bottom: 15px;
-        }
-
-        .modal-title {
-            color: #2c3e50;
-            font-size: 1.4em;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 28px;
-            color: #6c757d;
+            gap: var(--space-4);
+            padding: var(--space-4);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
             cursor: pointer;
-            padding: 0;
-            line-height: 1;
-            transition: color 0.2s ease;
+            transition: border-color var(--duration) var(--ease),
+                        background var(--duration) var(--ease);
         }
 
-        .close-btn:hover {
-            color: #e74c3c;
+        .device-item:hover {
+            border-color: var(--border-strong);
+            background: var(--surface-hover);
         }
 
-        .modal-body {
-            line-height: 1.6;
+        .device-name {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-weight: var(--weight-medium);
         }
 
+        .device-meta {
+            margin-top: var(--space-1);
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        /* Status dot: colour plus the word, never colour alone */
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: var(--radius-full);
+            background: var(--text-muted);
+            flex: none;
+        }
+
+        .status-dot.online          { background: var(--signal-green); }
+        .status-dot.recently_active { background: var(--signal-yellow); }
+        .status-dot.offline         { background: var(--grey-400); }
+
+        /* Device detail modal rows */
         .detail-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #f1f3f4;
+            gap: var(--space-4);
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--border);
+            font-size: var(--text-base);
         }
 
-        .detail-row:last-child {
-            border-bottom: none;
-        }
-
-        .detail-label {
-            font-weight: 600;
-            color: #495057;
-            min-width: 120px;
-        }
-
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: var(--text-muted); }
         .detail-value {
-            color: #2c3e50;
             text-align: right;
-            flex: 1;
+            font-family: var(--font-mono);
+            font-size: var(--text-sm);
+            word-break: break-word;
         }
-
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        .status-dot.online {
-            background: #27ae60;
-            box-shadow: 0 0 10px rgba(39, 174, 96, 0.3);
-        }
-
-        .status-dot.recently_active {
-            background: #f39c12;
-            box-shadow: 0 0 10px rgba(243, 156, 18, 0.3);
-        }
-
-        .status-dot.offline {
-            background: #e74c3c;
-        }
-
-        .device-item {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 10px;
-            padding: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-
-        .device-item:hover {
-            background: #e9ecef;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        @media (max-width: 768px) {
-            .nav-container {
-                padding: 0 15px;
-            }
-            
-            .nav-logo {
-                font-size: 1.2em;
-            }
-            
-            .nav-buttons {
-                gap: 10px;
-            }
-            
-            .nav-btn {
-                padding: 6px 12px;
-                font-size: 0.9em;
-            }
-            
-            .container {
-                padding: 20px 15px;
-            }
-            
-            .header h1 {
-                font-size: 1.8em;
-            }
-            
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-            
-            .dashboard-card {
-                padding: 20px;
-            }
-
-            .modal-content {
-                margin: 10% auto;
-                width: 95%;
-                padding: 20px;
-            }
-        }
+        .detail-value .cluster-sm { justify-content: flex-end; font-family: var(--font-sans); }
     </style>
-    <script src="i18n-strings.js?v=2026-08-30"></script>
-    <script src="i18n.js?v=2026-08-30"></script>
-    <script src="pebble-sim.js?v=2026-08-30"></script>
-    <script src="settings-modal.js?v=2026-08-30"></script>
 </head>
 <body>
-    <!-- Top Navigation Bar -->
-    <nav class="top-nav">
-        <div class="nav-container">
-            <a href="/" class="nav-logo">
-                ⚡ Energy Pebble
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a href="/" class="brand">
+                <i data-icon="bolt" data-icon-size="20" class="brand__mark"></i>
+                Energy Pebble
             </a>
-            <div class="nav-buttons">
-                <a href="/" class="nav-btn home" data-i18n="nav.home">Home</a>
-                <div class="admin-dropdown" id="adminDropdown" style="display: none;">
-                    <div class="nav-btn admin" onclick="toggleAdminMenu()" data-i18n="nav.admin">Admin ▼</div>
-                    <div class="admin-dropdown-content" id="adminMenuDropdown">
-                        <a href="/admin/users" class="admin-dropdown-item" data-i18n="nav.admin.users">Users</a>
-                        <a href="/admin/devices" class="admin-dropdown-item" data-i18n="nav.admin.devices">Devices</a>
-                        <a href="/admin/firmware" class="admin-dropdown-item" data-i18n="nav.admin.firmware">Firmware</a>
-                        <a href="/admin/tokens" class="admin-dropdown-item" data-i18n="nav.admin.tokens">API Tokens</a>
-                    </div>
-                </div>
-                <div class="user-menu">
-                    <button class="user-menu-trigger" onclick="toggleUserMenu()">
-                        <span id="current-username">User</span> ▼
+            <div class="site-nav">
+                <a href="/" class="btn btn--ghost btn--collapse">
+                    <i data-icon="home" data-icon-size="16"></i>
+                    <span data-i18n="nav.home">Home</span>
+                </a>
+
+                <div class="menu" id="adminDropdown" style="display: none;">
+                    <button type="button" class="btn btn--ghost" onclick="toggleAdminMenu()"
+                            aria-haspopup="true" aria-expanded="false" id="adminMenuTrigger">
+                        <i data-icon="shield" data-icon-size="16"></i>
+                        <span data-i18n="nav.admin">Admin</span>
+                        <i data-icon="chevronDown" data-icon-size="14" class="menu__chevron"></i>
                     </button>
-                    <div class="user-menu-dropdown" id="userMenuDropdown">
-                        <a href="#" onclick="openUserSettings()" class="user-menu-item" data-i18n="nav.settings.plain">Settings</a>
-                        <a href="https://auth.tdlx.nl/logout" class="user-menu-item logout" data-i18n="nav.logout.plain">Logout</a>
+                    <div class="menu__panel" id="adminMenuDropdown" role="menu">
+                        <a href="/admin/users" class="menu__item" role="menuitem">
+                            <i data-icon="user" data-icon-size="16"></i>
+                            <span data-i18n="nav.admin.users">Users</span>
+                        </a>
+                        <a href="/admin/devices" class="menu__item" role="menuitem">
+                            <i data-icon="chip" data-icon-size="16"></i>
+                            <span data-i18n="nav.admin.devices">Devices</span>
+                        </a>
+                        <a href="/admin/firmware" class="menu__item" role="menuitem">
+                            <i data-icon="code" data-icon-size="16"></i>
+                            <span data-i18n="nav.admin.firmware">Firmware</span>
+                        </a>
+                        <a href="/admin/tokens" class="menu__item" role="menuitem">
+                            <i data-icon="lock" data-icon-size="16"></i>
+                            <span data-i18n="nav.admin.tokens">API Tokens</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="menu" id="userMenu">
+                    <button type="button" class="btn btn--secondary" onclick="toggleUserMenu()"
+                            aria-haspopup="true" aria-expanded="false" id="userMenuTrigger">
+                        <i data-icon="user" data-icon-size="16"></i>
+                        <span id="current-username">User</span>
+                        <i data-icon="chevronDown" data-icon-size="14" class="menu__chevron"></i>
+                    </button>
+                    <div class="menu__panel" id="userMenuDropdown" role="menu">
+                        <button type="button" class="menu__item" role="menuitem" onclick="openUserSettings()">
+                            <i data-icon="settings" data-icon-size="16"></i>
+                            <span data-i18n="nav.settings">Settings</span>
+                        </button>
+                        <div class="menu__separator"></div>
+                        <a href="https://auth.tdlx.nl/logout" class="menu__item menu__item--danger" role="menuitem">
+                            <i data-icon="logout" data-icon-size="16"></i>
+                            <span data-i18n="nav.logout">Logout</span>
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <div class="container">
-        <div class="welcome-section">
-            <div class="welcome-message">
-                <h2 id="welcome-greeting" data-i18n="dashboard.greeting">Welcome back!</h2>
-                <p data-i18n="dashboard.greetingSub">Ready to optimize your energy usage and manage your connected devices?</p>
+    <main id="main" class="container page">
+        <div class="page-head">
+            <h1 id="welcome-greeting" data-i18n="dashboard.greeting">Welcome back!</h1>
+            <p class="lead" data-i18n="dashboard.greetingSub">Ready to optimize your energy usage and manage your connected devices?</p>
+        </div>
+
+        <div class="grid stats-grid">
+            <div class="stat">
+                <div class="stat__label" data-i18n="dashboard.stat.currentPrice">Current Energy Price</div>
+                <div class="stat__value" id="current-color">–</div>
             </div>
-            
-            <div class="quick-stats">
-                <div class="stat-card">
-                    <div class="stat-value" id="current-color">-</div>
-                    <div class="stat-label" data-i18n="dashboard.stat.currentPrice">Current Energy Price</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="connected-devices">-</div>
-                    <div class="stat-label" data-i18n="dashboard.stat.connected">Connected Energy Dots</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="unclaimed-devices">-</div>
-                    <div class="stat-label" data-i18n="dashboard.stat.unclaimed">Unclaimed Devices</div>
-                </div>
+            <div class="stat">
+                <div class="stat__label" data-i18n="dashboard.stat.connected">Connected Energy Dots</div>
+                <div class="stat__value" id="connected-devices">–</div>
+            </div>
+            <div class="stat">
+                <div class="stat__label" data-i18n="dashboard.stat.unclaimed">Unclaimed Devices</div>
+                <div class="stat__value" id="unclaimed-devices">–</div>
             </div>
         </div>
 
-        <div class="dashboard-grid">
-            <div class="dashboard-card" style="grid-column: 1 / -1; text-align: center;">
-                <h3 class="card-title" data-i18n="dashboard.pebble.title">My Pebble</h3>
-                <p class="card-description" data-i18n-html="dashboard.pebble.description">
+        <!-- My Pebble: one pebble per home -->
+        <section class="card pebble-card">
+            <div class="card__header">
+                <h2 class="card__title" data-i18n="dashboard.pebble.title">My Pebble</h2>
+            </div>
+            <div class="card__body pebble-card__body">
+                <div id="home-pebbles" class="home-pebbles"></div>
+                <p class="prose text-sm" data-i18n-html="dashboard.pebble.description">
                     What your pebble shows right now, based on your household profile.
                     Adjust it under <strong>Settings</strong> in your user menu &mdash; devices pick up changes within 15 minutes.
                 </p>
-                <div id="home-pebbles" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 30px; margin-top: 10px;"></div>
             </div>
+        </section>
 
-            <div class="dashboard-card">
-                                <h3 class="card-title" data-i18n="dashboard.dots.title">My Energy Dots</h3>
-                <p class="card-description" data-i18n="dashboard.dots.description">
-                    View and manage your assigned Energy Dot devices. Monitor their status and configure device settings.
-                </p>
-                <span class="card-status status-ready" data-i18n="dashboard.status.available">Available Now</span>
-                <br>
-                <div id="device-summary" style="margin: 15px 0; font-size: 0.9em; color: #6c757d;" data-i18n="dashboard.dots.loading">
-                    Loading device information...
-                </div>
-                <button class="card-action" onclick="toggleDeviceManagement()" data-i18n="dashboard.dots.view">View My Devices</button>
-                <a href="/setup/" class="card-action" style="margin-left: 10px;" data-i18n="dashboard.dots.add">➕ Add a Device</a>
-            </div>
-
-            <div class="dashboard-card">
-                                <h3 class="card-title" data-i18n="dashboard.solar.title">Solar Data Integration</h3>
-                <p class="card-description" data-i18n="dashboard.solar.description">
-                    Connect your Enode account to access real-time solar production data. 
-                    Optimize energy usage based on your solar generation and grid prices.
-                </p>
-                <span class="card-status status-coming-soon" data-i18n="dashboard.status.comingSoon">Coming Soon</span>
-                <br>
-                <a href="#" class="card-action disabled" data-i18n="dashboard.solar.action">Connect Enode</a>
-            </div>
-
-            <div class="dashboard-card">
-                                <h3 class="card-title" data-i18n="dashboard.impact.title">Impact Circle</h3>
-                <p class="card-description" data-i18n="dashboard.impact.description">
-                    Discover the energy secrets that help you save money and protect the planet. 
-                    Learn about optimal energy usage times and hidden green hours.
-                </p>
-                <span class="card-status status-ready" data-i18n="dashboard.status.available">Available Now</span>
-                <br>
-                <a href="/impact-circle" class="card-action" data-i18n="dashboard.impact.action">Enter Impact Circle</a>
-            </div>
-
-            <div class="dashboard-card">
-                                <h3 class="card-title" data-i18n="dashboard.analytics.title">Energy Analytics</h3>
-                <p class="card-description" data-i18n="dashboard.analytics.description">
-                    View detailed analytics of your energy usage patterns, savings achieved, 
-                    and environmental impact. Track your optimization progress over time.
-                </p>
-                <span class="card-status status-coming-soon" data-i18n="dashboard.status.comingSoon">Coming Soon</span>
-                <br>
-                <a href="#" class="card-action disabled" data-i18n="dashboard.analytics.action">View Analytics</a>
-            </div>
-        </div>
-
-        <!-- Device Management Section (Hidden by default) -->
-        <div id="device-management" class="device-management" style="display: none;">
-            <div class="card" style="margin-top: 30px;">
-                <h2 data-i18n="dashboard.dots.title">My Energy Dots</h2>
-                
-                <!-- User's Devices -->
-                <div class="device-section">
-                    <h3 data-i18n="dashboard.devices.assignedTitle">Your Assigned Devices</h3>
-                    <div id="user-devices" class="device-list">
-                        <p class="loading-message" data-i18n="dashboard.devices.loading">Loading your devices...</p>
+        <div class="grid feature-grid">
+            <article class="card card--interactive feature-card">
+                <div class="card__body">
+                    <div class="cluster" style="justify-content: space-between;">
+                        <h3 class="card__title" data-i18n="dashboard.dots.title">My Energy Dots</h3>
+                        <span class="badge badge--accent" data-i18n="dashboard.status.available">Available Now</span>
+                    </div>
+                    <p class="feature-card__desc" data-i18n="dashboard.dots.description">
+                        View and manage your assigned Energy Dot devices. Monitor their status and configure device settings.
+                    </p>
+                    <div class="feature-card__meta" id="device-summary" data-i18n="dashboard.dots.loading">
+                        Loading device information...
                     </div>
                 </div>
-                
-                <div style="margin-top: 20px; text-align: center;">
-                    <a href="/setup/" class="card-action" data-i18n="dashboard.dots.add">➕ Add a Device</a>
-                    <button class="refresh-button" onclick="refreshDeviceData()" style="margin-left: 10px;" data-i18n="dashboard.devices.refresh">Refresh Status</button>
-                    <button class="card-action" onclick="toggleDeviceManagement()" style="margin-left: 10px; background: #6c757d;" data-i18n="common.close">Close</button>
+                <div class="card__footer">
+                    <button type="button" class="btn btn--primary btn--sm" onclick="toggleDeviceManagement()" data-i18n="dashboard.dots.view">View My Devices</button>
+                    <a href="/setup/" class="btn btn--secondary btn--sm">
+                        <i data-icon="plus" data-icon-size="15"></i>
+                        <span data-i18n="dashboard.dots.add">Add a Device</span>
+                    </a>
+                </div>
+            </article>
+
+            <article class="card card--interactive feature-card">
+                <div class="card__body">
+                    <div class="cluster" style="justify-content: space-between;">
+                        <h3 class="card__title" data-i18n="dashboard.impact.title">Impact Circle</h3>
+                        <span class="badge badge--accent" data-i18n="dashboard.status.available">Available Now</span>
+                    </div>
+                    <p class="feature-card__desc" data-i18n="dashboard.impact.description">
+                        Discover the energy secrets that help you save money and protect the planet.
+                        Learn about optimal energy usage times and hidden green hours.
+                    </p>
+                </div>
+                <div class="card__footer">
+                    <a href="/impact-circle" class="btn btn--primary btn--sm" data-i18n="dashboard.impact.action">Enter Impact Circle</a>
+                </div>
+            </article>
+
+            <article class="card feature-card">
+                <div class="card__body">
+                    <div class="cluster" style="justify-content: space-between;">
+                        <h3 class="card__title" data-i18n="dashboard.solar.title">Solar Data Integration</h3>
+                        <span class="badge" data-i18n="dashboard.status.comingSoon">Coming Soon</span>
+                    </div>
+                    <p class="feature-card__desc" data-i18n="dashboard.solar.description">
+                        Connect your Enode account to access real-time solar production data.
+                        Optimize energy usage based on your solar generation and grid prices.
+                    </p>
+                </div>
+                <div class="card__footer">
+                    <button type="button" class="btn btn--secondary btn--sm" disabled data-i18n="dashboard.solar.action">Connect Enode</button>
+                </div>
+            </article>
+
+            <article class="card feature-card">
+                <div class="card__body">
+                    <div class="cluster" style="justify-content: space-between;">
+                        <h3 class="card__title" data-i18n="dashboard.analytics.title">Energy Analytics</h3>
+                        <span class="badge" data-i18n="dashboard.status.comingSoon">Coming Soon</span>
+                    </div>
+                    <p class="feature-card__desc" data-i18n="dashboard.analytics.description">
+                        View detailed analytics of your energy usage patterns, savings achieved,
+                        and environmental impact. Track your optimization progress over time.
+                    </p>
+                </div>
+                <div class="card__footer">
+                    <button type="button" class="btn btn--secondary btn--sm" disabled data-i18n="dashboard.analytics.action">View Analytics</button>
+                </div>
+            </article>
+        </div>
+
+        <!-- Device management (revealed from the Energy Dots card) -->
+        <section id="device-management" class="card" style="display: none; margin-top: var(--space-6);">
+            <div class="card__header">
+                <h2 class="card__title" data-i18n="dashboard.devices.assignedTitle">Your Assigned Devices</h2>
+                <button type="button" class="btn btn--ghost btn--sm btn--icon" onclick="toggleDeviceManagement()"
+                        data-i18n-aria-label="common.close" aria-label="Close">
+                    <i data-icon="close" data-icon-size="16"></i>
+                </button>
+            </div>
+            <div class="card__body">
+                <div id="user-devices" class="device-list">
+                    <p class="state" data-i18n="dashboard.devices.loading">Loading your devices...</p>
                 </div>
             </div>
-        </div>
-    </div>
+            <div class="card__footer">
+                <a href="/setup/" class="btn btn--primary btn--sm">
+                    <i data-icon="plus" data-icon-size="15"></i>
+                    <span data-i18n="dashboard.dots.add">Add a Device</span>
+                </a>
+                <button type="button" class="btn btn--secondary btn--sm" onclick="refreshDeviceData()">
+                    <i data-icon="refresh" data-icon-size="15"></i>
+                    <span data-i18n="dashboard.devices.refresh">Refresh Status</span>
+                </button>
+            </div>
+        </section>
+    </main>
 
     <!-- Device Details Modal -->
     <div id="deviceModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title" id="modalTitle" data-i18n="dashboard.deviceModal.title">Device Details</h2>
-                <button class="close-btn" onclick="closeDeviceModal()">&times;</button>
+        <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+            <div class="modal__header">
+                <h2 class="modal__title" id="modalTitle" data-i18n="dashboard.deviceModal.title">Device Details</h2>
+                <button type="button" class="btn btn--ghost btn--sm btn--icon" onclick="closeDeviceModal()"
+                        data-i18n-aria-label="common.close" aria-label="Close">
+                    <i data-icon="close" data-icon-size="16"></i>
+                </button>
             </div>
-            <div class="modal-body" id="modalBody">
+            <div class="modal__body" id="modalBody">
                 <!-- Device details will be populated here -->
             </div>
         </div>
@@ -864,6 +375,11 @@
     <!-- User Settings Modal (shared component — see settings-modal.js) -->
     <settings-modal id="settings-modal"></settings-modal>
 
+    <script src="i18n-strings.js?v=2026-08-30"></script>
+    <script src="i18n.js?v=2026-08-30"></script>
+    <script src="icons.js?v=2026-08-30"></script>
+    <script src="pebble-sim.js?v=2026-08-30"></script>
+    <script src="settings-modal.js?v=2026-08-30"></script>
     <script>
         I18n.start();
         const t = (key, vars) => I18n.t(key, vars);
@@ -893,15 +409,17 @@
                 const currentColor = data.hour_color_codes[0]?.color_code;
                 
                 const colorElement = document.getElementById('current-color');
+                // Colour comes from the signal tokens, so light and dark themes
+                // both stay legible without a second hard-coded palette here.
                 const colorMap = {
-                    'G': { text: t('color.green'), color: '#27ae60' },
-                    'Y': { text: t('color.yellow'), color: '#f39c12' },
-                    'R': { text: t('color.red'), color: '#e74c3c' }
+                    'G': { text: t('color.green'), tone: 'green' },
+                    'Y': { text: t('color.yellow'), tone: 'yellow' },
+                    'R': { text: t('color.red'), tone: 'red' }
                 };
-                
+
                 if (currentColor && colorMap[currentColor]) {
                     colorElement.textContent = colorMap[currentColor].text;
-                    colorElement.style.color = colorMap[currentColor].color;
+                    colorElement.className = 'stat__value stat__value--' + colorMap[currentColor].tone;
                 }
             } catch (error) {
                 console.error('Failed to load current color:', error);
@@ -929,12 +447,10 @@
                     
                     if (connectedElement) {
                         connectedElement.textContent = data.total_devices || 0;
-                        connectedElement.style.color = data.total_devices > 0 ? '#27ae60' : '#6c757d';
                     }
-                    
+
                     if (unclaimedElement) {
                         unclaimedElement.textContent = 0; // No unclaimed devices in simplified version
-                        unclaimedElement.style.color = '#6c757d';
                     }
                     
                     // Update device summary
@@ -979,7 +495,7 @@
         // Show loading state for device management
         function showDeviceLoading() {
             const userContainer = document.getElementById('user-devices');
-            userContainer.innerHTML = `<p class="loading-message">${t('dashboard.devices.loading')}</p>`;
+            userContainer.innerHTML = `<div class="state"><span class="spinner"></span>${t('dashboard.devices.loading')}</div>`;
         }
 
         // Refresh device data
@@ -1023,24 +539,31 @@
             const container = document.getElementById('user-devices');
             
             if (deviceData.claimed.length === 0) {
-                container.innerHTML = `<p class="loading-message">${t('dashboard.devices.emptyList')}</p>`;
+                container.innerHTML = `<div class="state">
+                    <i data-icon="chip" data-icon-size="28"></i>
+                    <span>${t('dashboard.devices.emptyList')}</span>
+                </div>`;
+                Icons.render(container);
                 return;
             }
             
             container.innerHTML = deviceData.claimed.map(device => `
                 <div class="device-item" onclick="showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})">
-                    <div class="device-info">
-                        <div class="device-nickname">${device.nickname || t('device.defaultName')}
-                            ${device.home_name ? `<span style="font-weight: 400; font-size: 0.8em; background: #eef2e9; color: #2c3e50; border-radius: 10px; padding: 2px 8px; margin-left: 6px;">${device.home_name}</span>` : ''}</div>
-                        <div class="device-details">
-                            <span class="device-status ${device.status}">${statusLabel(device.status)}</span>
-                            ${t('device.lastSeen', { time: formatDeviceTime(device.last_seen) })}<br>
-                            ${t('device.requests', { count: device.request_count })} • ${t('device.id', { id: device.device_id || t('common.unknown') })}
+                    <div>
+                        <div class="device-name">
+                            <span class="status-dot ${device.status}"></span>
+                            ${device.nickname || t('device.defaultName')}
+                            ${device.home_name ? `<span class="badge">${device.home_name}</span>` : ''}
+                        </div>
+                        <div class="device-meta">
+                            ${statusLabel(device.status)} &middot;
+                            ${t('device.lastSeen', { time: formatDeviceTime(device.last_seen) })} &middot;
+                            ${t('device.requests', { count: device.request_count })} &middot;
+                            ${t('device.id', { id: device.device_id || t('common.unknown') })}
                         </div>
                     </div>
-                    <div class="device-actions">
-                        <button class="device-btn" onclick="event.stopPropagation(); showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})" style="background: #3498db;">${t('device.viewDetails')}</button>
-                    </div>
+                    <button type="button" class="btn btn--secondary btn--sm"
+                            onclick="event.stopPropagation(); showDeviceDetails(${JSON.stringify(device).replace(/"/g, '&quot;')})">${t('device.viewDetails')}</button>
                 </div>
             `).join('');
         }
@@ -1059,7 +582,11 @@
 
         function showDeviceError(message) {
             const userContainer = document.getElementById('user-devices');
-            userContainer.innerHTML = `<p style="color: #e74c3c; text-align: center;">${message}</p>`;
+            userContainer.innerHTML = `<div class="state">
+                <i data-icon="alert" data-icon-size="24" style="color: var(--danger-500);"></i>
+                <span>${message}</span>
+            </div>`;
+            Icons.render(userContainer);
         }
 
         // Device Modal Functions
@@ -1081,7 +608,7 @@
                 <div class="detail-row">
                     <span class="detail-label">${t('device.detail.status')}</span>
                     <span class="detail-value">
-                        <span class="status-indicator">
+                        <span class="cluster-sm">
                             <span class="status-dot ${statusClass}"></span>
                             ${connectionStatus}
                         </span>
@@ -1125,12 +652,12 @@
                 </div>
             `;
             
-            modal.style.display = 'block';
+            modal.classList.add('is-open');
+            Icons.render(modal);
         }
-        
+
         function closeDeviceModal() {
-            const modal = document.getElementById('deviceModal');
-            modal.style.display = 'none';
+            document.getElementById('deviceModal').classList.remove('is-open');
         }
         
         function formatDetailTime(timestamp) {
@@ -1145,42 +672,45 @@
             });
         }
         
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('deviceModal');
-            if (event.target === modal) {
-                closeDeviceModal();
-            }
+        // Close the modal on a click outside it, or on Escape
+        window.addEventListener('click', function (event) {
+            if (event.target === document.getElementById('deviceModal')) closeDeviceModal();
+        });
+        window.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') closeDeviceModal();
+        });
+
+        // Menus share the .menu / .is-open pattern from base.css
+        function setMenuOpen(menuId, triggerId, open) {
+            const menu = document.getElementById(menuId);
+            if (!menu) return;
+            menu.classList.toggle('is-open', open);
+            const trigger = document.getElementById(triggerId);
+            if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
 
-        // User menu functionality
         function toggleUserMenu() {
-            const dropdown = document.getElementById('userMenuDropdown');
-            dropdown.classList.toggle('show');
+            const menu = document.getElementById('userMenu');
+            setMenuOpen('userMenu', 'userMenuTrigger', !menu.classList.contains('is-open'));
         }
 
-        // Admin menu functionality
         function toggleAdminMenu() {
-            const dropdown = document.getElementById('adminMenuDropdown');
-            dropdown.classList.toggle('show');
+            const menu = document.getElementById('adminDropdown');
+            setMenuOpen('adminDropdown', 'adminMenuTrigger', !menu.classList.contains('is-open'));
         }
 
-        // Close menus when clicking outside
-        document.addEventListener('click', function(event) {
-            const userMenu = document.querySelector('.user-menu');
-            const userDropdown = document.getElementById('userMenuDropdown');
-            const adminMenu = document.querySelector('.admin-dropdown');
-            const adminDropdown = document.getElementById('adminMenuDropdown');
-            
-            // Close user menu if clicking outside
-            if (!userMenu.contains(event.target)) {
-                userDropdown.classList.remove('show');
-            }
-            
-            // Close admin menu if clicking outside
-            if (adminMenu && !adminMenu.contains(event.target)) {
-                adminDropdown.classList.remove('show');
-            }
+        // Close menus on an outside click or on Escape
+        document.addEventListener('click', function (event) {
+            const userMenu = document.getElementById('userMenu');
+            const adminMenu = document.getElementById('adminDropdown');
+            if (userMenu && !userMenu.contains(event.target)) setMenuOpen('userMenu', 'userMenuTrigger', false);
+            if (adminMenu && !adminMenu.contains(event.target)) setMenuOpen('adminDropdown', 'adminMenuTrigger', false);
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') return;
+            setMenuOpen('userMenu', 'userMenuTrigger', false);
+            setMenuOpen('adminDropdown', 'adminMenuTrigger', false);
         });
 
         // User settings functionality — the modal itself lives in the shared
@@ -1188,8 +718,7 @@
         let currentUserData = null;
 
         function openUserSettings() {
-            // Close user menu
-            document.getElementById('userMenuDropdown').classList.remove('show');
+            setMenuOpen('userMenu', 'userMenuTrigger', false);
             document.getElementById('settings-modal').open();
         }
 
@@ -1291,9 +820,9 @@
             }
             const container = document.getElementById('home-pebbles');
             container.innerHTML = homes.map(h => `
-                <div style="text-align: center;">
+                <div>
                     <pebble-sim id="home-pebble-${h.id}" src="/api/color-code"></pebble-sim>
-                    ${homes.length > 1 ? `<div style="font-weight: 600; color: #2c3e50; margin-top: 2px;">${h.name}</div>` : ''}
+                    ${homes.length > 1 ? `<div class="home-pebble__name">${h.name}</div>` : ''}
                 </div>`).join('');
             for (const h of homes) {
                 try {

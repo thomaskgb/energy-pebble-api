@@ -58,9 +58,18 @@ energy_pebble/
 │       ├── session_secret
 │       └── storage_encryption_key
 ├── static/               # Static web assets
+│   ├── base.css          # Design system: tokens + primitives (customer UI)
+│   ├── icons.js          # Inline SVG icon set
+│   ├── components.css    # Legacy component styles — admin pages only
 │   ├── index.html        # Main webpage
 │   ├── dashboard.html    # Protected dashboard
-│   └── energy-pebble-image.jpg  # Project image
+│   ├── login.html        # Sign-in page
+│   ├── impact-circle.html # Energy secrets page
+│   ├── simulator.html    # Scenario simulator
+│   ├── setup/index.html  # Device Wi-Fi setup (synced with the esphome repo)
+│   ├── pebble-sim.js     # <pebble-sim> web component
+│   ├── settings-modal.js # <settings-modal> web component
+│   └── energy-pebble-device.jpg  # Product photo
 ├── sample_data.json      # Sample data for testing
 ├── test_device_detection.py  # Test script for device detection
 └── CLAUDE.md            # This file
@@ -73,6 +82,34 @@ energy_pebble/
 - **User Claiming**: Users can claim and name devices detected on their network
 - **SQLite Database**: Device data stored in `/tmp/energy_pebble.db`
 
+## Design System
+`static/base.css` is the single stylesheet for the customer-facing UI. Pages
+link it and then carry only the CSS that is genuinely theirs — anything that
+appears on two pages belongs in `base.css`.
+
+- **Tokens first**: colour, type scale, spacing, radii, elevation and motion
+  are all custom properties on `:root`. Never hard-code a hex value or a pixel
+  spacing in a page; reach for the token.
+- **Dark theme**: a single `@media (prefers-color-scheme: dark)` block
+  redefines the semantic tokens (`--bg`, `--surface`, `--text`, `--accent`, the
+  signal colours). Components never need their own dark rules. Text on the
+  accent uses `--on-accent`, which flips to dark ink in the dark theme so
+  primary buttons keep WCAG AA contrast.
+- **Colour discipline**: one neutral ramp carries the interface, one green
+  accent carries the brand, and green/amber/red are reserved for the price
+  signal. Signal elements always spell out their state in words as well —
+  colour is never the only carrier of meaning.
+- **Icons**: `static/icons.js` renders an inline SVG for every
+  `<i data-icon="name">` placeholder, or `Icons.svg(name, {size})` for markup
+  built in JavaScript. Call `Icons.render(root)` after inserting HTML. Emoji
+  are not used as interface icons — they render differently per platform and
+  ignore the surrounding text colour.
+- **Shadow DOM**: `pebble-sim.js` and `settings-modal.js` cannot link
+  `base.css`, but custom properties cross the shadow boundary, so their styles
+  consume the same tokens with standalone fallbacks.
+- **Admin pages** still use the older `components.css` and have not been
+  migrated.
+
 ## Internationalization
 The web UI ships in English (`en`), Dutch (`nl`) and French (`fr`). The pebble
 itself shows colors and needs no translation.
@@ -84,9 +121,12 @@ itself shows colors and needs no translation.
   with the EN/NL/FR switcher in the top nav; the choice is kept in
   `localStorage` until they sign in, after which the account setting wins.
 - **Runtime**: `static/i18n.js` (the small runtime) plus `static/i18n-strings.js`
-  (all three catalogs). Load them in that order and **before** `pebble-sim.js`
-  and `settings-modal.js`, which register their shadow roots with the runtime
-  when they upgrade.
+  (all three catalogs). Load them in that order and **before** `icons.js`,
+  `pebble-sim.js` and `settings-modal.js` — the last two register their shadow
+  roots with the runtime when they upgrade.
+- **No emoji in strings**: catalog values are text only. Icons belong in the
+  markup (see the Design System section), so a translator never has to carry
+  one and the same key works next to any icon.
 - **Markup**: put the key in an attribute — `data-i18n` (textContent),
   `data-i18n-html` (strings with inline markup), or `data-i18n-<attr>` for
   placeholders, titles and aria labels. Strings built in JavaScript use
@@ -158,6 +198,9 @@ does not need bumping on every deploy.
 - **Security**: All passwords use Argon2ID hashing with strong parameters
 
 ## Recent Updates
+- **UI redesign**: single `base.css` design system with light/dark tokens,
+  an SVG icon set replacing emoji, and reworked home/dashboard/login/impact/
+  simulator/setup layouts
 - **Device Management**: Added automatic detection and pairing system for Energy Dots
 - **Dashboard Enhancement**: Updated dashboard with device management interface
 - **Backward Compatibility**: Ensured existing devices continue working unchanged

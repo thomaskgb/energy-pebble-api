@@ -1526,6 +1526,20 @@ if LOCAL_DEV_USER:
     async def _dev_impact_circle():
         return RedirectResponse("/static/impact-circle.html")
 
+    @app.get("/login", include_in_schema=False)
+    async def _dev_login():
+        return RedirectResponse("/static/login.html")
+
+    @app.get("/setup/", include_in_schema=False)
+    async def _dev_setup():
+        return RedirectResponse("/static/setup/index.html")
+
+    # "/" is the API's own root endpoint here, so the wordmark in the header
+    # lands on that JSON locally; Caddy serves the landing page in production.
+    @app.get("/home", include_in_schema=False)
+    async def _dev_home():
+        return RedirectResponse("/static/index.html")
+
 async def fetch_data(date_str: Optional[str] = None):
     """Fetch data from Elia's API for a given date."""
     if not date_str:
