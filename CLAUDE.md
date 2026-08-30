@@ -66,7 +66,7 @@ energy_pebble/
 │   ├── login.html        # Sign-in page
 │   ├── impact-circle.html # Energy secrets page
 │   ├── simulator.html    # Scenario simulator
-│   ├── setup/index.html  # Device Wi-Fi setup (synced with the esphome repo)
+│   ├── setup/index.html  # Device Wi-Fi setup (translated variant; see the file header)
 │   ├── pebble-sim.js     # <pebble-sim> web component
 │   ├── settings-modal.js # <settings-modal> web component
 │   └── energy-pebble-device.jpg  # Product photo
