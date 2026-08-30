@@ -171,6 +171,13 @@ Script and stylesheet tags carry a `?v=` marker. It exists to break caches
 populated under the previous year-long policy; with revalidation in place it
 does not need bumping on every deploy.
 
+Bump it when an asset's *content* changes in a way the HTML depends on. A
+browser still holding a year-long copy from before the revalidation policy
+will fetch the new HTML (it revalidates) but keep the old script, and the two
+disagree: the design-system rewrite hit exactly that, pairing new markup that
+draws its own chevron with an old catalog whose string still ended in a
+literal triangle.
+
 ## Domain Configuration
 - **Production**: `energypebble.tdlx.nl`
 - **Routing**: 
