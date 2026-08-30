@@ -27,7 +27,6 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /api/json`: Get raw electricity price data in JSON format
 - `GET /api/sample`: Get sample data for testing
 - `GET /api/sample-color-code`: Get sample color codes for testing
-- `GET /api/device/config-version`: Short fingerprint of the device's effective settings; firmware polls it every 30s and refetches colors only when it changes
 - `GET /docs`: Swagger UI documentation
 
 ### Device Management (Protected)
@@ -59,9 +58,18 @@ energy_pebble/
 │       ├── session_secret
 │       └── storage_encryption_key
 ├── static/               # Static web assets
+│   ├── base.css          # Design system: tokens + primitives (customer UI)
+│   ├── icons.js          # Inline SVG icon set
+│   ├── admin.css         # Admin console layer, built on base.css
 │   ├── index.html        # Main webpage
 │   ├── dashboard.html    # Protected dashboard
-│   └── energy-pebble-image.jpg  # Project image
+│   ├── login.html        # Sign-in page
+│   ├── impact-circle.html # Energy secrets page
+│   ├── simulator.html    # Scenario simulator
+│   ├── setup/index.html  # Device Wi-Fi setup (synced with the esphome repo)
+│   ├── pebble-sim.js     # <pebble-sim> web component
+│   ├── settings-modal.js # <settings-modal> web component
+│   └── energy-pebble-device.jpg  # Product photo
 ├── sample_data.json      # Sample data for testing
 ├── test_device_detection.py  # Test script for device detection
 └── CLAUDE.md            # This file
@@ -74,6 +82,38 @@ energy_pebble/
 - **User Claiming**: Users can claim and name devices detected on their network
 - **SQLite Database**: Device data stored in `/tmp/energy_pebble.db`
 
+## Design System
+`static/base.css` is the single stylesheet for the customer-facing UI. Pages
+link it and then carry only the CSS that is genuinely theirs; anything that
+appears on two pages belongs in `base.css`.
+
+- **Tokens first**: colour, type scale, spacing, radii, elevation and motion
+  are all custom properties on `:root`. Never hard-code a hex value or a pixel
+  spacing in a page; reach for the token.
+- **Dark theme**: a single `@media (prefers-color-scheme: dark)` block
+  redefines the semantic tokens (`--bg`, `--surface`, `--text`, `--accent`, the
+  signal colours). Components never need their own dark rules. Text on the
+  accent uses `--on-accent`, which flips to dark ink in the dark theme so
+  primary buttons keep WCAG AA contrast.
+- **Colour discipline**: one neutral ramp carries the interface, one green
+  accent carries the brand, and green/amber/red are reserved for the price
+  signal. Signal elements always spell out their state in words as well, so
+  colour is never the only carrier of meaning.
+- **Icons**: `static/icons.js` renders an inline SVG for every
+  `<i data-icon="name">` placeholder, or `Icons.svg(name, {size})` for markup
+  built in JavaScript. Call `Icons.render(root)` after inserting HTML. Emoji
+  are not used as interface icons: they render differently per platform and
+  ignore the surrounding text colour.
+- **Shadow DOM**: `pebble-sim.js` and `settings-modal.js` cannot link
+  `base.css`, but custom properties cross the shadow boundary, so their styles
+  consume the same tokens with standalone fallbacks.
+- **Admin pages** load `base.css` plus `admin.css`. They keep their own class
+  names (`.section`, `.stat-card`, `.user-table`, `.status-badge`) because the
+  JavaScript that builds their rows speaks that vocabulary; `admin.css` defines
+  it once in terms of the shared tokens. Their asset hrefs are root-absolute
+  (`/base.css`), because the browser URL is `/admin/users` and a relative href
+  would resolve under `/admin/`.
+
 ## Internationalization
 The web UI ships in English (`en`), Dutch (`nl`) and French (`fr`). The pebble
 itself shows colors and needs no translation.
@@ -85,9 +125,12 @@ itself shows colors and needs no translation.
   with the EN/NL/FR switcher in the top nav; the choice is kept in
   `localStorage` until they sign in, after which the account setting wins.
 - **Runtime**: `static/i18n.js` (the small runtime) plus `static/i18n-strings.js`
-  (all three catalogs). Load them in that order and **before** `pebble-sim.js`
-  and `settings-modal.js`, which register their shadow roots with the runtime
-  when they upgrade.
+  (all three catalogs). Load them in that order and **before** `icons.js`,
+  `pebble-sim.js` and `settings-modal.js`; the last two register their shadow
+  roots with the runtime when they upgrade.
+- **No emoji in strings**: catalog values are text only. Icons belong in the
+  markup (see the Design System section), so a translator never has to carry
+  one and the same key works next to any icon.
 - **Markup**: put the key in an attribute: `data-i18n` (textContent),
   `data-i18n-html` (strings with inline markup), or `data-i18n-<attr>` for
   placeholders, titles and aria labels. Strings built in JavaScript use
@@ -109,13 +152,7 @@ The system uses a commitment-based approach to ensure color stability:
 - **Day-ahead pricing**: New prices published daily at 12:45 CET
 - **Color stability**: Once committed, colors don't change for 8 hours
 - **Data fetching**: Fetches 3 days of data for extended analysis
-- **Price cache**: A fetched day is kept in memory and in
-  `/tmp/elia_prices.json`, so page loads no longer hit griddata.elia.be. A
-  complete day (96 quarter-hourly entries) is held for 6 hours, a missing or
-  partial one is retried after 5 minutes, concurrent requests for the same day
-  share a single fetch, and if Elia is unreachable the stale day is served
-  rather than an error.
-- **Persistence**: Committed colors and cached prices survive container restarts
+- **Persistence**: Committed colors survive container restarts
 
 ## Deployment
 ```bash
@@ -124,7 +161,7 @@ docker compose up -d
 
 ### Static asset caching
 Our own HTML, CSS and JS carry no version in their filenames, so Caddy serves
-them with `Cache-Control: no-cache`, so they revalidate against an ETag, which
+them with `Cache-Control: no-cache`; they revalidate against an ETag, which
 costs a 304 and no body. Only vendored libraries (pinned by filename) and
 images keep the year-long cache. Extensionless routes (`/`, `/setup/`,
 `/dashboard`, `/impact-circle`, `/login`, `/admin/*`) are named explicitly in
@@ -165,6 +202,11 @@ does not need bumping on every deploy.
 - **Security**: All passwords use Argon2ID hashing with strong parameters
 
 ## Recent Updates
+- **UI redesign**: single `base.css` design system with light/dark tokens,
+  an SVG icon set replacing emoji, and reworked home/dashboard/login/impact/
+  simulator/setup layouts
+- **Admin console migrated**: the four admin pages now build on `base.css` +
+  `admin.css`; `components.css` is retired
 - **Device Management**: Added automatic detection and pairing system for Energy Dots
 - **Dashboard Enhancement**: Updated dashboard with device management interface
 - **Backward Compatibility**: Ensured existing devices continue working unchanged

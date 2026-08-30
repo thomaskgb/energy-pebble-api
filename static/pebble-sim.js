@@ -255,32 +255,59 @@
           .body { fill: #f7f4ef; stroke: #e3ded5; stroke-width: 1.5; }
           .well { fill: #efece6; }
           .hour-label {
-            font: 600 10px 'Segoe UI', system-ui, sans-serif;
+            font: 600 10px var(--font-sans, system-ui, sans-serif);
             fill: rgba(40, 40, 35, 0.55);
             text-anchor: middle; dominant-baseline: central;
             pointer-events: none;
           }
           .now-label {
-            font: 700 11px 'Segoe UI', system-ui, sans-serif;
+            font: 700 11px var(--font-sans, system-ui, sans-serif);
             fill: rgba(40, 40, 35, 0.6);
             text-anchor: middle; dominant-baseline: central;
             letter-spacing: 0.08em; text-transform: uppercase;
             pointer-events: none;
           }
           path, #dot { transition: fill .5s, fill-opacity .5s; }
+
+          /* The controls panel borrows the host page's design tokens, with
+             standalone fallbacks for pages that do not load base.css. */
           .panel {
-            font: 14px/1.5 'Segoe UI', system-ui, sans-serif; color: #444;
-            display: grid; gap: 12px; min-width: 210px; text-align: left;
+            font-family: var(--font-sans, system-ui, sans-serif);
+            font-size: 13px; line-height: 1.5;
+            color: var(--text, #39424e);
+            display: grid; gap: 10px; min-width: 220px; text-align: left;
           }
-          .panel fieldset { border: 1px solid #e0dcd4; border-radius: 8px; padding: 8px 12px; margin: 0; }
-          .panel legend { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #999; padding: 0 4px; }
+          .panel fieldset {
+            border: 1px solid var(--border, #e2e7ee);
+            border-radius: var(--radius-md, 8px);
+            background: var(--surface, #fff);
+            padding: 2px 12px 8px; margin: 0;
+          }
+          .panel legend {
+            font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: .06em;
+            color: var(--text-muted, #6b7686); padding: 0 4px;
+          }
           /* Rows read name first, control at the end */
-          .panel label { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; padding: 4px 0; }
-          .panel label small { color: #999; font-weight: 400; }
-          .panel input[type=range] { width: 110px; accent-color: #27ae60; }
-          .panel input[type=radio], .panel input[type=checkbox] { accent-color: #27ae60; margin: 0; }
-          .panel select { padding: 4px 8px; border: 1px solid #e0dcd4; border-radius: 6px; font: inherit; }
-          .panel input[type=radio], .panel input[type=checkbox] { accent-color: #27ae60; }
+          .panel label {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 16px; cursor: pointer; padding: 7px 0;
+          }
+          .panel label + label { border-top: 1px solid var(--border, #eef1f5); }
+          .panel label small { color: var(--text-muted, #6b7686); font-weight: 400; }
+          .panel input[type=range] { width: 110px; accent-color: var(--accent, #16815a); }
+          .panel input[type=radio], .panel input[type=checkbox] {
+            accent-color: var(--accent, #16815a);
+            width: 15px; height: 15px; margin: 0;
+          }
+          .panel select {
+            padding: 4px 8px; font: inherit;
+            color: var(--text, #39424e);
+            background: var(--surface, #fff);
+            border: 1px solid var(--border-strong, #cbd3de);
+            border-radius: var(--radius-sm, 6px);
+          }
+          .panel :focus-visible { outline: 2px solid var(--accent, #16815a); outline-offset: 2px; }
         </style>
         <div class="wrap">
           <svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" role="img"

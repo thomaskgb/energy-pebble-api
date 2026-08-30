@@ -1556,6 +1556,43 @@ if LOCAL_DEV_USER:
     async def _dev_impact_circle():
         return RedirectResponse("/static/impact-circle.html")
 
+    @app.get("/login", include_in_schema=False)
+    async def _dev_login():
+        return RedirectResponse("/static/login.html")
+
+    @app.get("/setup/", include_in_schema=False)
+    async def _dev_setup():
+        return RedirectResponse("/static/setup/index.html")
+
+    # "/" is the API's own root endpoint here, so the wordmark in the header
+    # lands on that JSON locally; Caddy serves the landing page in production.
+    @app.get("/home", include_in_schema=False)
+    async def _dev_home():
+        return RedirectResponse("/static/index.html")
+
+    # Admin pages live at /admin/<name> in production, so their assets are
+    # referenced root-absolutely (a relative href would resolve under /admin/).
+    # Serve the page and those root assets here so the same markup works
+    # locally without the edge stack.
+    _ADMIN_PAGES = {"users", "devices", "firmware", "tokens"}
+
+    @app.get("/admin/{page}", include_in_schema=False)
+    async def _dev_admin(page: str):
+        if page not in _ADMIN_PAGES:
+            raise HTTPException(status_code=404, detail="Unknown admin page")
+        return FileResponse(_static_dir / f"admin-{page}.html")
+
+    @app.get("/{asset:path}.css", include_in_schema=False)
+    async def _dev_root_css(asset: str):
+        return FileResponse(_static_dir / f"{asset}.css")
+
+    @app.get("/{asset:path}.js", include_in_schema=False)
+    async def _dev_root_js(asset: str):
+        return FileResponse(_static_dir / f"{asset}.js")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def _dev_favicon():
+        return FileResponse(_static_dir / "favicon.ico")
 # --- Elia day-ahead price cache -------------------------------------------
 # Elia publishes a day's quarter-hourly prices once (around 12:45 CET for the
 # next day) and does not revise them afterwards, so a fetched day stays valid.

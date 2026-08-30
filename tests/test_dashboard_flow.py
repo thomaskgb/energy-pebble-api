@@ -71,8 +71,10 @@ def test_dashboard_flow():
     print("\n3️⃣ Checking static assets accessibility")
     
     assets = [
-        "/components.css",
-        "/energy-pebble-image.jpg"
+        "/base.css",
+        "/icons.js",
+        "/admin.css",
+        "/energy-pebble-device.jpg"
     ]
     
     for asset in assets:

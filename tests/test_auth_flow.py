@@ -35,7 +35,7 @@ def test_public_endpoints():
         "/api/sample-color-code",
         "/docs",
         "/openapi.json",
-        "/components.css"
+        "/base.css"
     ]
     
     session = requests.Session()
@@ -180,7 +180,7 @@ def test_internal_api():
         result = subprocess.run(['docker', 'exec', 'energy_pebble-web-1', 'ls', '-la', '/usr/share/caddy/'], 
                               capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
-            if 'components.css' in result.stdout and 'dashboard.html' in result.stdout:
+            if 'base.css' in result.stdout and 'dashboard.html' in result.stdout:
                 print_result(True, f"Static files present in Caddy container")
             else:
                 print_result(False, f"Static files missing in Caddy container")
@@ -230,7 +230,7 @@ def test_traefik_routing():
     endpoints_to_test = [
         ("/", "should reach Caddy (web)"),
         ("/api/color-code", "should reach FastAPI (api)"),
-        ("/components.css", "should reach Caddy (web)"),
+        ("/base.css", "should reach Caddy (web)"),
     ]
     
     for endpoint, description in endpoints_to_test:
@@ -253,7 +253,7 @@ def test_traefik_routing():
                 else:
                     print_result(False, f"{endpoint} -> {response.status_code}, might not be FastAPI")
                     
-            elif endpoint == "/components.css":
+            elif endpoint == "/base.css":
                 if response.status_code == 200 and 'css' in response.headers.get('content-type', '').lower():
                     print_result(True, f"{endpoint} -> CSS file served correctly")
                 else:
