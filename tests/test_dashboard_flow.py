@@ -73,7 +73,7 @@ def test_dashboard_flow():
     assets = [
         "/base.css",
         "/icons.js",
-        "/components.css",
+        "/admin.css",
         "/energy-pebble-device.jpg"
     ]
     

@@ -1540,6 +1540,30 @@ if LOCAL_DEV_USER:
     async def _dev_home():
         return RedirectResponse("/static/index.html")
 
+    # Admin pages live at /admin/<name> in production, so their assets are
+    # referenced root-absolutely (a relative href would resolve under /admin/).
+    # Serve the page and those root assets here so the same markup works
+    # locally without the edge stack.
+    _ADMIN_PAGES = {"users", "devices", "firmware", "tokens"}
+
+    @app.get("/admin/{page}", include_in_schema=False)
+    async def _dev_admin(page: str):
+        if page not in _ADMIN_PAGES:
+            raise HTTPException(status_code=404, detail="Unknown admin page")
+        return FileResponse(_static_dir / f"admin-{page}.html")
+
+    @app.get("/{asset:path}.css", include_in_schema=False)
+    async def _dev_root_css(asset: str):
+        return FileResponse(_static_dir / f"{asset}.css")
+
+    @app.get("/{asset:path}.js", include_in_schema=False)
+    async def _dev_root_js(asset: str):
+        return FileResponse(_static_dir / f"{asset}.js")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def _dev_favicon():
+        return FileResponse(_static_dir / "favicon.ico")
+
 async def fetch_data(date_str: Optional[str] = None):
     """Fetch data from Elia's API for a given date."""
     if not date_str:

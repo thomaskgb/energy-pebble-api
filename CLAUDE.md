@@ -60,7 +60,7 @@ energy_pebble/
 ├── static/               # Static web assets
 │   ├── base.css          # Design system: tokens + primitives (customer UI)
 │   ├── icons.js          # Inline SVG icon set
-│   ├── components.css    # Legacy component styles — admin pages only
+│   ├── admin.css         # Admin console layer, built on base.css
 │   ├── index.html        # Main webpage
 │   ├── dashboard.html    # Protected dashboard
 │   ├── login.html        # Sign-in page
@@ -107,8 +107,12 @@ appears on two pages belongs in `base.css`.
 - **Shadow DOM**: `pebble-sim.js` and `settings-modal.js` cannot link
   `base.css`, but custom properties cross the shadow boundary, so their styles
   consume the same tokens with standalone fallbacks.
-- **Admin pages** still use the older `components.css` and have not been
-  migrated.
+- **Admin pages** load `base.css` plus `admin.css`. They keep their own class
+  names (`.section`, `.stat-card`, `.user-table`, `.status-badge`) because the
+  JavaScript that builds their rows speaks that vocabulary; `admin.css` defines
+  it once in terms of the shared tokens. Their asset hrefs are root-absolute
+  (`/base.css`), because the browser URL is `/admin/users` and a relative href
+  would resolve under `/admin/`.
 
 ## Internationalization
 The web UI ships in English (`en`), Dutch (`nl`) and French (`fr`). The pebble
@@ -201,6 +205,8 @@ does not need bumping on every deploy.
 - **UI redesign**: single `base.css` design system with light/dark tokens,
   an SVG icon set replacing emoji, and reworked home/dashboard/login/impact/
   simulator/setup layouts
+- **Admin console migrated**: the four admin pages now build on `base.css` +
+  `admin.css`; `components.css` is retired
 - **Device Management**: Added automatic detection and pairing system for Energy Dots
 - **Dashboard Enhancement**: Updated dashboard with device management interface
 - **Backward Compatibility**: Ensured existing devices continue working unchanged

@@ -574,6 +574,15 @@ hr {
 .menu__item--danger:hover { background: var(--danger-soft); color: var(--danger-500); }
 .menu__item--danger svg { color: currentColor; }
 
+/* The page you are already on, inside a navigation menu */
+.menu__item--active {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font-weight: var(--weight-medium);
+}
+.menu__item--active svg { color: var(--accent); }
+.menu__item--active:hover { background: var(--accent-soft); color: var(--accent-ink); }
+
 .menu__separator {
     height: 1px;
     margin: var(--space-1) 0;

@@ -22,21 +22,21 @@ def test_complete_dashboard():
     
     session = requests.Session()
     
-    # Test 1: Check components.css accessibility via Caddy
-    print("\n1️⃣ Testing components.css accessibility")
+    # Test 1: Check base.css accessibility via Caddy
+    print("\n1️⃣ Testing base.css accessibility")
     try:
-        # Try to access components.css through Docker container
-        response = session.get('http://localhost:8001/components.css')
+        # Try to access base.css through Docker container
+        response = session.get('http://localhost:8001/base.css')
         if response.status_code == 200:
-            print("✅ components.css accessible via web server")
-            if 'btn {' in response.text:
+            print("✅ base.css accessible via web server")
+            if '.btn {' in response.text:
                 print("   Contains button styles ✓")
-            if '--color-primary' in response.text:
+            if '--accent:' in response.text:
                 print("   Contains design tokens ✓")
         else:
-            print(f"❌ components.css not accessible: {response.status_code}")
+            print(f"❌ base.css not accessible: {response.status_code}")
     except Exception as e:
-        print(f"❌ Error accessing components.css: {e}")
+        print(f"❌ Error accessing base.css: {e}")
     
     # Test 2: Check dashboard.html accessibility
     print("\n2️⃣ Testing dashboard.html accessibility")
@@ -44,8 +44,8 @@ def test_complete_dashboard():
         response = session.get('http://localhost:8001/dashboard')
         if response.status_code == 200:
             print("✅ dashboard.html accessible")
-            if 'components.css' in response.text:
-                print("   Links to components.css ✓")
+            if 'base.css' in response.text:
+                print("   Links to base.css ✓")
             if 'loadUserData' in response.text:
                 print("   Contains authentication JavaScript ✓")
         else:
@@ -100,7 +100,7 @@ def test_complete_dashboard():
     print("=" * 50)
     print("Dashboard functionality test complete.")
     print("\nIf all tests pass, the dashboard should work properly.")
-    print("If components.css test fails, check Docker volume mounts.")
+    print("If base.css test fails, check Docker volume mounts.")
     print("If API tests fail, check authentication headers in production.")
 
 if __name__ == "__main__":
