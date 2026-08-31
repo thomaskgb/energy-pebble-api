@@ -1629,18 +1629,6 @@ _DOCS_BAR = """
 """
 
 
-@app.get("/docs.css", include_in_schema=False)
-async def api_reference_css():
-    """The reference's stylesheet, served by the app that serves the reference.
-
-    Traefik routes PathPrefix(`/docs`) here, which catches /docs.css too, so
-    Caddy never sees the request and the file 404'd as JSON however correctly it
-    sat in static/. Serving it from the same place as the page it styles keeps
-    the two together and needs no routing change.
-    """
-    return FileResponse(_static_dir / "docs.css", media_type="text/css")
-
-
 @app.get("/docs", include_in_schema=False)
 async def api_reference():
     """Swagger UI, skinned to match the site."""
@@ -1650,9 +1638,14 @@ async def api_reference():
         swagger_favicon_url="/favicon.svg",
     ).body.decode()
     # Ours loads after Swagger's, so it only has to override, never reproduce.
+    # Caddy serves this, not us: the file lives in static/ with the rest of the
+    # CSS, and the name deliberately avoids /docs and /api, both of which
+    # Traefik routes to this app. Naming it docs.css put it behind
+    # PathPrefix(`/docs`), where the API answered 404 and then, once a route
+    # existed, 500, because the API image carries no static directory.
     page = page.replace(
         "</head>",
-        '<link rel="stylesheet" href="/docs.css?v=2026-08-30-5">\n</head>',
+        '<link rel="stylesheet" href="/reference.css">\n</head>',
     )
     page = page.replace("<body>", f"<body>{_DOCS_BAR}", 1)
     return HTMLResponse(page)
