@@ -155,6 +155,49 @@
             word-break: break-word;
         }
         .detail-value .cluster-sm { justify-content: flex-end; font-family: var(--font-sans); }
+
+        /* Modal section headings: the modal mixes the household configuration
+           with connection plumbing, so each block gets a quiet label. */
+        .detail-section {
+            margin: var(--space-5) 0 0;
+            padding-top: var(--space-3);
+            font-size: var(--text-xs);
+            font-weight: var(--weight-semibold);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .detail-section:first-child { margin-top: 0; padding-top: 0; }
+
+        .detail-note {
+            padding: var(--space-2) 0;
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        /* What the pebble shows right now: one chip per committed hour, the
+           current hour largest. Colour is never the only carrier: the words
+           live in the tooltip/aria-label here and in plain text in the
+           device modal. */
+        .color-strip {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            flex: none;
+        }
+
+        .color-strip__chip {
+            width: 8px;
+            height: 8px;
+            border-radius: var(--radius-full);
+            background: var(--grey-400);
+        }
+
+        .color-strip__chip:first-child { width: 12px; height: 12px; }
+
+        .color-strip__chip--g { background: var(--signal-green); }
+        .color-strip__chip--y { background: var(--signal-yellow); }
+        .color-strip__chip--r { background: var(--signal-red); }
     </style>
 </head>
 <body>
@@ -331,6 +374,45 @@
             }
         }
 
+        // The colors a device is showing (G/Y/R machine values from the API)
+        function colorWord(code) {
+            return { G: t('color.green'), Y: t('color.yellow'), R: t('color.red') }[code] || code;
+        }
+
+        // Compact strip of what the pebble shows: current hour + next few.
+        // The tooltip and aria-label spell the colors out in words.
+        function colorStrip(device, count) {
+            const colors = (device.current_colors || []).slice(0, count);
+            if (!colors.length) return '';
+            const label = colors.map((entry, i) => {
+                if (i === 0) return t('device.preview.now', { color: colorWord(entry.color_code) });
+                const time = new Date(entry.hour).toLocaleTimeString(I18n.language,
+                    { hour: '2-digit', minute: '2-digit' });
+                return `${time} ${colorWord(entry.color_code)}`;
+            }).join(' · ');
+            const chips = colors.map(entry =>
+                `<span class="color-strip__chip color-strip__chip--${(entry.color_code || '').toLowerCase()}"></span>`
+            ).join('');
+            return `<span class="color-strip" role="img" title="${label}" aria-label="${label}">${chips}</span>`;
+        }
+
+        function contractLabel(type) {
+            switch (type) {
+                case 'day_night': return t('settings.contract.dayNight');
+                case 'fixed': return t('settings.contract.fixed');
+                default: return t('settings.contract.dynamic');
+            }
+        }
+
+        function signalSourceLabel(source) {
+            switch (source) {
+                case 'solar': return t('device.signal.solar');
+                case 'day_night': return t('device.signal.dayNight');
+                case 'fixed': return t('device.signal.fixed');
+                default: return t('device.signal.price');
+            }
+        }
+
         // Lists built as HTML strings do not carry data-i18n keys, so they are
         // rebuilt whenever the language changes.
         document.addEventListener('language-changed', function() {
@@ -493,6 +575,7 @@
                             <span class="status-dot ${device.status}"></span>
                             ${device.nickname || t('device.defaultName')}
                             ${device.home_name ? `<span class="badge">${device.home_name}</span>` : ''}
+                            ${colorStrip(device, 4)}
                         </div>
                         <div class="device-meta">
                             ${statusLabel(device.status)} &middot;
@@ -542,7 +625,7 @@
             const connectionStatus = statusLabel(statusClass);
             
             const minutesAgo = device.minutes_since_last_seen || 0;
-            
+
             // With one home there is nothing to choose; the name alone says
             // where the pebble lives.
             const homeValue = userHomes.length > 1 ? `
@@ -551,6 +634,15 @@
                         </select>
                         <span class="field__hint" id="device-home-error"></span>`
                 : (device.home_name || (userHomes[0] && userHomes[0].name) || t('common.unknown'));
+
+            // The household profile the server resolved for this device: the
+            // same settings /api/color-code applies to its colors.
+            const config = device.active_config || {};
+            const currentColors = device.current_colors || [];
+            const showingNow = currentColors.length
+                ? `<span class="cluster-sm">${colorStrip(device, 4)} ${colorWord(currentColors[0].color_code)}</span>`
+                : t('device.preview.unavailable');
+            const yesNo = value => value ? t('common.yes') : t('common.no');
 
             body.innerHTML = `
                 <div class="detail-row">
@@ -562,6 +654,29 @@
                         </span>
                     </span>
                 </div>
+                <h3 class="detail-section">${t('device.config.title')}</h3>
+                ${config.personalized ? '' : `<p class="detail-note">${t('device.config.default')}</p>`}
+                <div class="detail-row">
+                    <span class="detail-label">${t('device.config.showingNow')}</span>
+                    <span class="detail-value">${showingNow}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">${t('settings.pebble.contract')}</span>
+                    <span class="detail-value"><span class="cluster-sm">${contractLabel(config.contract_type)}</span></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">${t('settings.pebble.solar')}</span>
+                    <span class="detail-value"><span class="cluster-sm">${yesNo(config.has_solar)}</span></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">${t('settings.pebble.battery')}</span>
+                    <span class="detail-value"><span class="cluster-sm">${yesNo(config.has_battery)}</span></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">${t('device.config.signalSource')}</span>
+                    <span class="detail-value"><span class="cluster-sm">${signalSourceLabel(config.signal_source)}</span></span>
+                </div>
+                <h3 class="detail-section">${t('device.detail.technical')}</h3>
                 <div class="detail-row">
                     <span class="detail-label">${t('device.detail.home')}</span>
                     <span class="detail-value">${homeValue}</span>
