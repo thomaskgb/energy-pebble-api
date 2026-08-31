@@ -709,12 +709,34 @@ def calculate_device_status(last_seen_str: str) -> tuple[str, int]:
     except Exception:
         return "offline", 999999
 
-def create_device_fingerprint(client_ip: str, user_agent: str, timestamp: datetime) -> str:
-    """Create a unique fingerprint for device identification."""
-    # Use client IP, user agent, and hour of first request to create fingerprint
-    hour_key = timestamp.replace(minute=0, second=0, microsecond=0).isoformat()
-    fingerprint_data = f"{client_ip}:{user_agent}:{hour_key}"
-    return hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]
+# An ESP32 reports its eFuse MAC as twelve hex characters. Anything else -- a
+# test script's label, a truncated header, a hand-typed guess -- is not a
+# device, and must never be allowed to create a device record: those records
+# are what the admin console counts as pebbles in the field.
+DEVICE_ID_PATTERN = re.compile(r"[0-9a-f]{12}")
+
+def normalise_device_id(device_id: Optional[str]) -> Optional[str]:
+    """Return the canonical form of a device id, or None if it is not one.
+
+    Case and surrounding whitespace are forgiven because they come from a
+    header a firmware author writes by hand; the shape is not, because every
+    other identifier in the system is derived from it.
+    """
+    if not device_id:
+        return None
+    candidate = device_id.strip().lower()
+    return candidate if DEVICE_ID_PATTERN.fullmatch(candidate) else None
+
+def create_device_fingerprint(device_id: str) -> str:
+    """Create the unique key for a device row.
+
+    This used to hash the client IP, the user agent and the hour of first
+    contact, from the days before devices sent an id of their own. Two pebbles
+    in one household share all three, so the second one collided on the UNIQUE
+    column and its INSERT was silently ignored -- the device simply never
+    appeared. The device id is the identity now, so hash that and nothing else.
+    """
+    return hashlib.sha256(f"device:{device_id}".encode()).hexdigest()[:16]
 
 def generate_mac_from_device_id(device_id: str) -> str:
     """Convert ESP32 device ID to actual hardware MAC address.
@@ -1532,11 +1554,16 @@ def maybe_prune_device_records():
         logger.warning(f"Device retention sweep failed: {e}")
 
 def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str] = None):
-    """Log a device request for tracking purposes. Only tracks devices with device_id."""
+    """Log a device request for tracking purposes. Only tracks real device ids."""
     try:
         maybe_prune_device_records()
 
-        # Only log devices that provide a device_id
+        # Only log callers that identify themselves as a device, and only when
+        # the id has the shape of one. The claim endpoint has always enforced
+        # this; registration did not, so any string in an X-Device-ID header
+        # created a row -- which is how a batch of "test-Kitchen Pebble"
+        # devices with a 00:00:00:00:00:00 MAC ended up on the admin page.
+        device_id = normalise_device_id(device_id)
         if not device_id:
             return
             
@@ -1555,7 +1582,7 @@ def log_device_request(client_ip: str, user_agent: str, device_id: Optional[str]
                 
                 # If no rows updated, insert new device with device_id
                 if cursor.rowcount == 0:
-                    fingerprint = create_device_fingerprint(client_ip, user_agent or "unknown", now)
+                    fingerprint = create_device_fingerprint(device_id)
                     
                     # Get MAC address from predefined devices or generate one
                     mac_address = None
@@ -2889,8 +2916,8 @@ async def claim_own_device(claim: DeviceSelfClaimRequest, request: Request):
     user_info = get_current_user(request)
     user_id = user_info['user_id']
 
-    device_id = (claim.device_id or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{12}", device_id):
+    device_id = normalise_device_id(claim.device_id)
+    if not device_id:
         raise HTTPException(status_code=400,
                             detail="device_id must be 12 hex characters")
     nickname = (claim.nickname or "").strip() or None
@@ -2940,14 +2967,13 @@ async def claim_own_device(claim: DeviceSelfClaimRequest, request: Request):
                 if device_row:
                     device_db_id = device_row[0]
                 else:
-                    placeholder_fp = hashlib.sha256(
-                        f"claim:{device_id}".encode()).hexdigest()[:16]
                     cursor.execute('''
                         INSERT INTO devices (client_ip, device_fingerprint,
                                              first_seen, last_seen, user_agent,
                                              device_id, mac_address, home_id)
                         VALUES (?, ?, ?, NULL, ?, ?, ?, ?)
-                    ''', (client_ip, placeholder_fp, datetime.now(pytz.UTC),
+                    ''', (client_ip, create_device_fingerprint(device_id),
+                          datetime.now(pytz.UTC),
                           "claimed-before-first-contact", device_id,
                           generate_mac_from_device_id(device_id), home_id))
                     device_db_id = cursor.lastrowid
@@ -3017,8 +3043,8 @@ async def get_own_device_status(device_id: str, request: Request):
     user_info = get_current_user(request)
     user_id = user_info['user_id']
 
-    device_id = (device_id or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{12}", device_id):
+    device_id = normalise_device_id(device_id)
+    if not device_id:
         raise HTTPException(status_code=400,
                             detail="device_id must be 12 hex characters")
     try:
@@ -4690,8 +4716,8 @@ async def mint_device_secret(device_id: str, request: Request):
     if not admin_info['is_admin']:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    device_id = (device_id or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{12}", device_id):
+    device_id = normalise_device_id(device_id)
+    if not device_id:
         raise HTTPException(status_code=400,
                             detail="device_id must be 12 hex characters")
 
