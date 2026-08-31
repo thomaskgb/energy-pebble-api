@@ -277,7 +277,7 @@ def init_database():
             
             logger.info("Successfully migrated devices table")
         else:
-            # Create devices table for tracking energy dots (new installations)
+            # Create devices table for tracking pebbles (new installations)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS devices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

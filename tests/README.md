@@ -12,7 +12,7 @@ This directory contains various test scripts for validating Energy Pebble functi
 - **`test_minimal_auth.py`** - Minimal FastAPI authentication setup test
 
 ### Device & Hardware Tests
-- **`test_device_detection.py`** - Tests Energy Dot device detection and registration
+- **`test_device_detection.py`** - Tests Energy Pebble device detection and registration
 - **`test_firmware_docker.py`** - Tests firmware management in Docker environment
 - **`test_firmware_management.py`** - Tests firmware upload and management features
 - **`test_ota_check.py`** - Tests OTA update selection: highest installable version wins, and firmware a device would refuse (no md5, unsigned, missing binary) is never offered

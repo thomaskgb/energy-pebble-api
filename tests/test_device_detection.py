@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test script for device detection functionality.
-Simulates different energy dots making requests to the API.
+Simulates different pebbles making requests to the API.
 """
 
 import requests
@@ -28,13 +28,13 @@ def test_device_detection():
     print("🔴 Testing Energy Pebble Device Detection")
     print("=" * 50)
     
-    # Simulate different types of energy dots
+    # Simulate different types of pebbles
     devices = [
-        ("Kitchen Dot", "ESP32-HTTPClient/1.0"),
-        ("Living Room Dot", "ESP32-HTTPClient/1.0"),
-        ("Bedroom Dot", "ESP8266-HTTPClient/1.0"),
-        ("Office Dot", "ESP32-HTTPClient/1.2"),
-        ("Garage Dot", "ESPHome/2023.12.0"),
+        ("Kitchen Pebble", "ESP32-HTTPClient/1.0"),
+        ("Living Room Pebble", "ESP32-HTTPClient/1.0"),
+        ("Bedroom Pebble", "ESP8266-HTTPClient/1.0"),
+        ("Office Pebble", "ESP32-HTTPClient/1.2"),
+        ("Garage Pebble", "ESPHome/2023.12.0"),
     ]
     
     print("Simulating device requests...")

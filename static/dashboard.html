@@ -174,7 +174,7 @@
                 <div class="stat__value" id="current-color">–</div>
             </div>
             <div class="stat">
-                <div class="stat__label" data-i18n="dashboard.stat.connected">Connected Energy Dots</div>
+                <div class="stat__label" data-i18n="dashboard.stat.connected">Pebbles</div>
                 <div class="stat__value" id="connected-devices">–</div>
             </div>
             <div class="stat">
@@ -201,21 +201,21 @@
             <article class="card card--interactive feature-card">
                 <div class="card__body">
                     <div class="cluster" style="justify-content: space-between;">
-                        <h3 class="card__title" data-i18n="dashboard.dots.title">My Energy Dots</h3>
+                        <h3 class="card__title" data-i18n="dashboard.deviceCard.title">My Devices</h3>
                         <span class="badge badge--accent" data-i18n="dashboard.status.available">Available Now</span>
                     </div>
-                    <p class="feature-card__desc" data-i18n="dashboard.dots.description">
-                        View and manage your assigned Energy Dot devices. Monitor their status and configure device settings.
+                    <p class="feature-card__desc" data-i18n="dashboard.deviceCard.description">
+                        View and manage the Energy Pebbles assigned to you. Monitor their status and configure device settings.
                     </p>
-                    <div class="feature-card__meta" id="device-summary" data-i18n="dashboard.dots.loading">
+                    <div class="feature-card__meta" id="device-summary" data-i18n="dashboard.deviceCard.loading">
                         Loading device information...
                     </div>
                 </div>
                 <div class="card__footer">
-                    <button type="button" class="btn btn--primary btn--sm" onclick="toggleDeviceManagement()" data-i18n="dashboard.dots.view">View My Devices</button>
+                    <button type="button" class="btn btn--primary btn--sm" onclick="toggleDeviceManagement()" data-i18n="dashboard.deviceCard.view">View My Devices</button>
                     <a href="/setup/" class="btn btn--secondary btn--sm">
                         <i data-icon="plus" data-icon-size="15"></i>
-                        <span data-i18n="dashboard.dots.add">Add a Device</span>
+                        <span data-i18n="dashboard.deviceCard.add">Add a Device</span>
                     </a>
                 </div>
             </article>
@@ -266,7 +266,7 @@
             </article>
         </div>
 
-        <!-- Device management (revealed from the Energy Dots card) -->
+        <!-- Device management (revealed from the devices card) -->
         <section id="device-management" class="card" style="display: none; margin-top: var(--space-6);">
             <div class="card__header">
                 <h2 class="card__title" data-i18n="dashboard.devices.assignedTitle">Your Assigned Devices</h2>
@@ -283,7 +283,7 @@
             <div class="card__footer">
                 <a href="/setup/" class="btn btn--primary btn--sm">
                     <i data-icon="plus" data-icon-size="15"></i>
-                    <span data-i18n="dashboard.dots.add">Add a Device</span>
+                    <span data-i18n="dashboard.deviceCard.add">Add a Device</span>
                 </a>
                 <button type="button" class="btn btn--secondary btn--sm" onclick="refreshDeviceData()">
                     <i data-icon="refresh" data-icon-size="15"></i>
