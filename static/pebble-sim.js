@@ -7,6 +7,7 @@
  *   <pebble-sim src="/api/color-code" controls></pebble-sim>   playground with toggles
  *   <pebble-sim src="/api/color-code"></pebble-sim>            display only
  *   <pebble-sim colors="G,G,Y,R,R,Y,G,G,G"></pebble-sim>       static colors (current + 8)
+ *   <pebble-sim size="52" colors="..."></pebble-sim>            mini face (labels hidden)
  *
  * JS API: el.setSettings({signal_source, palette, brightness, night_dim_enabled})
  * mirrors the server-side per-user settings, so the dashboard can preview a
@@ -240,6 +241,10 @@
 
     _render() {
       const controls = this.hasAttribute('controls');
+      // A rendered size other than the native 240 scales the whole face via
+      // the viewBox; below 120px the text labels cannot be read, so they go.
+      const size = parseInt(this.getAttribute('size'), 10) || SIZE;
+      const mini = size < 120 ? 'mini' : '';
       let segs = '';
       for (let i = 0; i < 8; i++) {
         segs += `<path id="seg${i}" d="${segmentPath(i)}" />`;
@@ -260,6 +265,7 @@
             text-anchor: middle; dominant-baseline: central;
             pointer-events: none;
           }
+          .mini .hour-label, .mini .now-label { display: none; }
           .now-label {
             font: 700 11px var(--font-sans, system-ui, sans-serif);
             fill: rgba(40, 40, 35, 0.6);
@@ -310,7 +316,7 @@
           .panel :focus-visible { outline: 2px solid var(--accent, #16815a); outline-offset: 2px; }
         </style>
         <div class="wrap">
-          <svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" role="img"
+          <svg width="${size}" height="${size}" viewBox="0 0 ${SIZE} ${SIZE}" class="${mini}" role="img"
                data-i18n-aria-label="pebble.ariaLabel"
                aria-label="Energy Pebble: center shows the current hour, ring segments the next 8 hours">
             <rect class="body" x="6" y="6" width="${SIZE - 12}" height="${SIZE - 12}" rx="78"/>

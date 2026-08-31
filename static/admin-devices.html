@@ -13,6 +13,10 @@
         /* Devices: the QR sticker preview opens in its own window and carries
            its own styles, so nothing extra is needed here. */
         .device-section { margin-bottom: var(--space-6); }
+
+        /* Device column: mini pebble face next to the name */
+        .device-cell { display: flex; align-items: center; gap: var(--space-3); }
+        .device-cell pebble-sim { flex: none; }
     </style>
     <script src="/vendor/qrcode.min.js"></script>
 </head>
@@ -133,6 +137,7 @@
     <script src="/i18n.js?v=2026-08-30-6"></script>
     <script src="/icons.js?v=2026-08-30-6"></script>
     <script src="/site-header.js?v=2026-08-30-6"></script>
+    <script src="/pebble-sim.js?v=2026-08-31-1"></script>
     <script>I18n.start();</script>
     <script>
         // Check if user has admin access
@@ -190,6 +195,38 @@
             }
         }
 
+        // Mini replica of the device face: what this pebble is showing right
+        // now (server-resolved committed colors). The tooltip spells the
+        // colors out, so colour is not the only carrier of meaning.
+        function miniPebble(device) {
+            const colors = device.current_colors || [];
+            if (!colors.length) return '';
+            const words = { G: 'green', Y: 'yellow', R: 'red' };
+            const label = colors.map((entry, i) => {
+                const word = words[entry.color_code] || entry.color_code;
+                if (i === 0) return `Now ${word}`;
+                return `${String(new Date(entry.hour).getHours()).padStart(2, '0')}h ${word}`;
+            }).join(' · ');
+            const codes = colors.map(entry => entry.color_code).join(',');
+            return `<pebble-sim size="52" colors="${codes}" title="${label}"></pebble-sim>`;
+        }
+
+        // One line on the signal the device is actually being served
+        function signalSummary(device) {
+            const config = device.active_config;
+            if (!config) return '';
+            const source = {
+                price: 'Day-ahead prices',
+                solar: 'Price + solar forecast',
+                day_night: 'Day/night tariff',
+                fixed: 'Fixed price (no signal)'
+            }[config.signal_source] || config.signal_source;
+            const extras = [config.has_solar ? 'solar' : null,
+                            config.has_battery ? 'battery' : null].filter(Boolean).join(', ');
+            const fallback = config.personalized ? '' : ' — default';
+            return `Signal: ${source}${extras ? ` (${extras})` : ''}${fallback}<br>`;
+        }
+
         // Render devices table
         function renderDevicesTable(devices) {
             const container = document.getElementById('deviceList');
@@ -215,8 +252,13 @@
                         ${devices.map(device => `
                             <tr>
                                 <td>
-                                    <div class="device-nickname">${device.device_nickname || (device.mac_address ? `Device ${device.mac_address.slice(-4)}` : 'Unknown Device')}</div>
-                                    ${device.mac_address ? `<div class="device-mac">${device.mac_address}</div>` : '<div class="device-mac">No MAC Address</div>'}
+                                    <div class="device-cell">
+                                        ${miniPebble(device)}
+                                        <div>
+                                            <div class="device-nickname">${device.device_nickname || (device.mac_address ? `Device ${device.mac_address.slice(-4)}` : 'Unknown Device')}</div>
+                                            ${device.mac_address ? `<div class="device-mac">${device.mac_address}</div>` : '<div class="device-mac">No MAC Address</div>'}
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="status-badge status-${device.status || 'offline'}">
@@ -235,6 +277,7 @@
                                 </td>
                                 <td>
                                     <small style="color: #6c757d;">
+                                        ${signalSummary(device)}
                                         Requests: ${device.request_count || 0}<br>
                                         ${device.current_firmware_version ? `Version: ${device.current_firmware_version}<br>` : ''}
                                         ${device.software_version ? `Reported: ${device.software_version}<br>` : ''}
@@ -258,6 +301,10 @@
             `;
             
             container.innerHTML = table;
+            // The colors are already the household's transformed signal; the
+            // admin should see them undimmed whatever the wall clock says.
+            container.querySelectorAll('pebble-sim').forEach(el =>
+                el.setSettings({ night_dim_enabled: false }));
         }
 
         // Mint (or replace) the claim secret for a device and open a
