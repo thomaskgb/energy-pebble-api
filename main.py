@@ -2169,6 +2169,33 @@ async def get_json_data(date: Optional[str] = None):
         logger.error(f"Unexpected error in get_json_data: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
+async def compute_display_colors(start_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    """The default price-based color window: current hour + next 8.
+
+    The shared front half of /api/color-code - fetch, hourly grouping,
+    thirds over the 48h reference window, committed colors applied and this
+    call's window committed in turn. Per-household transforms come after.
+    Returns [] when no price data is available.
+    """
+    if start_date is None:
+        start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    json_data = await fetch_data_for_date_range(start_date, num_days=3)
+    if not json_data:
+        return []
+
+    hourly_data = group_entries_by_hour(json_data)
+    extended_hours_data = get_current_and_future_hours(hourly_data, 48)
+    if not extended_hours_data:
+        return []
+
+    color_codes = determine_color_codes(extended_hours_data, reference_window_hours=48)
+    color_codes = apply_committed_colors(color_codes)
+    commit_colors_for_window(color_codes, commitment_hours=8)
+
+    # Current + next 8: what the device face displays
+    return color_codes[:9]
+
 @app.get("/api/color-code", tags=["public"])
 async def get_color_code(request: Request, date: Optional[str] = None, device_id: Optional[str] = None):
     """
@@ -2204,40 +2231,14 @@ async def get_color_code(request: Request, date: Optional[str] = None, device_id
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     
     # Determine the start date
-    if date:
-        start_date = datetime.strptime(date, "%Y-%m-%d")
-    else:
-        start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Fetch data for multiple days to ensure we have enough hours (3 days for extended reference window)
-    json_data = await fetch_data_for_date_range(start_date, num_days=3)
-    
-    if not json_data:
+    start_date = datetime.strptime(date, "%Y-%m-%d") if date else None
+
+    display_colors = await compute_display_colors(start_date)
+    if not display_colors:
         raise HTTPException(status_code=404, detail="No data available for the requested date range")
-    
-    # Group by hour
-    hourly_data = group_entries_by_hour(json_data)
-    
-    # Get current and future hours (48 hours for extended reference window)
-    extended_hours_data = get_current_and_future_hours(hourly_data, 48)
-    
-    if not extended_hours_data:
-        raise HTTPException(status_code=404, detail="No data available for the requested time period")
-    
+
     # Get the current hour
-    current_hour = extended_hours_data[0]["dateTime"]
-    
-    # Determine color codes using extended reference window
-    color_codes = determine_color_codes(extended_hours_data, reference_window_hours=48)
-    
-    # Apply commitment logic - preserve committed colors for stability
-    color_codes = apply_committed_colors(color_codes)
-    
-    # Commit new colors for the next 8 hours if not already committed
-    commit_colors_for_window(color_codes, commitment_hours=8)
-    
-    # Return the first 9 hours for display (current + next 8)
-    display_colors = color_codes[:9]
+    current_hour = display_colors[0]["hour"]
 
     # Add metadata about commitment status
     committed_count = sum(1 for color in display_colors if color.get("committed", False))
@@ -2733,10 +2734,11 @@ async def attach_effective_signal(devices: List[Dict[str, Any]]) -> None:
     """Annotate device dicts (keyed on 'device_id') with `active_config` and
     `current_colors`.
 
-    Settings are resolved per device through get_settings_for_device, the
-    same path /api/color-code takes, so the result shows what the pebble
-    actually displays. The color preview reuses the committed window rather
-    than refetching price data; it is empty until colors have been committed.
+    Settings are resolved per device through get_settings_for_device, and the
+    color preview runs the same pipeline /api/color-code runs (current hour +
+    next 8, committed colors applied, then the household transform), so the
+    result is exactly what each pebble displays. If price data cannot be
+    fetched, the committed-colors cache stands in; empty as a last resort.
     """
     resolved = []
     for device in devices:
@@ -2753,11 +2755,20 @@ async def attach_effective_signal(devices: List[Dict[str, Any]]) -> None:
         }
         resolved.append(effective)
 
-    load_committed_colors()
-    base_colors = [
-        {"hour": hour, "color_code": color}
-        for hour, color in sorted(get_committed_colors_for_window().items())
-    ]
+    try:
+        base_colors = [
+            {"hour": entry["hour"], "color_code": entry["color_code"]}
+            for entry in await compute_display_colors()
+        ]
+    except Exception as e:
+        logger.warning(f"Color pipeline failed for device preview, using committed cache: {e}")
+        base_colors = []
+    if not base_colors:
+        load_committed_colors()
+        base_colors = [
+            {"hour": hour, "color_code": color}
+            for hour, color in sorted(get_committed_colors_for_window().items())
+        ]
     solar_boost = None
     if base_colors and any(s.get("has_solar") for s in resolved):
         solar_boost = await get_solar_boost_hours()
