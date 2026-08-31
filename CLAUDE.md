@@ -32,9 +32,13 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - `GET /docs`: Swagger UI documentation
 
 ### Device Management (Protected)
-- `GET /api/devices`: Get detected devices from client's IP address
-- `POST /api/devices/{id}/claim`: Claim a device and assign nickname (requires auth)
-- `GET /api/user/devices`: Get all devices claimed by authenticated user
+- `GET /api/user/devices`: Get all devices claimed by authenticated user, with
+  each one's effective settings and current colors
+- `POST /api/user/devices/claim`: Claim a device, proving possession with its
+  sticker secret or by being on its network (requires auth)
+- `GET /api/user/devices/{device_id}/status`: Online/offline poll used by the
+  setup page while it waits for a new pebble to phone home
+- `GET /api/admin/devices`: Every device, for the admin console (admin only)
 - `GET/PUT /api/user/preferences`: Account-level preferences, currently the interface `language` (requires auth)
 
 ## Web Routes
@@ -77,13 +81,22 @@ energy_pebble/
 │   ├── settings-modal.js # <settings-modal> web component
 │   └── energy-pebble-device.jpg  # Product photo
 ├── sample_data.json      # Sample data for testing
-├── test_device_detection.py  # Test script for device detection
+├── tests/                # Test suite (pytest, plus a few runnable scripts)
 └── CLAUDE.md            # This file
 ```
 
 ## Device Management System
 - **Passive Detection**: Automatically detects pebbles making API requests
-- **Device Fingerprinting**: Creates unique identifiers based on IP, User-Agent, and timing
+- **Device id is the identity**: a device announces itself with `X-Device-ID`,
+  the twelve hex characters of its ESP32 eFuse MAC. `normalise_device_id` is
+  the single gate — it forgives case and whitespace, rejects everything else,
+  and every entry point calls it. Without it any string in that header created
+  a row, which is how a batch of `test-Kitchen Pebble` devices with a
+  `00:00:00:00:00:00` MAC once reached the admin console.
+- **Device fingerprint**: the unique key on a device row, hashed from the
+  device id alone. It used to hash IP + user agent + hour of first contact,
+  which two pebbles in one household share — the second one's `INSERT OR
+  IGNORE` was dropped and the device never appeared anywhere.
 - **Backward Compatibility**: Existing devices continue working without changes
 - **User Claiming**: Users can claim and name devices detected on their network
 - **SQLite Database**: Device data stored in `/tmp/energy_pebble.db`
@@ -206,7 +219,8 @@ it. It is customer-facing, so it is translated like the rest of the site.
 
 - **Device records are deleted after twelve months** without a connection
   (`DEVICE_RETENTION_DAYS`, `prune_device_records`). They hold the only
-  network-identifying data we keep: IP address, user agent and a fingerprint.
+  network-identifying data we keep: IP address and user agent. (The fingerprint
+  beside them is derived from the device id, not from the network.)
   The sweep rides along with device traffic, at most once a day, because there
   is no scheduler in this app.
 - **The page and the code must move together.** `tests/test_retention.py` fails
@@ -271,8 +285,11 @@ literal triangle.
 - Use `/api/sample-color-code` for testing without real API calls
 - Sample data includes realistic price patterns and edge cases
 - Web interface auto-refreshes every 15 minutes
-- Run `python3 test_device_detection.py` to test device detection functionality
 - Run `pytest tests/test_i18n.py` after touching any user-facing string
+- `tests/test_device_detection.py` registers real devices as a side effect, so
+  it defaults to `BASE_URL=http://localhost:8000`. Point it elsewhere only
+  deliberately: every run against production leaves rows on `/admin/devices`
+  that look like pebbles in the field.
 
 ## Dependencies
 - FastAPI with CORS support
@@ -291,6 +308,12 @@ literal triangle.
 - **Security**: All passwords use Argon2ID hashing with strong parameters
 
 ## Recent Updates
+- **Only real device ids create device records**: `X-Device-ID` must be twelve
+  hex characters, and the fingerprint is derived from it rather than from the
+  network, so junk ids cannot invent devices and two pebbles in one household
+  no longer collide. `tests/test_device_detection.py` takes a `BASE_URL` and
+  defaults to localhost; it used to point at production, which is what put the
+  junk rows there.
 - **One product name**: the hardware is the Energy Pebble, "pebble" after
   first mention; "Energy Dot" is gone from the interface, the catalogs and
   the docs (CONTENT-REVIEW.md §3.4). "Dot" survives only where it means a
