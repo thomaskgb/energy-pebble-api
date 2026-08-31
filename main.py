@@ -2729,15 +2729,47 @@ async def verify_user(request: Request):
 # Device claiming endpoints removed for simplicity
 # Devices are now pre-assigned to users via database setup
 
-async def build_user_devices_response(user_id: str) -> Dict[str, Any]:
-    """The /api/user/devices payload: the user's claimed devices, each with
-    its effective settings and the colors it is currently showing.
+async def attach_effective_signal(devices: List[Dict[str, Any]]) -> None:
+    """Annotate device dicts (keyed on 'device_id') with `active_config` and
+    `current_colors`.
 
     Settings are resolved per device through get_settings_for_device, the
-    same path /api/color-code takes, so the dashboard shows what the pebble
+    same path /api/color-code takes, so the result shows what the pebble
     actually displays. The color preview reuses the committed window rather
     than refetching price data; it is empty until colors have been committed.
     """
+    resolved = []
+    for device in devices:
+        _, settings = get_settings_for_device(device.get("device_id"))
+        effective = settings or DEFAULT_USER_SETTINGS
+        device["active_config"] = {
+            "contract_type": effective["contract_type"],
+            "has_solar": effective["has_solar"],
+            "has_battery": effective["has_battery"],
+            "signal_source": derive_signal_source(effective),
+            # False = unclaimed/unknown to the resolver: the pebble gets the
+            # default price-based signal.
+            "personalized": settings is not None,
+        }
+        resolved.append(effective)
+
+    load_committed_colors()
+    base_colors = [
+        {"hour": hour, "color_code": color}
+        for hour, color in sorted(get_committed_colors_for_window().items())
+    ]
+    solar_boost = None
+    if base_colors and any(s.get("has_solar") for s in resolved):
+        solar_boost = await get_solar_boost_hours()
+    for device, settings in zip(devices, resolved):
+        device["current_colors"] = [
+            {"hour": entry["hour"], "color_code": entry["color_code"]}
+            for entry in apply_signal_source(base_colors, settings, solar_boost)
+        ] if base_colors else []
+
+async def build_user_devices_response(user_id: str) -> Dict[str, Any]:
+    """The /api/user/devices payload: the user's claimed devices, each with
+    its effective settings and the colors it is currently showing."""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
 
@@ -2763,9 +2795,6 @@ async def build_user_devices_response(user_id: str) -> Dict[str, Any]:
             device_db_id = row[0]
             mac_address = get_device_mac_address(cursor, conn, device_db_id, device_id, stored_mac)
 
-            _, settings = get_settings_for_device(device_id)
-            effective = settings or DEFAULT_USER_SETTINGS
-
             device = {
                 "id": row[0],
                 "fingerprint": row[1],
@@ -2784,33 +2813,10 @@ async def build_user_devices_response(user_id: str) -> Dict[str, Any]:
                 "home_name": row[14],
                 "status": status,
                 "minutes_since_last_seen": minutes_ago,
-                "active_config": {
-                    "contract_type": effective["contract_type"],
-                    "has_solar": effective["has_solar"],
-                    "has_battery": effective["has_battery"],
-                    "signal_source": derive_signal_source(effective),
-                    # False = unclaimed/unknown to the resolver: the pebble
-                    # gets the default price-based signal.
-                    "personalized": settings is not None,
-                },
-                "_settings": effective,
             }
             devices.append(device)
 
-    load_committed_colors()
-    base_colors = [
-        {"hour": hour, "color_code": color}
-        for hour, color in sorted(get_committed_colors_for_window().items())
-    ]
-    solar_boost = None
-    if base_colors and any(d["_settings"].get("has_solar") for d in devices):
-        solar_boost = await get_solar_boost_hours()
-    for device in devices:
-        settings = device.pop("_settings")
-        device["current_colors"] = [
-            {"hour": entry["hour"], "color_code": entry["color_code"]}
-            for entry in apply_signal_source(base_colors, settings, solar_boost)
-        ] if base_colors else []
+    await attach_effective_signal(devices)
 
     return {
         "user_id": user_id,
@@ -4364,7 +4370,9 @@ async def get_all_devices(
             
             # Adjust total count if status filtering was applied
             actual_total = len(device_list) if status else total_count
-            
+
+            await attach_effective_signal(device_list)
+
             return {
                 "devices": device_list,
                 "total": actual_total,
