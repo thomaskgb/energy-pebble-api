@@ -121,6 +121,25 @@ def test_migration_from_user_settings():
     assert main.derive_signal_source(resolved) == "day_night"
 
 
+def test_backfill_links_claimed_device_without_home():
+    # A claimed device that ended up with no home (the pre-fix claim endpoints
+    # never set home_id) is attached to its claimer's default home when the
+    # startup migration re-runs — even for a claimer with no user_settings row.
+    with sqlite3.connect(main.DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO devices (client_ip, device_fingerprint, device_id) VALUES ('3.3.3.3','fp-bf','222324252627')")
+        cursor.execute("INSERT INTO user_devices (user_id, device_id) VALUES ('bea', ?)", (cursor.lastrowid,))
+        conn.commit()
+
+    main.init_database()  # runs at every startup
+
+    homes = main.get_user_homes("bea")
+    assert len(homes) == 1 and homes[0]["device_count"] == 1
+    with sqlite3.connect(main.DB_PATH) as conn:
+        home_id = conn.execute("SELECT home_id FROM devices WHERE device_id='222324252627'").fetchone()[0]
+    assert home_id == homes[0]["id"]
+
+
 def test_user_token_flow_for_home_assistant():
     # Personal token authenticates as the user, without admin rights
     token, token_id = main.create_user_api_token("erin", "Home Assistant")

@@ -34,7 +34,19 @@ def cleanup():
             cur.execute("DELETE FROM user_devices WHERE device_id=?", (row[0],))
         cur.execute("DELETE FROM devices WHERE device_id=?", (DEVICE_ID,))
         cur.execute("DELETE FROM device_secrets WHERE device_id=?", (DEVICE_ID,))
+        for uid in (USER["Remote-User"], OTHER_USER["Remote-User"]):
+            cur.execute("SELECT id FROM homes WHERE user_id=?", (uid,))
+            for (home_id,) in cur.fetchall():
+                cur.execute("DELETE FROM home_settings WHERE home_id=?", (home_id,))
+            cur.execute("DELETE FROM homes WHERE user_id=?", (uid,))
         conn.commit()
+
+
+def device_home_id():
+    with sqlite3.connect(main.DB_PATH) as conn:
+        row = conn.execute("SELECT home_id FROM devices WHERE device_id=?",
+                           (DEVICE_ID,)).fetchone()
+    return row[0] if row else None
 
 
 def test_claim_requires_auth():
@@ -82,6 +94,11 @@ def test_full_claim_flow():
         assert r.status_code == 200
         assert r.json()["proof"] == "secret"
 
+        # The claim links the device to the claimer's default home; the home
+        # is what decides what the pebble shows.
+        assert r.json()["home_id"] == main.get_or_create_default_home(USER["Remote-User"])
+        assert device_home_id() == r.json()["home_id"]
+
         # Placeholder row must NOT read as online
         r = client.get(f"/api/user/devices/{DEVICE_ID}/status", headers=USER)
         assert r.status_code == 200
@@ -105,6 +122,66 @@ def test_full_claim_flow():
                         headers={**USER, "x-real-ip": DEVICE_IP})
         assert r.status_code == 200
         assert r.json()["proof"] == "same_network"
+    finally:
+        cleanup()
+
+
+def test_claim_with_explicit_home():
+    cleanup()
+    try:
+        r = client.post(f"/api/admin/devices/{DEVICE_ID}/secret", headers=ADMIN)
+        secret = r.json()["secret"]
+
+        # A home the claimer does not own is refused before anything happens
+        lair = client.post("/api/user/homes", headers=OTHER_USER,
+                           json={"name": "Lair"}).json()
+        r = client.post("/api/user/devices/claim",
+                        json={"device_id": DEVICE_ID, "secret": secret,
+                              "home_id": lair["id"]},
+                        headers=USER)
+        assert r.status_code == 404
+        assert device_home_id() is None
+
+        # Claiming into one of your own homes lands the device there
+        flat = client.post("/api/user/homes", headers=USER,
+                           json={"name": "Flat"}).json()
+        r = client.post("/api/user/devices/claim",
+                        json={"device_id": DEVICE_ID, "secret": secret,
+                              "home_id": flat["id"]},
+                        headers=USER)
+        assert r.status_code == 200
+        assert r.json()["home_id"] == flat["id"]
+        assert device_home_id() == flat["id"]
+
+        # Re-claiming without a home_id leaves the device where it is
+        r = client.post("/api/user/devices/claim",
+                        json={"device_id": DEVICE_ID, "secret": secret},
+                        headers=USER)
+        assert r.status_code == 200
+        assert device_home_id() == flat["id"]
+    finally:
+        cleanup()
+
+
+def test_admin_claim_links_home():
+    cleanup()
+    try:
+        main.log_device_request(DEVICE_IP, "ESPHome", DEVICE_ID)
+        with sqlite3.connect(main.DB_PATH) as conn:
+            db_id = conn.execute("SELECT id FROM devices WHERE device_id=?",
+                                 (DEVICE_ID,)).fetchone()[0]
+
+        r = client.put(f"/api/admin/devices/{db_id}/claim",
+                       json={"user": USER["Remote-User"]}, headers=ADMIN)
+        assert r.status_code == 200
+        assert r.json()["home_id"] == main.get_or_create_default_home(USER["Remote-User"])
+        assert device_home_id() == r.json()["home_id"]
+
+        # Reassigning moves the device to the new owner's default home
+        r = client.put(f"/api/admin/devices/{db_id}/claim",
+                       json={"user": OTHER_USER["Remote-User"]}, headers=ADMIN)
+        assert r.status_code == 200
+        assert device_home_id() == main.get_or_create_default_home(OTHER_USER["Remote-User"])
     finally:
         cleanup()
 
