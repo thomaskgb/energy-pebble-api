@@ -16,7 +16,7 @@ Energy Pebble is a REST API that provides electricity price color codes (Green, 
 - **Real-time data**: Fetches from Elia's day-ahead pricing API
 - **Clean web interface**: Shows current color codes with stability indicators
 - **User authentication**: Authelia-based authentication with protected user area
-- **Device management**: Automatic detection and pairing of Energy Dot hardware devices
+- **Device management**: Automatic detection and pairing of Energy Pebble hardware devices
 - **Energy secrets**: Fun, educational content for authenticated users
 - **Interface languages**: English, Dutch and French, chosen per account
 
@@ -82,7 +82,7 @@ energy_pebble/
 ```
 
 ## Device Management System
-- **Passive Detection**: Automatically detects Energy Dots making API requests
+- **Passive Detection**: Automatically detects pebbles making API requests
 - **Device Fingerprinting**: Creates unique identifiers based on IP, User-Agent, and timing
 - **Backward Compatibility**: Existing devices continue working without changes
 - **User Claiming**: Users can claim and name devices detected on their network
@@ -291,12 +291,18 @@ literal triangle.
 - **Security**: All passwords use Argon2ID hashing with strong parameters
 
 ## Recent Updates
+- **One product name**: the hardware is the Energy Pebble, "pebble" after
+  first mention; "Energy Dot" is gone from the interface, the catalogs and
+  the docs (CONTENT-REVIEW.md §3.4). "Dot" survives only where it means a
+  literal dot — the centre "now" dot, the status dots, the LED table on the
+  setup page — and in the `energy_dot_v1.0.0.bin` firmware filename, which
+  names a real binary on disk and in the firmware database.
 - **UI redesign**: single `base.css` design system with light/dark tokens,
   an SVG icon set replacing emoji, and reworked home/dashboard/login/impact/
   simulator/setup layouts
 - **Admin console migrated**: the four admin pages now build on `base.css` +
   `admin.css`; `components.css` is retired
-- **Device Management**: Added automatic detection and pairing system for Energy Dots
+- **Device Management**: Added automatic detection and pairing system for Energy Pebbles
 - **Dashboard Enhancement**: Updated dashboard with device management interface
 - **Backward Compatibility**: Ensured existing devices continue working unchanged
 - **Database Integration**: Added SQLite database for device tracking
