@@ -220,10 +220,6 @@
                 <div class="stat__label" data-i18n="dashboard.stat.connected">Pebbles</div>
                 <div class="stat__value" id="connected-devices">–</div>
             </div>
-            <div class="stat">
-                <div class="stat__label" data-i18n="dashboard.stat.unclaimed">Unclaimed Devices</div>
-                <div class="stat__value" id="unclaimed-devices">–</div>
-            </div>
         </div>
 
         <!-- My Pebble: one pebble per home -->
@@ -258,7 +254,7 @@
                     <button type="button" class="btn btn--primary btn--sm" onclick="toggleDeviceManagement()" data-i18n="dashboard.deviceCard.view">View My Devices</button>
                     <a href="/setup/" class="btn btn--secondary btn--sm">
                         <i data-icon="plus" data-icon-size="15"></i>
-                        <span data-i18n="dashboard.deviceCard.add">Add a Device</span>
+                        <span data-i18n="dashboard.deviceCard.add">Add a pebble</span>
                     </a>
                 </div>
             </article>
@@ -326,7 +322,7 @@
             <div class="card__footer">
                 <a href="/setup/" class="btn btn--primary btn--sm">
                     <i data-icon="plus" data-icon-size="15"></i>
-                    <span data-i18n="dashboard.deviceCard.add">Add a Device</span>
+                    <span data-i18n="dashboard.deviceCard.add">Add a pebble</span>
                 </a>
                 <button type="button" class="btn btn--secondary btn--sm" onclick="refreshDeviceData()">
                     <i data-icon="refresh" data-icon-size="15"></i>
@@ -447,7 +443,7 @@
         }
 
         // Device management variables
-        let deviceData = { claimed: [], unclaimed: [] };
+        let deviceData = { claimed: [] };
         let userHomes = [];
 
         // Load device statistics
@@ -464,16 +460,11 @@
                     const data = await userResponse.json();
                     
                     const connectedElement = document.getElementById('connected-devices');
-                    const unclaimedElement = document.getElementById('unclaimed-devices');
                     
                     if (connectedElement) {
                         connectedElement.textContent = data.total_devices || 0;
                     }
 
-                    if (unclaimedElement) {
-                        unclaimedElement.textContent = 0; // No unclaimed devices in simplified version
-                    }
-                    
                     // Update device summary
                     const summaryElement = document.getElementById('device-summary');
                     if (summaryElement) {
