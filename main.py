@@ -1629,6 +1629,18 @@ _DOCS_BAR = """
 """
 
 
+@app.get("/docs.css", include_in_schema=False)
+async def api_reference_css():
+    """The reference's stylesheet, served by the app that serves the reference.
+
+    Traefik routes PathPrefix(`/docs`) here, which catches /docs.css too, so
+    Caddy never sees the request and the file 404'd as JSON however correctly it
+    sat in static/. Serving it from the same place as the page it styles keeps
+    the two together and needs no routing change.
+    """
+    return FileResponse(_static_dir / "docs.css", media_type="text/css")
+
+
 @app.get("/docs", include_in_schema=False)
 async def api_reference():
     """Swagger UI, skinned to match the site."""
