@@ -53,6 +53,7 @@ class DeviceSelfClaimRequest(BaseModel):
     device_id: str
     secret: Optional[str] = None   # per-device secret from the QR sticker
     nickname: Optional[str] = None
+    home_id: Optional[int] = None  # target home; default: the user's default home
 
 # Pydantic models for API tokens
 class TokenCreate(BaseModel):
@@ -2890,6 +2891,14 @@ async def claim_own_device(claim: DeviceSelfClaimRequest, request: Request):
     nickname = (claim.nickname or "").strip() or None
     client_ip = get_real_client_ip(request)
 
+    # Resolve the target home before taking db_lock: the home helpers take
+    # that (non-reentrant) lock themselves.
+    if claim.home_id is not None:
+        _require_own_home(user_id, claim.home_id)
+        home_id = claim.home_id
+    else:
+        home_id = get_or_create_default_home(user_id)
+
     try:
         with db_lock:
             with sqlite3.connect(DB_PATH) as conn:
@@ -2931,11 +2940,11 @@ async def claim_own_device(claim: DeviceSelfClaimRequest, request: Request):
                     cursor.execute('''
                         INSERT INTO devices (client_ip, device_fingerprint,
                                              first_seen, last_seen, user_agent,
-                                             device_id, mac_address)
-                        VALUES (?, ?, ?, NULL, ?, ?, ?)
+                                             device_id, mac_address, home_id)
+                        VALUES (?, ?, ?, NULL, ?, ?, ?, ?)
                     ''', (client_ip, placeholder_fp, datetime.now(pytz.UTC),
                           "claimed-before-first-contact", device_id,
-                          generate_mac_from_device_id(device_id)))
+                          generate_mac_from_device_id(device_id), home_id))
                     device_db_id = cursor.lastrowid
 
                 cursor.execute(
@@ -2960,6 +2969,21 @@ async def claim_own_device(claim: DeviceSelfClaimRequest, request: Request):
                     ''', (user_id, device_db_id, nickname))
                     message = "Device linked to your account"
 
+                # The home defines what the pebble shows; a claim that leaves
+                # home_id NULL would fall through to the legacy per-user
+                # settings path. An explicit home_id moves the device; without
+                # one, a device already in a home stays where it is.
+                if claim.home_id is not None:
+                    cursor.execute('UPDATE devices SET home_id = ? WHERE id = ?',
+                                   (home_id, device_db_id))
+                else:
+                    cursor.execute(
+                        'UPDATE devices SET home_id = ? WHERE id = ? AND home_id IS NULL',
+                        (home_id, device_db_id))
+                cursor.execute('SELECT home_id FROM devices WHERE id = ?',
+                               (device_db_id,))
+                home_id = cursor.fetchone()[0]
+
                 conn.commit()
 
         logger.info(f"User {user_id} claimed device {device_id} (proof: {proof})")
@@ -2969,6 +2993,7 @@ async def claim_own_device(claim: DeviceSelfClaimRequest, request: Request):
             "claimed_by": user_id,
             "proof": proof,
             "nickname": nickname,
+            "home_id": home_id,
         }
     except HTTPException:
         raise
@@ -4598,15 +4623,21 @@ async def claim_device_for_user(device_id: int, claim_data: DeviceClaimRequest, 
                 raise HTTPException(status_code=404, detail="Device not found")
             
             device_uuid = device[0]
-            
+
+            # The home defines what the pebble shows; on a reassignment the
+            # old home belongs to the previous owner, so always repoint.
+            # Resolved before this connection starts writing: the helper
+            # writes over its own connection and would block on ours.
+            home_id = get_or_create_default_home(user)
+
             # Check if device is already claimed
             cursor.execute('SELECT user_id FROM user_devices WHERE device_id = ?', (device_id,))
             existing_claim = cursor.fetchone()
-            
+
             if existing_claim:
                 # Update existing claim
                 cursor.execute('''
-                    UPDATE user_devices 
+                    UPDATE user_devices
                     SET user_id = ?
                     WHERE device_id = ?
                 ''', (user, device_id))
@@ -4618,15 +4649,19 @@ async def claim_device_for_user(device_id: int, claim_data: DeviceClaimRequest, 
                     VALUES (?, ?, CURRENT_TIMESTAMP)
                 ''', (user, device_id))
                 action = f"claimed by {user}"
-            
+
+            cursor.execute('UPDATE devices SET home_id = ? WHERE id = ?',
+                           (home_id, device_id))
+
             conn.commit()
-            
+
             logger.info(f"Admin {admin_user} {action} device {device_uuid} (ID: {device_id})")
-            
+
             return {
                 "message": f"Device {action} successfully",
                 "device_id": device_uuid,
-                "claimed_by": user
+                "claimed_by": user,
+                "home_id": home_id
             }
             
     except HTTPException:
