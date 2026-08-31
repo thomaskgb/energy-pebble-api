@@ -49,6 +49,14 @@
             gap: var(--space-8);
         }
 
+        .home-pebble__signal {
+            margin-top: var(--space-2);
+            max-width: 34ch;
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            text-wrap: balance;
+        }
+
         .home-pebble__name {
             margin-top: var(--space-2);
             font-size: var(--text-sm);
@@ -282,27 +290,18 @@
                         Connect your Enode account to access real-time solar production data.
                         Optimize energy usage based on your solar generation and grid prices.
                     </p>
-                </div>
-                <div class="card__footer">
-                    <button type="button" class="btn btn--secondary btn--sm" disabled data-i18n="dashboard.solar.action">Connect Enode</button>
-                </div>
-            </article>
-
-            <article class="card feature-card">
-                <div class="card__body">
-                    <div class="cluster" style="justify-content: space-between;">
-                        <h3 class="card__title" data-i18n="dashboard.analytics.title">Energy Analytics</h3>
-                        <span class="badge" data-i18n="dashboard.status.comingSoon">Coming Soon</span>
-                    </div>
-                    <p class="feature-card__desc" data-i18n="dashboard.analytics.description">
-                        View detailed analytics of your energy usage patterns, savings achieved,
-                        and environmental impact. Track your optimization progress over time.
+                    <p class="feature-card__desc" data-i18n="dashboard.solar.feedbackNote">
+                        If you have ideas or feedback for this feature, let us know and we'll take it into account.
                     </p>
                 </div>
                 <div class="card__footer">
-                    <button type="button" class="btn btn--secondary btn--sm" disabled data-i18n="dashboard.analytics.action">View Analytics</button>
+                    <a class="btn btn--secondary btn--sm"
+                       href="mailto:energypebble@tdlx.nl?subject=Energy%20Pebble%3A%20solar%20integration"
+                       data-i18n-href="dashboard.solar.mailto"
+                       data-i18n="dashboard.solar.action">Send feedback</a>
                 </div>
             </article>
+
         </div>
 
         <!-- Device management (revealed from the devices card) -->
@@ -415,6 +414,7 @@
             loadCurrentColor();
             loadDeviceStats();
             if (deviceData.claimed.length) renderUserDevices();
+            renderHomePebbles();
         });
 
         // Load current energy color
@@ -865,13 +865,36 @@
                 <div>
                     <pebble-sim id="home-pebble-${h.id}" src="/api/color-code"></pebble-sim>
                     ${homes.length > 1 ? `<div class="home-pebble__name">${h.name}</div>` : ''}
+                    <p class="home-pebble__signal" id="home-signal-${h.id}"></p>
                 </div>`).join('');
             for (const h of homes) {
                 try {
                     const resp = await fetch('/api/user/settings?home_id=' + h.id);
-                    if (resp.ok) applySettingsToSim('home-pebble-' + h.id, (await resp.json()).settings);
+                    if (!resp.ok) continue;
+                    const data = await resp.json();
+                    applySettingsToSim('home-pebble-' + h.id, data.settings);
+                    renderHomeSignal(h.id, data.derived_signal, data.settings);
                 } catch (e) { /* keep defaults */ }
             }
+        }
+
+        // The card shows what the pebble is doing; this says why, per home.
+        // A battery only ever extends a green signal, so its clause is additive
+        // and never stands alone.
+        function renderHomeSignal(homeId, signal, settings) {
+            const el = document.getElementById('home-signal-' + homeId);
+            if (!el) return;
+            // Keys are spelled out rather than composed: the i18n test reads
+            // them statically, and a built key is invisible to it.
+            let text;
+            switch (signal) {
+                case 'solar': text = t('dashboard.signal.solar'); break;
+                case 'day_night': text = t('dashboard.signal.dayNight'); break;
+                case 'fixed': text = t('dashboard.signal.fixed'); break;
+                default: text = t('dashboard.signal.price');
+            }
+            if (settings && settings.has_battery) text += ' ' + t('dashboard.signal.battery');
+            el.textContent = text;
         }
 
         function applySettingsToSim(simId, s) {
